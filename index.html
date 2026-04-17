@@ -193,6 +193,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { color: var(--text-dim); font-size: 14px; }
+  .viewer-mode .admin-only { display: none !important; }
+  .viewer-badge { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(139,92,246,.2); color: #c4b5fd; letter-spacing: 1px; }
 </style>
 </head>
 <body>
@@ -251,11 +253,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 <header class="topbar">
   <div class="topbar-title" id="topbar-title">Dashboard</div>
   <div class="static-dataset-label" id="dataset-label">DATASET · OCT 2025 – MAR 2026</div>
-  <input type="file" id="xlsx-upload" accept=".xlsx" style="display:none" onchange="handleXLSXUpload(event)">
-  <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px" onclick="document.getElementById('xlsx-upload').click()" title="Upload service operations Excel file">📤 Upload XLSX</button>
+  <input type="file" id="xlsx-upload" accept=".xlsx" style="display:none" class="admin-only" onchange="handleXLSXUpload(event)">
+  <button class="btn btn-ghost admin-only" style="font-size:11px;padding:6px 12px" onclick="document.getElementById('xlsx-upload').click()" title="Upload service operations Excel file">📤 Upload XLSX</button>
   <button class="btn btn-ghost" id="reset-data-btn" style="font-size:11px;padding:6px 12px" onclick="resetToBundledData()" title="Refresh data from database">↻ Refresh</button>
   <div class="clock" id="clock">—</div>
   <div id="user-menu" style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim)">
+    <span id="user-role-badge"></span>
     <span id="user-email" style="font-family:var(--mono)"></span>
     <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px" onclick="handleLogout()" title="Sign out">Sign out</button>
   </div>
@@ -1079,6 +1082,7 @@ function parseCMCSheet(rows, year){
 let _pendingUploadResult = null;
 
 async function handleXLSXUpload(event){
+  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
   const file = event.target.files[0];
   if(!file) return;
   // Guard: file size limit (20 MB sanity bound)
@@ -2645,7 +2649,7 @@ function renderAmbiguities(){
         <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;padding:8px 12px;display:flex;align-items:center;gap:10px">
           <span style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:700">✓ REVIEWED</span>
           <span style="font-size:11px;color:var(--text-dim)">${review.reviewer} · ${review.decision} · ${dateStr}</span>
-          <button class="btn btn-ghost" style="font-size:10px;padding:3px 8px;margin-left:auto" onclick="undoReview('${a.id}')">Undo</button>
+          <button class="btn btn-ghost admin-only" style="font-size:10px;padding:3px 8px;margin-left:auto" onclick="undoReview('${a.id}')">Undo</button>
         </div>
       </div>`;
     }
@@ -2665,9 +2669,9 @@ function renderAmbiguities(){
       </div>
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px" onclick="openDetail('${a.id}')">View Record</button>
-        <button class="btn btn-primary" style="font-size:10px;padding:4px 10px" onclick="openReviewPanel(${i})">Mark Reviewed ✓</button>
+        <button class="btn btn-primary admin-only" style="font-size:10px;padding:4px 10px" onclick="openReviewPanel(${i})">Mark Reviewed ✓</button>
       </div>
-      <div id="review-panel-${i}" style="display:none;margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px">
+      <div id="review-panel-${i}" class="admin-only" style="display:none;margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px">
         <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:10px">REVIEW PANEL</div>
         <div style="margin-bottom:10px">
           <label style="font-family:var(--mono);font-size:9px;color:var(--text-faint);display:block;margin-bottom:4px">REVIEWER</label>
@@ -2717,6 +2721,7 @@ function checkReviewReady(i){
   btn.style.cursor=ready?'pointer':'not-allowed';
 }
 async function submitReview(i,ambId){
+  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
   const reviewer=document.getElementById(`rp-reviewer-${i}`).value;
   const dec=document.querySelector(`input[name="rp-dec-${i}"]:checked`)?.value;
   const notes=document.getElementById(`rp-notes-${i}`).value;
@@ -2725,6 +2730,7 @@ async function submitReview(i,ambId){
   renderAmbiguities();
 }
 async function undoReview(ambId){
+  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
   const a = AMBIGUITIES.find(x => x.id === ambId);
   if(!a) return;
   try {
@@ -2946,6 +2952,20 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 let _sb = null;            // Supabase client
 let _currentUser = null;   // logged-in user
+let _userRole = 'viewer';  // 'admin' | 'viewer'
+
+function applyRoleRestrictions(){
+  _userRole = _currentUser?.app_metadata?.role === 'admin' ? 'admin' : 'viewer';
+  if(_userRole === 'viewer'){
+    document.body.classList.add('viewer-mode');
+  } else {
+    document.body.classList.remove('viewer-mode');
+  }
+  const badge = document.getElementById('user-role-badge');
+  if(badge) badge.innerHTML = _userRole === 'viewer'
+    ? '<span class="viewer-badge">VIEWER</span>'
+    : '<span class="viewer-badge" style="background:rgba(59,130,246,.2);color:#93c5fd">ADMIN</span>';
+}
 
 function showLogin(){ document.getElementById('login-overlay').style.display = 'flex'; }
 function hideLogin(){ document.getElementById('login-overlay').style.display = 'none'; }
@@ -3182,6 +3202,7 @@ async function bootApp(){
     // Show logged-in user in topbar
     const ue = document.getElementById('user-email');
     if(ue && _currentUser) ue.textContent = _currentUser.email || '';
+    applyRoleRestrictions();
     await doFirstPaint();
   } catch(e){
     hideLoading();
