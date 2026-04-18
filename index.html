@@ -307,12 +307,39 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
   <div class="login-card">
     <h1>MRI FieldOps</h1>
     <div class="sub">3i MEDTECH · Sign in to continue</div>
+
+    <!-- Sign-in form -->
     <form id="login-form" autocomplete="on">
       <input type="email" id="login-email" placeholder="Email" required autocomplete="username">
       <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password">
       <button type="submit" id="login-submit">Sign in</button>
       <div id="login-error" class="login-error"></div>
+      <div style="margin-top:10px;text-align:right">
+        <a href="#" id="forgot-link" style="font-size:11px;color:var(--brand);text-decoration:none" onclick="showForgot(event)">Forgot password?</a>
+      </div>
     </form>
+
+    <!-- Forgot-password form (hidden until 'Forgot password?' is clicked) -->
+    <form id="forgot-form" autocomplete="on" style="display:none">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">Enter your email and we'll send a reset link.</div>
+      <input type="email" id="forgot-email" placeholder="Email" required autocomplete="username">
+      <button type="submit" id="forgot-submit">Send reset link</button>
+      <div id="forgot-msg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+      <div style="margin-top:10px;text-align:right">
+        <a href="#" style="font-size:11px;color:var(--brand);text-decoration:none" onclick="showSignIn(event)">← Back to sign in</a>
+      </div>
+    </form>
+
+    <!-- Set-new-password form (shown when the user arrives from a recovery email link) -->
+    <form id="recovery-form" autocomplete="on" style="display:none">
+      <div style="font-size:13px;color:var(--text);margin-bottom:4px;font-weight:600">Set a new password</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Minimum 10 characters. Mix letters, numbers, and symbols.</div>
+      <input type="password" id="recovery-pw1" placeholder="New password" required autocomplete="new-password" minlength="10">
+      <input type="password" id="recovery-pw2" placeholder="Confirm new password" required autocomplete="new-password" minlength="10">
+      <button type="submit" id="recovery-submit">Update password</button>
+      <div id="recovery-msg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+    </form>
+
     <div class="footer-note">
       Don't have an account? Ask your admin to add you in Supabase Auth.
     </div>
@@ -3557,6 +3584,104 @@ function renderAuditLog(){
 }
 
 // ── Login handling ────────────────────────────────────────────────────
+function _showLoginForm(which){
+  const forms = ['login-form', 'forgot-form', 'recovery-form'];
+  forms.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = (id === which) ? '' : 'none';
+  });
+  // Clear any lingering messages
+  ['login-error','forgot-msg','recovery-msg'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.textContent = '';
+  });
+}
+function showForgot(ev){ if(ev) ev.preventDefault(); _showLoginForm('forgot-form'); }
+function showSignIn(ev){ if(ev) ev.preventDefault(); _showLoginForm('login-form'); }
+
+async function handleForgotPassword(ev){
+  ev.preventDefault();
+  const email = document.getElementById('forgot-email').value.trim();
+  const msg = document.getElementById('forgot-msg');
+  const btn = document.getElementById('forgot-submit');
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = '';
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    const redirectTo = window.location.origin + window.location.pathname;
+    const { error } = await _sb.auth.resetPasswordForEmail(email, { redirectTo });
+    if(error) throw error;
+    msg.style.color = 'var(--ok, #4ade80)';
+    msg.textContent = 'If that email is registered, a reset link has been sent. Check your inbox.';
+  } catch(e){
+    // Always show the same generic success message to avoid leaking which emails exist.
+    console.warn('reset_failed', e);
+    msg.style.color = 'var(--ok, #4ade80)';
+    msg.textContent = 'If that email is registered, a reset link has been sent. Check your inbox.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send reset link';
+  }
+}
+
+async function handleRecoverySubmit(ev){
+  ev.preventDefault();
+  const pw1 = document.getElementById('recovery-pw1').value;
+  const pw2 = document.getElementById('recovery-pw2').value;
+  const msg = document.getElementById('recovery-msg');
+  const btn = document.getElementById('recovery-submit');
+  msg.style.color = 'var(--text-dim)';
+  msg.textContent = '';
+
+  if(pw1.length < 10){
+    msg.style.color = '#ef4444';
+    msg.textContent = 'Password must be at least 10 characters.';
+    return;
+  }
+  if(pw1 !== pw2){
+    msg.style.color = '#ef4444';
+    msg.textContent = 'Passwords do not match.';
+    return;
+  }
+  // Basic complexity: at least one letter, one number
+  if(!/[A-Za-z]/.test(pw1) || !/[0-9]/.test(pw1)){
+    msg.style.color = '#ef4444';
+    msg.textContent = 'Password must include letters and numbers.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Updating…';
+  try {
+    const { error } = await _sb.auth.updateUser({ password: pw1 });
+    if(error) throw error;
+    msg.style.color = 'var(--ok, #4ade80)';
+    msg.textContent = 'Password updated. Signing you in…';
+    // Clear recovery hash from URL so a refresh doesn't re-trigger
+    if(window.history && window.history.replaceState){
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    // Audit event
+    try { await logAudit('password_changed', { via: 'recovery_link' }); } catch(_){}
+    // Proceed into app
+    const { data: { session } } = await _sb.auth.getSession();
+    if(session){
+      _currentUser = session.user;
+      hideLogin();
+      await bootApp();
+    } else {
+      // Fallback: show login form
+      _showLoginForm('login-form');
+      msg.textContent = 'Password updated. Please sign in.';
+    }
+  } catch(e){
+    msg.style.color = '#ef4444';
+    msg.textContent = e.message || 'Failed to update password.';
+    btn.disabled = false;
+    btn.textContent = 'Update password';
+  }
+}
+
 async function handleLogin(ev){
   ev.preventDefault();
   const email = document.getElementById('login-email').value.trim();
@@ -3629,14 +3754,47 @@ async function bootApp(){
   // Initialize client
   _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+  // Always wire up login-overlay form listeners (cheap, safe)
+  document.getElementById('login-form').addEventListener('submit', handleLogin);
+  const forgotForm = document.getElementById('forgot-form');
+  if(forgotForm) forgotForm.addEventListener('submit', handleForgotPassword);
+  const recoveryForm = document.getElementById('recovery-form');
+  if(recoveryForm) recoveryForm.addEventListener('submit', handleRecoverySubmit);
+
+  // Detect a Supabase recovery link. Supabase puts tokens in the URL hash
+  // (e.g. #access_token=...&type=recovery) and the auth client parses them
+  // automatically on init, firing a PASSWORD_RECOVERY event. We subscribe
+  // before checking the session so the event fires for us.
+  let _recoveryMode = false;
+  _sb.auth.onAuthStateChange((event, session) => {
+    if(event === 'PASSWORD_RECOVERY'){
+      _recoveryMode = true;
+      showLogin();
+      _showLoginForm('recovery-form');
+    }
+  });
+
+  // Secondary hash check (in case the event already fired before our listener
+  // attached in some browsers): if the URL hash contains type=recovery, show
+  // the recovery form.
+  if(window.location.hash && /[#&]type=recovery\b/.test(window.location.hash)){
+    _recoveryMode = true;
+    showLogin();
+    _showLoginForm('recovery-form');
+    return;
+  }
+
   // Check existing session
   const { data: { session } } = await _sb.auth.getSession();
+  if(_recoveryMode){
+    // Recovery event already surfaced the form; do not bootstrap app.
+    return;
+  }
   if(session){
     _currentUser = session.user;
     await bootApp();
   } else {
     showLogin();
-    document.getElementById('login-form').addEventListener('submit', handleLogin);
   }
 })();
 
