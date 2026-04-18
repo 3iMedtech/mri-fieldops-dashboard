@@ -1223,6 +1223,7 @@ function showUploadPreview(result, fileName){
 }
 
 async function applyUploadedData(){
+  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
   if(!_pendingUploadResult){ closeModal('upload-modal'); return; }
   const r = _pendingUploadResult;
 
@@ -2303,7 +2304,7 @@ function renderPMReminders(){
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Engineers: ${engList}</div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" style="font-size:10px;padding:4px 12px" onclick="composePMEmail('${pm.id}')">📧 Compose Reminder Email</button>
-        <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px" onclick="markPMDone('${pm.id}')">✓ Mark PM Completed</button>
+        <button class="btn btn-ghost admin-only" style="font-size:10px;padding:4px 10px" onclick="markPMDone('${pm.id}')">✓ Mark PM Completed</button>
       </div>
     </div>`;
   }).join('');
@@ -2345,6 +2346,7 @@ FieldOps Service Manager`);
 }
 
 async function markPMDone(pmId){
+  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
   const pm = PM_SCHEDULE.find(p=>p.id===pmId);
   if(!pm) return;
   const today = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
