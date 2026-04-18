@@ -333,6 +333,42 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
     .live-badge { padding: 4px 6px; }
   }
 
+  /* ── Contract renewal tiles ──────────────────────────────────────── */
+  .renew-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .renew-tile {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    transition: transform .15s ease;
+  }
+  .renew-tile:hover { transform: translateY(-1px); }
+  .renew-tile__label {
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim, #94a3b8);
+  }
+  .renew-tile__value {
+    font-family: var(--display, inherit);
+    font-weight: 700;
+    font-size: 26px;
+    line-height: 1.1;
+    margin-top: 4px;
+  }
+  .renew-tile__sub {
+    font-size: 11px;
+    color: var(--text-faint, #64748b);
+    margin-top: 2px;
+  }
+  @media (max-width: 768px) {
+    .renew-tiles { grid-template-columns: repeat(2, 1fr); }
+  }
+
   /* ── Print / PDF export ────────────────────────────────────────────── */
   @media print {
     @page { size: A4 landscape; margin: 12mm; }
@@ -506,6 +542,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
       <div class="panel-head"><div class="panel-title">👷 Field Team</div><div class="panel-action" onclick="navigate('team')">All →</div></div>
       <div class="panel-body"><div class="eng-list" id="dash-eng-list"></div></div>
     </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">📆 Upcoming Contract Renewals</div>
+      <div class="panel-action" onclick="navigate('pm')">PM Schedule →</div>
+    </div>
+    <div class="panel-body"><div id="renewals-panel"></div></div>
   </div>
 
   <div class="grid-2 g-1-1-1" style="grid-template-columns:1fr 1fr 1fr">
@@ -1615,6 +1659,7 @@ function renderAll(){
   renderKPIGrid();
   renderDashOpen();
   renderDashEngineers();
+  renderRenewals();
   renderBarMonthly();
   renderCallTypeChart();
   renderTopCustomers();
@@ -2242,6 +2287,115 @@ function renderDashEngineers(){
     </div>`;
   }).join('')+
   '<div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);padding:6px 0;text-align:center">Status derived from open ticket assignments only</div>';
+}
+
+// ── Contract renewals ────────────────────────────────────────────────
+// Merges CMC_DATA and PM_SCHEDULE into a single list of contracts with
+// end-dates, dedupes on customer+model, and annotates days-until-expiry.
+// Returns rows sorted by soonest expiry first. Rows with days < 0
+// (already expired) are included up to 30 days in the past so they
+// stay visible; older expirations are dropped.
+function getContractRenewals(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const seen = new Map(); // key = customer|model (lowercase) → row
+
+  function add(customer, model, town, contract, endRaw, source){
+    if(!customer) return;
+    const end = parseFlexDate(endRaw);
+    if(!end) return;
+    const days = Math.round((end - today) / 86400000);
+    // Keep already-expired for 30d of visibility; drop ancient ones
+    if(days < -30) return;
+    const key = (customer + '|' + (model||'')).toLowerCase();
+    const prev = seen.get(key);
+    // Prefer PM_SCHEDULE (more granular) over CMC_DATA when both exist
+    if(!prev || (source === 'pm' && prev.source === 'cmc')){
+      seen.set(key, { customer, model: model||'—', town: town||'—', contract: contract||'—', end, days, source });
+    }
+  }
+
+  CMC_DATA.forEach(c => add(c.customer, c.model, c.town, c.contract, c.end, 'cmc'));
+  PM_SCHEDULE.forEach(p => add(p.customer, p.model, p.town, p.contract, p.contractEnd, 'pm'));
+
+  return [...seen.values()].sort((a,b) => a.days - b.days);
+}
+
+function renewalBucket(days){
+  if(days < 0)  return 'expired';
+  if(days <= 30) return 'd30';
+  if(days <= 60) return 'd60';
+  if(days <= 90) return 'd90';
+  return 'future';
+}
+
+function renderRenewals(){
+  const container = document.getElementById('renewals-panel');
+  if(!container) return;
+  const all = getContractRenewals();
+  const expired = all.filter(r => r.days < 0);
+  const d30 = all.filter(r => r.days >= 0 && r.days <= 30);
+  const d60 = all.filter(r => r.days > 30 && r.days <= 60);
+  const d90 = all.filter(r => r.days > 60 && r.days <= 90);
+
+  // Top-of-panel tiles
+  const tile = (label, count, color, sub) => `
+    <div class="renew-tile" style="border-color:${color}40;background:${color}0d">
+      <div class="renew-tile__label">${label}</div>
+      <div class="renew-tile__value" style="color:${color}">${count}</div>
+      <div class="renew-tile__sub">${sub}</div>
+    </div>`;
+
+  const tiles = `
+    <div class="renew-tiles">
+      ${tile('Expired', expired.length, '#ef4444', expired.length?'Already lapsed':'None lapsed')}
+      ${tile('≤ 30 days', d30.length, '#f59e0b', 'Act this month')}
+      ${tile('31–60 days', d60.length, '#eab308', 'Quote soon')}
+      ${tile('61–90 days', d90.length, '#10b981', 'Plan ahead')}
+    </div>`;
+
+  // Top-12 list of contracts expiring soonest (expired + ≤90 days)
+  const list = [...expired, ...d30, ...d60, ...d90].slice(0, 12);
+  const fmt = (d) => {
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+    return `${dd} ${mm} ${d.getFullYear()}`;
+  };
+  const dayBadge = (days) => {
+    let color = '#94a3b8', text = `${days}d`;
+    if(days < 0){ color = '#ef4444'; text = `${Math.abs(days)}d ago`; }
+    else if(days <= 30) color = '#f59e0b';
+    else if(days <= 60) color = '#eab308';
+    else if(days <= 90) color = '#10b981';
+    return `<span style="font-family:var(--mono);font-size:11px;font-weight:600;color:${color}">${text}</span>`;
+  };
+  const contractPill = (c) => {
+    const t = (c||'').toLowerCase();
+    const cls = t==='cmc'?'cmc':(t==='warranty'?'warranty':'low');
+    return `<span class="badge ${cls}">${esc(c||'—')}</span>`;
+  };
+
+  const rows = list.length ? list.map(r => `
+    <tr>
+      <td style="font-weight:500">${esc(r.customer)}</td>
+      <td style="font-size:11px;color:var(--text-dim)">${esc(r.model)}</td>
+      <td style="font-size:11px;color:var(--text-dim)">${esc(r.town)}</td>
+      <td>${contractPill(r.contract)}</td>
+      <td style="font-family:var(--mono);font-size:11px">${fmt(r.end)}</td>
+      <td style="text-align:right">${dayBadge(r.days)}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--text-faint);padding:24px">No contracts expiring in the next 90 days.</td></tr>`;
+
+  container.innerHTML = `
+    ${tiles}
+    <div style="overflow-x:auto;margin-top:12px">
+      <table class="data-table">
+        <thead><tr>
+          <th>CUSTOMER</th><th>MODEL</th><th>LOCATION</th>
+          <th>CONTRACT</th><th>END DATE</th><th style="text-align:right">STATUS</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 function renderBarMonthly(){
@@ -3301,7 +3455,7 @@ setInterval(updateClock,1000); updateClock();
 // ══════════════════════════════════════════
 // Page-specific renderers so we can re-run them on navigate
 const PAGE_RENDERERS={
-  dashboard:()=>{renderDashMonthTabs();renderAlertBanner();renderKPIGrid();renderDashOpen();renderDashEngineers();renderBarMonthly();renderCallTypeChart();renderTopCustomers();renderKPIBand();},
+  dashboard:()=>{renderDashMonthTabs();renderAlertBanner();renderKPIGrid();renderDashOpen();renderDashEngineers();renderRenewals();renderBarMonthly();renderCallTypeChart();renderTopCustomers();renderKPIBand();},
   tickets:()=>{buildHistoryTabs();renderHistory();},
   open:renderOpen,
   pm:renderPM,
@@ -3335,6 +3489,7 @@ async function doFirstPaint(){
   renderKPIGrid();
   renderDashOpen();
   renderDashEngineers();
+  renderRenewals();
   renderBarMonthly();
   renderCallTypeChart();
   renderTopCustomers();
