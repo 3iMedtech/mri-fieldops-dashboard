@@ -1550,7 +1550,12 @@ async function applyUploadedData(){
     // loader we don't need.
     suppressRealtimeReload(30000);
 
-    // 1. Write config assets (if any new ones appeared)
+    // Each XLSX upload is the complete source of truth for operational
+    // data. We replace — not merge — so orphan rows from previous
+    // uploads don't accumulate in the DB and leak back into the UI
+    // after logout/login.
+
+    // 1. Replace config assets
     if(r.config && r.config.length > 0){
       const configRows = r.config.map(a => ({
         code: a.code, ast_id: a.ast_id || null, name: a.name,
@@ -1565,13 +1570,20 @@ async function applyUploadedData(){
       const cfgSeen = new Map();
       configRows.forEach(row => { if(row.code) cfgSeen.set(row.code, row); });
       const deduped = Array.from(cfgSeen.values());
-      const { error } = await _sb.from('config_assets').upsert(deduped);
+      showLoading('Replacing install base…');
+      // Wipe first so assets that were removed upstream don't linger.
+      // `neq('code', '__sentinel__')` matches every row (no asset has
+      // that literal code).
+      const delAssets = await _sb.from('config_assets').delete().neq('code', '__sentinel__');
+      if(delAssets.error) throw delAssets.error;
+      const { error } = await _sb.from('config_assets').insert(deduped);
       if(error) throw error;
     }
 
-    // 2. Write CMC contracts
+    // 2. Replace CMC contracts
     if(r.cmc && r.cmc.length > 0){
       // CMC uses an auto-uuid pk, so we delete and reinsert for this upload
+      showLoading('Replacing CMC contracts…');
       await _sb.from('cmc_contracts').delete().neq('sn', -99999);
       const cmcRows = r.cmc.map(c => ({
         sn: c.sn, customer: c.customer, town: c.town || null,
@@ -1583,7 +1595,11 @@ async function applyUploadedData(){
       if(error) throw error;
     }
 
-    // 3. Bulk upsert all tickets
+    // 3. Replace tickets — wipe old rows so tickets removed upstream
+    //    don't stick around. Then bulk-upsert the new set.
+    showLoading(`Replacing tickets (${r.allTickets.length} rows)…`);
+    const delTickets = await _sb.from('tickets').delete().neq('id', '__sentinel__');
+    if(delTickets.error) throw delTickets.error;
     showLoading(`Uploading ${r.allTickets.length} tickets…`);
     await dbBulkUpsertTickets(r.allTickets);
 
