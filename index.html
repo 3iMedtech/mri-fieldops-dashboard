@@ -520,7 +520,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
     <div class="nav-section">OPERATIONS</div>
     <div class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span> Dashboard</div>
     <div class="nav-item" data-page="tickets"><span class="nav-icon">🎫</span> Service History <span class="nav-badge blue" id="nb-total">143</span></div>
-    <div class="nav-item" data-page="open"><span class="nav-icon">🚨</span> Open Tickets <span class="nav-badge" id="nb-open">13</span></div>
+    <div class="nav-item" data-page="open"><span class="nav-icon">🚨</span> Open Tickets <span class="nav-badge" id="nb-open">0</span></div>
     <div class="nav-item" data-page="pm"><span class="nav-icon">📅</span> PM Schedules <span class="nav-badge amber" id="nb-pm">9</span></div>
     <div class="nav-section">ASSETS & TEAM</div>
     <div class="nav-item" data-page="assets"><span class="nav-icon">🏥</span> Install Base</div>
@@ -656,7 +656,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 <!-- ██ OPEN TICKETS ██ -->
 <div class="page" id="page-open">
   <div class="panel">
-    <div class="panel-head"><div class="panel-title">🚨 Open Tickets — 13 Active (7 sites)</div></div>
+    <div class="panel-head"><div class="panel-title" id="open-panel-title">🚨 Open Tickets</div></div>
     <div style="overflow-x:auto">
       <table class="data-table">
         <thead><tr>
@@ -2749,6 +2749,14 @@ function filterHistoryModality(el,m){
 // RENDER OPEN TICKETS
 // ══════════════════════════════════════════
 function renderOpen(){
+  const openCount = OPEN_TICKETS.length;
+  const siteCount = new Set(OPEN_TICKETS.map(t=>t.customer)).size;
+  const title = document.getElementById('open-panel-title');
+  if(title){
+    title.textContent = openCount > 0
+      ? `🚨 Open Tickets — ${openCount} Active (${siteCount} site${siteCount===1?'':'s'})`
+      : `🚨 Open Tickets — None`;
+  }
   document.getElementById('open-body').innerHTML=OPEN_TICKETS.map(t=>`
     <tr class="clickable" onclick="openDetail('${t.id}')">
       <td><span class="ticket-id">${t.id}</span></td>
@@ -2947,12 +2955,21 @@ function renderPMReminders(){
   }).join('');
 }
 
+// Fixed CC list for every PM reminder — applied in addition to regional engineers in To.
+const PM_REMINDER_CC = [
+  'yogesh.d@3imedtech.com',
+  'anand.vs@3imedtech.com',
+  'ravikumar.g@3imedtech.com',
+  'abhijit.s@3imedtech.com'
+];
+
 function composePMEmail(pmId){
   const pm = PM_SCHEDULE.find(p=>p.id===pmId);
   if(!pm) return;
   const st = pmStatus(pm);
   const engineers = getEngineersForRegion(pm.region);
   const toEmails = engineers.map(e=>e.email).join(',');
+  const ccEmails = encodeURIComponent(PM_REMINDER_CC.join(','));
   const urgency = st.code==='overdue' ? 'OVERDUE' : 'Due Soon';
   const subject = encodeURIComponent(`[PM ${urgency}] ${pm.customer} — ${pm.model} (${pm.town}) — Due ${pm.nextPMS||'TBD'}`);
   const dueDate = pm.nextPMS || 'TBD';
@@ -2977,8 +2994,8 @@ PM Frequency: ${pm.freq}x per year
 Please schedule and complete the PM within the window. Confirm completion by replying to this email with the PM report.
 
 Regards,
-FieldOps Service Manager`);
-  const mailtoUrl = `mailto:${toEmails}?subject=${subject}&body=${body}`;
+Service desk`);
+  const mailtoUrl = `mailto:${toEmails}?cc=${ccEmails}&subject=${subject}&body=${body}`;
   window.open(mailtoUrl, '_blank');
 }
 
