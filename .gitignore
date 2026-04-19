@@ -1,0 +1,13 @@
+# Local DB dumps — never commit, may contain customer data
+*.dump
+*.sql.backup
+prod-dump-*.sql
+staging-dump-*.sql
+
+# macOS
+.DS_Store
+
+# Editor / tooling state
+.claude/
+.vscode/
+node_modules/
