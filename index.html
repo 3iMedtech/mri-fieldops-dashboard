@@ -4075,7 +4075,11 @@ async function bootApp(){
 }
 
 // ── Realtime (live sync across users) ─────────────────────────────────
-let _rtChannel = null;
+// One channel per table (not one shared channel with 5 bindings): if a
+// single table isn't in the realtime publication, only that subscription
+// fails — the others keep working and the badge stays green.
+const _RT_TABLES = ['tickets','pm_schedule','engineers','cmc_contracts','ambiguities'];
+let _rtChannels = [];       // [{ table, channel, status }]
 let _rtReloadTimer = null;
 function _scheduleRtReload(){
   // Debounce: a batched upload can fire 300 events in a second. Collapse
@@ -4106,31 +4110,47 @@ function _setLiveBadgeState(state){
           : state === 'offline' ? 'Offline — changes will not auto-sync'
           : 'Connecting…';
 }
+function _rollupRtState(){
+  // Live if AT LEAST one table subscribed; offline only if all failed;
+  // else idle (still connecting).
+  if(!_rtChannels.length) return _setLiveBadgeState('offline');
+  const anyLive    = _rtChannels.some(c => c.status === 'SUBSCRIBED');
+  const allSettled = _rtChannels.every(c => ['SUBSCRIBED','CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(c.status));
+  if(anyLive)            _setLiveBadgeState('live');
+  else if(allSettled)    _setLiveBadgeState('offline');
+  else                   _setLiveBadgeState('idle');
+}
 function attachRealtime(){
-  if(!_sb || _rtChannel) return;
+  if(!_sb || _rtChannels.length) return;
   try {
-    _rtChannel = _sb.channel('fieldops-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' },      _scheduleRtReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pm_schedule' },  _scheduleRtReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'engineers' },    _scheduleRtReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cmc_contracts' },_scheduleRtReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ambiguities' },  _scheduleRtReload)
-      .subscribe((status) => {
-        // status values: SUBSCRIBED | CLOSED | CHANNEL_ERROR | TIMED_OUT
-        if(status === 'SUBSCRIBED') _setLiveBadgeState('live');
-        else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') _setLiveBadgeState('offline');
-        else _setLiveBadgeState('idle');
-      });
+    _RT_TABLES.forEach(table => {
+      const entry = { table, channel: null, status: 'idle' };
+      const ch = _sb.channel('fieldops-live-' + table)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, _scheduleRtReload)
+        .subscribe((status, err) => {
+          // status: SUBSCRIBED | CLOSED | CHANNEL_ERROR | TIMED_OUT
+          entry.status = status;
+          if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
+            console.warn('[realtime] table "' + table + '" — ' + status
+              + (err ? ' (' + (err.message||err) + ')' : '')
+              + '. Enable Realtime for this table in Supabase → Database → Replication → supabase_realtime publication.');
+          }
+          _rollupRtState();
+        });
+      entry.channel = ch;
+      _rtChannels.push(entry);
+    });
+    _rollupRtState();
   } catch(e){
     console.warn('[realtime] attach failed', e);
     _setLiveBadgeState('offline');
   }
 }
 function detachRealtime(){
-  if(_rtChannel && _sb){
-    try { _sb.removeChannel(_rtChannel); } catch(_){}
+  if(_sb){
+    _rtChannels.forEach(({channel}) => { try { _sb.removeChannel(channel); } catch(_){} });
   }
-  _rtChannel = null;
+  _rtChannels = [];
   if(_rtReloadTimer){ clearTimeout(_rtReloadTimer); _rtReloadTimer = null; }
 }
 
