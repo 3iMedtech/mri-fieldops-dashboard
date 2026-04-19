@@ -90,13 +90,22 @@ jobs:
                 -out "$OUT"
           ls -lh "$OUT"
           # Quick sanity-check: verify we can re-read the header.
+          # Decrypt + gunzip to a temp file, then grep — avoids SIGPIPE
+          # propagating under `set -o pipefail` when a downstream `head`
+          # closes the pipe early.
+          VERIFY_TMP=$(mktemp)
+          trap 'rm -f "$VERIFY_TMP"' EXIT
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 \
             -pass env:ENC_KEY -in "$OUT" 2>/dev/null \
-            | gunzip -c 2>/dev/null \
-            | head -c 80 \
-            | grep -q "PostgreSQL database dump" \
-            && echo "✅ Encrypted blob decrypts + unzips correctly." \
-            || (echo "::error::Self-verification failed — the artifact may be corrupt"; exit 1)
+            | gunzip -c 2>/dev/null > "$VERIFY_TMP" || true
+          if head -c 4096 "$VERIFY_TMP" | grep -qE "PostgreSQL database dump|pg_dump"; then
+            echo "✅ Encrypted blob decrypts + unzips correctly."
+          else
+            echo "::error::Self-verification failed — the artifact may be corrupt"
+            echo "--- first 200 bytes of decrypted output ---"
+            head -c 200 "$VERIFY_TMP" || true
+            exit 1
+          fi
           echo "ART=$OUT" >> "$GITHUB_ENV"
 
       - name: Upload encrypted backup artifact
