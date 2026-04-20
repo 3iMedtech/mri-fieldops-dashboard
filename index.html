@@ -245,6 +245,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
   }
   .viewer-mode .admin-only { display: none !important; }
   body:not(.superadmin-mode) .superadmin-only { display: none !important; }
+  /* PM management actions — admin or manager only. Engineer role sees neither. */
+  .viewer-mode .pm-manage { display: none !important; }
+  .viewer-mode.manager-mode .pm-manage { display: revert !important; }
   .viewer-badge { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(139,92,246,.2); color: #c4b5fd; letter-spacing: 1px; }
 
   /* ─────────────────────────────────────────────────────────────
@@ -870,6 +873,43 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
       <div class="modal-close" onclick="closeModal('detail-modal')">×</div>
     </div>
     <div class="modal-body" id="dm-body"></div>
+  </div>
+</div>
+
+<!-- PM COMPLETION MODAL -->
+<div class="modal-overlay" id="pm-complete-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--green);margin-bottom:3px">PM COMPLETION</div>
+        <div style="font-family:var(--display);font-weight:700;font-size:15px">Record Preventive Maintenance</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px" id="pm-complete-context">—</div>
+      </div>
+      <div class="modal-close" onclick="closeModal('pm-complete-modal')">×</div>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div>
+          <label style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:5px;letter-spacing:1px;text-transform:uppercase">Completion Date *</label>
+          <input type="date" id="pm-complete-date" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px">
+        </div>
+        <div>
+          <label style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:5px;letter-spacing:1px;text-transform:uppercase">Engineer Performed *</label>
+          <select id="pm-complete-engineer" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px"></select>
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:5px;letter-spacing:1px;text-transform:uppercase">Remarks / Observations</label>
+        <textarea id="pm-complete-remarks" rows="4" placeholder="Parts replaced, calibration values, issues noted, follow-up items..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);resize:vertical;font-family:inherit;font-size:12px;line-height:1.5"></textarea>
+      </div>
+      <div id="pm-complete-preview" style="background:var(--surface2);border:1px dashed var(--border);border-radius:6px;padding:10px 12px;font-size:11px;color:var(--text-dim);margin-bottom:16px">
+        Next PM will be computed from the completion date and frequency.
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeModal('pm-complete-modal')" style="font-size:12px;padding:8px 16px">Cancel</button>
+        <button class="btn btn-primary" id="pm-complete-submit" onclick="submitPMComplete()" style="font-size:12px;padding:8px 18px">✓ Confirm Completion</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2849,7 +2889,7 @@ function renderPM(){
     }
     // Gmail mailto link
     const emailAction = (st.code==='overdue'||st.code==='in-window') && engineers.length
-      ? `<button class="btn btn-primary" style="font-size:9px;padding:3px 8px" onclick="composePMEmail('${pm.id}')">📧 Remind</button>`
+      ? `<button class="btn btn-primary pm-manage" style="font-size:9px;padding:3px 8px" onclick="composePMEmail('${pm.id}')">📧 Remind</button>`
       : (st.code==='installation' || st.code==='not-covered')
         ? `<span style="color:var(--text-faint);font-size:10px">N/A</span>`
         : `<span style="color:var(--text-faint);font-size:10px">Not yet</span>`;
@@ -2971,8 +3011,8 @@ function renderPMReminders(){
       </div>
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Engineers: ${engList}</div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary" style="font-size:10px;padding:4px 12px" onclick="composePMEmail('${pm.id}')">📧 Compose Reminder Email</button>
-        <button class="btn btn-ghost admin-only" style="font-size:10px;padding:4px 10px" onclick="markPMDone('${pm.id}')">✓ Mark PM Completed</button>
+        <button class="btn btn-primary pm-manage" style="font-size:10px;padding:4px 12px" onclick="composePMEmail('${pm.id}')">📧 Compose Reminder Email</button>
+        <button class="btn btn-ghost pm-manage" style="font-size:10px;padding:4px 10px" onclick="openPMCompleteModal('${pm.id}')">✓ Mark PM Completed</button>
       </div>
     </div>`;
   }).join('');
@@ -3022,24 +3062,121 @@ Service desk`);
   window.open(mailtoUrl, '_blank');
 }
 
-async function markPMDone(pmId){
-  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
-  const pm = PM_SCHEDULE.find(p=>p.id===pmId);
+// PM-management access check — admin OR manager (interim email allowlist until
+// the `manager` role tier ships).
+function canManagePM(){
+  if(_userRole === 'admin' || _userRole === 'manager') return true;
+  const email = (_currentUser?.email || '').toLowerCase();
+  return email === 'manager@3imedtech.com';
+}
+
+// Holds the PM id while the completion modal is open.
+let _pmCompletePendingId = null;
+
+function openPMCompleteModal(pmId){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  const pm = PM_SCHEDULE.find(p => p.id === pmId);
   if(!pm) return;
-  const today = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
-  if(!confirm(`Mark PM as completed for ${pm.customer} (${pm.town}) as of ${today}?`)) return;
-  // Update the schedule: lastPMS = today, compute next due, clear overdue
-  pm.lastPMS = today.replace(/ /g,'-');
-  // Calculate next PM date based on frequency
+  _pmCompletePendingId = pmId;
+
+  // Context line
+  document.getElementById('pm-complete-context').innerHTML =
+    `<strong>${esc(pm.customer)}</strong> · ${esc(pm.town)} · ${esc(pm.model)} ` +
+    `<span style="color:var(--text-faint)">(${esc(pm.id)})</span>` +
+    (pm.nextPMS ? ` · Due <span style="color:var(--amber)">${esc(fmtDate(pm.nextPMS))}</span>` : '');
+
+  // Date — default today, max=today (no future dates allowed)
+  const todayIso = new Date().toISOString().slice(0,10);
+  const dateEl = document.getElementById('pm-complete-date');
+  dateEl.value = todayIso;
+  dateEl.max   = todayIso;
+  dateEl.onchange = updatePMCompletePreview;
+
+  // Engineer dropdown — preselect the only regional engineer if unambiguous
+  const regional = getEngineersForRegion(pm.region);
+  const options = ENGINEERS.map(e => {
+    const selected = regional.length === 1 && regional[0].id === e.id ? ' selected' : '';
+    return `<option value="${esc(e.id)}"${selected}>${esc(e.name)} — ${esc(e.region)}</option>`;
+  }).join('');
+  document.getElementById('pm-complete-engineer').innerHTML =
+    '<option value="">— Select engineer —</option>' + options;
+
+  document.getElementById('pm-complete-remarks').value = '';
+  document.getElementById('pm-complete-submit').disabled = false;
+  updatePMCompletePreview();
+
+  document.getElementById('pm-complete-modal').classList.add('open');
+}
+
+// Recomputes the "next PM will be..." preview whenever the date changes.
+function updatePMCompletePreview(){
+  const pm = PM_SCHEDULE.find(p => p.id === _pmCompletePendingId);
+  if(!pm) return;
+  const dateVal = document.getElementById('pm-complete-date').value;
+  const box = document.getElementById('pm-complete-preview');
+  if(!dateVal){ box.textContent = 'Pick a completion date.'; return; }
+  if(!pm.freq || pm.freq <= 0){
+    box.textContent = 'This machine has no PM frequency — next due date will not be auto-computed.';
+    return;
+  }
+  const intervalMonths = Math.round(12 / pm.freq);
+  const next = new Date(dateVal);
+  next.setMonth(next.getMonth() + intervalMonths);
+  const nextStr = next.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  box.innerHTML = `Next PM due: <strong style="color:var(--text)">${esc(nextStr)}</strong> ` +
+                  `<span style="color:var(--text-faint)">(+${intervalMonths} mo from completion, ${pm.freq}× per year)</span>`;
+}
+
+async function submitPMComplete(){
+  const pmId = _pmCompletePendingId;
+  const pm = PM_SCHEDULE.find(p => p.id === pmId);
+  if(!pm){ closeModal('pm-complete-modal'); return; }
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+
+  const dateVal = document.getElementById('pm-complete-date').value;
+  const engId   = document.getElementById('pm-complete-engineer').value;
+  const remarks = document.getElementById('pm-complete-remarks').value.trim();
+
+  if(!dateVal){ alert('Please select a completion date.'); return; }
+  if(new Date(dateVal) > new Date()){ alert('Completion date cannot be in the future.'); return; }
+  if(!engId){   alert('Please select the engineer who performed the PM.'); return; }
+
+  const eng = ENGINEERS.find(e => e.id === engId);
+  const submitBtn = document.getElementById('pm-complete-submit');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Saving…';
+
+  // 1) Write the completion row (audit trail + feeds performance metrics later)
+  const { error: insErr } = await _sb.from('pm_completions').insert({
+    pm_id: pmId,
+    completion_date: dateVal,
+    engineer_id: engId,
+    engineer_name: eng ? eng.name : null,
+    remarks: remarks || null,
+    created_by: _currentUser?.id || null
+  });
+  if(insErr){
+    console.error('PM completion insert failed:', insErr);
+    alert('Failed to save PM completion: ' + insErr.message);
+    submitBtn.disabled = false;
+    submitBtn.textContent = '✓ Confirm Completion';
+    return;
+  }
+
+  // 2) Update the schedule snapshot so the existing views stay correct
+  const completion = new Date(dateVal);
+  pm.lastPMS = completion.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
   if(pm.freq && pm.freq > 0){
     const intervalMonths = Math.round(12 / pm.freq);
-    const next = new Date();
+    const next = new Date(completion);
     next.setMonth(next.getMonth() + intervalMonths);
     pm.nextPMS = next.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
   }
   pm.status = 'active';
-  // Persist to Supabase
   await dbSavePM(pm);
+
+  closeModal('pm-complete-modal');
+  _pmCompletePendingId = null;
   renderPM();
   // Update nav badge
   const pb = document.getElementById('nb-pm');
@@ -3761,6 +3898,11 @@ function applyRoleRestrictions(){
   } else {
     document.body.classList.remove('superadmin-mode');
   }
+  // Manager gate — interim email allowlist until the `manager` role tier ships.
+  // Unlocks PM management actions (.pm-manage) for manager, keeps them hidden
+  // from the engineer login.
+  const isManager = _userRole === 'manager' || email === 'manager@3imedtech.com';
+  document.body.classList.toggle('manager-mode', isManager);
   const badge = document.getElementById('user-role-badge');
   if(badge) badge.innerHTML = _userRole === 'viewer'
     ? '<span class="viewer-badge">VIEWER</span>'
