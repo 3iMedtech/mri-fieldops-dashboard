@@ -248,6 +248,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
   /* PM management actions — admin or manager only. Engineer role sees neither. */
   .viewer-mode .pm-manage { display: none !important; }
   .viewer-mode.manager-mode .pm-manage { display: revert !important; }
+  /* PM Master Schedule ACTION column — hide entirely for engineers so the table doesn't carry an empty column. */
+  .viewer-mode .pm-action-col { display: none !important; }
+  .viewer-mode.manager-mode .pm-action-col { display: table-cell !important; }
   .viewer-badge { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(139,92,246,.2); color: #c4b5fd; letter-spacing: 1px; }
 
   /* ─────────────────────────────────────────────────────────────
@@ -695,7 +698,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
         <thead><tr>
           <th>ID</th><th>CUSTOMER</th><th>PLACE</th><th>MODEL</th><th>CONTRACT</th>
           <th>FREQ</th><th>LAST PMS</th><th>NEXT DUE</th><th>WINDOW</th>
-          <th>ENGINEERS</th><th>STATUS</th><th>ACTION</th>
+          <th>ENGINEERS</th><th>STATUS</th><th class="pm-action-col">ACTION</th>
         </tr></thead>
         <tbody id="pm-body"></tbody>
       </table>
@@ -2905,7 +2908,7 @@ function renderPM(){
       <td style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">${windowStr}</td>
       <td style="font-size:10px">${engNames}</td>
       <td><span class="badge ${st.cls}">${st.label}</span>${st.daysText?`<div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:2px">${st.daysText}</div>`:''}</td>
-      <td>${emailAction}</td>
+      <td class="pm-action-col">${emailAction}</td>
     </tr>`;
   }).join('');
 
