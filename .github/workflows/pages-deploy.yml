@@ -17,7 +17,7 @@ name: Deploy Pages (main + staging)
 
 on:
   push:
-    branches: [main, staging]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
