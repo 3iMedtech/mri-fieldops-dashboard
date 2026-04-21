@@ -1764,7 +1764,7 @@ async function applyUploadedData(){
     });
 
     // 5. Update in-memory state
-    RAW_TICKETS = r.allTickets;
+    RAW_TICKETS = _enrichTickets(r.allTickets);
     OPEN_TICKETS = RAW_TICKETS.filter(isOpen);
     CLOSED_TICKETS = RAW_TICKETS.filter(isClosed);
     INCIDENT_TICKETS = RAW_TICKETS.filter(isIncident);
@@ -1891,15 +1891,45 @@ function engCallCount(){
 
 // Canonical names that refer to a given roster engineer.
 // Used to match tickets back to the roster entry.
+// Memoized via WeakMap keyed by the engineer object — the Set is stable for
+// the lifetime of that object, so repeated lookups in hot paths (per-ticket
+// filters, per-render drill-downs) are O(1) after the first call.
+let _rosterCanonicalsCache = new WeakMap();
+function invalidateRosterCanonicals(){ _rosterCanonicalsCache = new WeakMap(); }
 function rosterEngineerCanonicals(eng){
+  let hit = _rosterCanonicalsCache.get(eng);
+  if(hit) return hit;
   const names = [eng.name, ...(eng.aliases||[])];
   const out = new Set();
   names.forEach(n=>{
     const c = canonEngName(n);
     if(c) out.add(c);
   });
+  _rosterCanonicalsCache.set(eng, out);
   return out;
 }
+
+// Ticket enrichment — parse dates and split the compound engineer string
+// once at load time so every later render can skip the regex/date work.
+// Every hot-path consumer (ticketsForEngineer, computeEngineerMetrics,
+// the drill-down sort) reads t._callDate / t._upDate / t._engCanons instead
+// of re-parsing 143+ tickets on every tab switch.
+function _enrichTicket(t){
+  t._callDate  = parseFlexDate(t.call_date);
+  t._upDate    = parseFlexDate(t.sys_up_date);
+  t._engCanons = splitEngineers(t.engineer);
+  return t;
+}
+function _enrichTickets(arr){ if(Array.isArray(arr)) arr.forEach(_enrichTicket); return arr; }
+
+// PM schedule index — replaces O(N) PM_SCHEDULE.find() inside metric loops.
+let PM_BY_ID = new Map();
+function _indexPMSchedule(){ PM_BY_ID = new Map(PM_SCHEDULE.map(p => [p.id, p])); }
+// Build once from the hardcoded fallback; Supabase load rebuilds it after.
+_indexPMSchedule();
+// NOTE: Enrichment of the hardcoded fallback RAW_TICKETS happens just after
+// parseFlexDate + DATA_START are declared, since parseFlexDate closes over
+// DATA_START (temporal dead zone blocks an immediate call here).
 
 // Single source of truth for "which tickets belong to this engineer, filtered by X?".
 // Every engineer-scoped view (Field Team, Engineer Performance, drill-downs) calls
@@ -1912,11 +1942,13 @@ function ticketsForEngineer(eng, opts){
   if(canonSet.size === 0) return [];
   const { windowStart=null, monthFilter=null } = opts || {};
   return RAW_TICKETS.filter(t=>{
-    const engs = splitEngineers(t.engineer);
+    // Pre-enriched at load time: t._engCanons, t._callDate. Fall back to
+    // live parse if we hit a row that somehow bypassed enrichment.
+    const engs = t._engCanons || splitEngineers(t.engineer);
     if(!engs.some(n => canonSet.has(n))) return false;
     if(monthFilter && monthFilter !== 'all' && t.month !== monthFilter) return false;
     if(windowStart){
-      const d = parseFlexDate(t.call_date);
+      const d = t._callDate !== undefined ? t._callDate : parseFlexDate(t.call_date);
       if(!d || d < windowStart) return false;
     }
     return true;
@@ -2010,6 +2042,14 @@ const DATE_AUDIT = { invalid:[], suspicious:[] };
 // Dataset window — anything outside this is suspicious, not "parseable but old"
 const DATA_START = new Date(2025,8,1);   // Sep 2025 (one-month grace before Oct 2025)
 const DATA_END   = new Date(2026,5,30);  // Jun 2026 (grace after Mar 2026)
+
+// Deferred enrichment of the hardcoded fallback RAW_TICKETS — safe to run
+// here because DATA_START / DATA_END are now initialized. Enrichment adds
+// t._callDate / t._upDate / t._engCanons so hot paths skip re-parsing.
+if(typeof RAW_TICKETS !== 'undefined' && Array.isArray(RAW_TICKETS)){
+  // queueMicrotask defers one tick so the audit counters reset below runs first.
+  queueMicrotask(() => { try { _enrichTickets(RAW_TICKETS); } catch(e) { console.warn('initial ticket enrichment skipped:', e); } });
+}
 
 function parseFlexDate(s, ctx){
   if(s == null || s === '') return null;
@@ -2214,6 +2254,10 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',team:'Field Team',ambiguities:'Flags & Ambiguities',engperf:'Engineer Performance',reports:'Reports',auditlog:'Audit Log'};
 const SUPERADMIN_EMAIL = 'abhijit.s@3imedtech.com';
+// Cache the currently-active nav item + page so navigate() only has to flip
+// two class toggles, never querySelectorAll across the whole document.
+let _activeNavItem = null;
+let _activePage = null;
 function navigate(page){
   // Viewers cannot access the Flags & Ambiguities page
   if(page==='ambiguities' && _userRole!=='admin'){
@@ -2230,11 +2274,14 @@ function navigate(page){
     logAudit('restricted_access_attempt', {target: page});
     page='dashboard';
   }
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  const t=document.querySelector(`[data-page="${page}"]`);
-  if(t) t.classList.add('active');
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById(`page-${page}`)?.classList.add('active');
+  // No-op if we're already on this page (clicking the same sidebar item).
+  if(_activePage && _activePage.id === `page-${page}`) return;
+  if(_activeNavItem) _activeNavItem.classList.remove('active');
+  const nextNav = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if(nextNav){ nextNav.classList.add('active'); _activeNavItem = nextNav; }
+  if(_activePage) _activePage.classList.remove('active');
+  const nextPage = document.getElementById(`page-${page}`);
+  if(nextPage){ nextPage.classList.add('active'); _activePage = nextPage; }
   document.getElementById('topbar-title').textContent=PAGE_TITLES[page]||page;
   if(page==='ambiguities') renderAmbiguities();
   if(page==='engperf') renderEngineerPerformance();
@@ -3247,6 +3294,8 @@ async function submitPMComplete(){
     submitBtn.textContent = '✓ Confirm Completion';
     return;
   }
+  // New completion — drop the TTL cache so the next metrics render reflects it.
+  invalidatePMCompletionsCache();
 
   // 2) Update the schedule snapshot so the existing views stay correct.
   // Parse the picker value as a local-time date — `new Date("YYYY-MM-DD")`
@@ -3596,11 +3645,13 @@ function computeEngineerMetrics(eng, windowStart){
   let ftfOk = 0, ftfN = 0;
   const sites = new Set();
 
+  // Single-pass aggregate. Uses the pre-parsed t._callDate / t._upDate and
+  // cached engineer canonicals so this loop stays tight even at 10k tickets.
   inWindow.forEach(t=>{
     sites.add(customerKey(t.customer));
     if(isClosed(t)){
-      const call = parseFlexDate(t.call_date);
-      const up   = parseFlexDate(t.sys_up_date);
+      const call = t._callDate;
+      const up   = t._upDate;
       if(call && up){
         const d = dayDiff(call, up);
         if(d >= 0){
@@ -3632,7 +3683,8 @@ function computeEngineerMetrics(eng, windowStart){
   });
   let pmDone = comps.length, pmLate = 0;
   comps.forEach(c=>{
-    const pm = PM_SCHEDULE.find(p => p.id === c.pm_id);
+    // O(1) lookup via PM_BY_ID Map instead of a linear PM_SCHEDULE.find().
+    const pm = PM_BY_ID.get(c.pm_id);
     if(!pm) return;
     // A completion is "late" if the calendar date slipped past the
     // scheduled due date by more than the PM window.
@@ -3657,13 +3709,28 @@ function computeEngineerMetrics(eng, windowStart){
   };
 }
 
+// TTL cache so the Engineer Performance tab doesn't hit Supabase on every
+// navigation — 60s is short enough that a fresh PM completion shows up
+// quickly, long enough that rapid tab-flipping never waits on the network.
+// Call invalidatePMCompletionsCache() after any completion write.
+let _pmCompletionsFetchedAt = 0;
+let _pmCompletionsInFlight = null;
+const PM_COMPLETIONS_TTL_MS = 60_000;
+function invalidatePMCompletionsCache(){ _pmCompletionsFetchedAt = 0; }
 async function loadPMCompletions(){
   if(typeof _sb === 'undefined' || !_sb) return;
-  const { data, error } = await _sb.from('pm_completions')
-    .select('pm_id,completion_date,engineer_id,engineer_name,remarks,created_at')
-    .order('completion_date', {ascending:false});
-  if(error){ console.warn('pm_completions load failed:', error.message); _PM_COMPLETIONS = []; return; }
-  _PM_COMPLETIONS = data || [];
+  const fresh = Date.now() - _pmCompletionsFetchedAt < PM_COMPLETIONS_TTL_MS;
+  if(fresh) return;
+  if(_pmCompletionsInFlight) return _pmCompletionsInFlight;
+  _pmCompletionsInFlight = (async () => {
+    const { data, error } = await _sb.from('pm_completions')
+      .select('pm_id,completion_date,engineer_id,engineer_name,remarks,created_at')
+      .order('completion_date', {ascending:false});
+    if(error){ console.warn('pm_completions load failed:', error.message); _PM_COMPLETIONS = []; }
+    else { _PM_COMPLETIONS = data || []; _pmCompletionsFetchedAt = Date.now(); }
+    _pmCompletionsInFlight = null;
+  })();
+  return _pmCompletionsInFlight;
 }
 
 // Colour a percentage by healthy/warn/critical thresholds.
@@ -3674,10 +3741,15 @@ function epPctColor(pct, goodAbove=80, okAbove=60){
   return 'var(--red)';
 }
 
+let _epRegionCacheKey = '';
 function epPopulateRegionFilter(){
   const sel = document.getElementById('ep-region');
   if(!sel) return;
   const regions = [...new Set(ENGINEERS.map(e=>e.region).filter(Boolean))].sort();
+  const key = regions.join('|');
+  // Skip DOM work if the region list hasn't changed since last render.
+  if(key === _epRegionCacheKey && sel.options.length > 0) return;
+  _epRegionCacheKey = key;
   const current = sel.value || 'all';
   sel.innerHTML = '<option value="all">All regions</option>' +
     regions.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');
@@ -3767,8 +3839,9 @@ function openEngineerDetail(engId, metricKey){
   const m = computeEngineerMetrics(eng, windowStart);
 
   const byDateDesc = (a, b) => {
-    const da = parseFlexDate(a.call_date);
-    const db = parseFlexDate(b.call_date);
+    // Enriched at load time — comparator stays O(1) per pair.
+    const da = a._callDate;
+    const db = b._callDate;
     return (db?.getTime()||0) - (da?.getTime()||0);
   };
 
@@ -3833,7 +3906,7 @@ function openEngineerDetail(engId, metricKey){
     </table>`;
   } else if(plan.mode === 'pm'){
     const rows = capped.map(c=>{
-      const pm = PM_SCHEDULE.find(p => p.id === c.pm_id);
+      const pm = PM_BY_ID.get(c.pm_id);
       const due = pm ? parseFlexDate(pm.nextPMS) : null;
       const done = parseFlexDate(c.completion_date);
       const late = (due && done) ? dayDiff(due, done) > PM_WINDOW_DAYS : false;
@@ -4440,6 +4513,7 @@ async function loadAllFromDB(opts = {}){
     nextPMS: dbDateToDisplay(r.next_pms),
     status: r.status || 'active',
   }));
+  _indexPMSchedule();
 
   setMsg('Loading ambiguities…');
   const { data: ambs, error: e5 } = await _sb.from('ambiguities').select('*');
@@ -4477,7 +4551,7 @@ async function loadAllFromDB(opts = {}){
     if(pg.length < pageSize) break;
     from += pageSize;
   }
-  RAW_TICKETS = allTickets.map(r => ({
+  RAW_TICKETS = _enrichTickets(allTickets.map(r => ({
     id: r.id, month: r.month, src_row: r.src_row,
     customer_raw: r.customer_raw || '', customer: r.customer || '',
     asset_code: r.asset_code || '', town: r.town || '', state: r.state || '',
@@ -4494,7 +4568,7 @@ async function loadAllFromDB(opts = {}){
     resolution: r.resolution || '', status: r.status || '',
     orphaned: !!r.orphaned, unmatched: !!r.unmatched,
     ambiguities: r.ambiguities || [],
-  }));
+  })));
 
   // Recompute derived arrays
   OPEN_TICKETS = RAW_TICKETS.filter(isOpen);
