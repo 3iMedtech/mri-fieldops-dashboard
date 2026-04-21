@@ -2377,9 +2377,13 @@ function renderAlertBanner(){
   const pendingFlags=pendingAmbCount();
   const invalidDates=DATE_AUDIT.invalid.length;
   const suspiciousDates=DATE_AUDIT.suspicious.length;
-  const dateNote=(invalidDates||suspiciousDates)
-    ?` · ${invalidDates} invalid + ${suspiciousDates} out-of-window date${(invalidDates+suspiciousDates)!==1?'s':''}`
-    :'';
+  // Human-readable breakdown: "invalid" = could not be parsed at all (row data is unusable),
+  // "suspicious" = parsed but falls outside the reporting window. Show only the categories
+  // that have a non-zero count so the banner reads naturally.
+  const noteParts = [];
+  if(invalidDates > 0)    noteParts.push(`${invalidDates} unreadable date${invalidDates!==1?'s':''}`);
+  if(suspiciousDates > 0) noteParts.push(`${suspiciousDates} ticket${suspiciousDates!==1?'s':''} dated outside reporting window`);
+  const dateNote = noteParts.length ? ` · ${noteParts.join(' · ')}` : '';
   const c=document.getElementById('alert-banner-container');
   if(!c) return;
 
@@ -2464,7 +2468,7 @@ function renderKPIGrid(){
     <div class="kpi-card green"><div class="kpi-label">PM Calls</div><div class="kpi-value green">${scopePM.length}</div><div class="kpi-delta up">${esc(scopeLabel)}</div></div>
     <div class="kpi-card amber"><div class="kpi-label">Open Tickets${isFiltered?'':''}</div><div class="kpi-value amber">${scopeOpen.length}</div><div class="kpi-delta warn">${isFiltered?'Opened in '+dashMonthFilter:'Require action now'}</div></div>
     ${(()=>{ const p=pendingAmbCount(); return `<div class="kpi-card ${p>0?'purple':'green'} admin-only" title="Data flags apply to the entire dataset regardless of filter"><div class="kpi-label">Data Flags ${lockTag}</div><div class="kpi-value ${p>0?'purple':'green'}">${p}</div><div class="kpi-delta ${p>0?'warn':''}">${p>0?'Need your review':'✓ All reviewed'}</div></div>`; })()}
-    <div class="kpi-card cyan" title="Assets don't change by month"><div class="kpi-label">Assets Covered ${lockTag}</div><div class="kpi-value cyan">${CONFIG_ASSETS.length}</div><div class="kpi-delta">Across ${new Set(CONFIG_ASSETS.map(a=>a.town)).size} cities</div></div>
+    <div class="kpi-card cyan" title="Install base doesn't change by month"><div class="kpi-label">Install Base Covered ${lockTag}</div><div class="kpi-value cyan">${CONFIG_ASSETS.length}</div><div class="kpi-delta">Across ${new Set(CONFIG_ASSETS.map(a=>a.town)).size} cities</div></div>
     <div class="kpi-card green" title="${slaTooltip}" style="cursor:help">
       <div class="kpi-label">SLA Compliance <span style="font-size:11px;vertical-align:middle">ⓘ</span></div>
       ${slaVal}${slaSubLabel}
