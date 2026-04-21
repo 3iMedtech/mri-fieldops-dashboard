@@ -2274,6 +2274,12 @@ function navigate(page){
     logAudit('restricted_access_attempt', {target: page});
     page='dashboard';
   }
+  // Lazy-init from the DOM on first use — the initial HTML marks one page
+  // and nav-item as .active, and if we don't seed the cache from there the
+  // initial page's .active class never gets removed and two pages end up
+  // "active" simultaneously (user sees the old page stuck on screen).
+  if(!_activePage)    _activePage    = document.querySelector('.page.active');
+  if(!_activeNavItem) _activeNavItem = document.querySelector('.nav-item.active');
   // No-op if we're already on this page (clicking the same sidebar item).
   if(_activePage && _activePage.id === `page-${page}`) return;
   if(_activeNavItem) _activeNavItem.classList.remove('active');
