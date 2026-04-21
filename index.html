@@ -541,17 +541,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
   <nav class="nav">
     <div class="nav-section">OPERATIONS</div>
     <div class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span> Dashboard</div>
-    <div class="nav-item" data-page="tickets"><span class="nav-icon">🎫</span> Service History <span class="nav-badge blue" id="nb-total">143</span></div>
-    <div class="nav-item" data-page="open"><span class="nav-icon">🚨</span> Open Tickets <span class="nav-badge" id="nb-open">0</span></div>
-    <div class="nav-item" data-page="pm"><span class="nav-icon">📅</span> PM Schedules <span class="nav-badge amber" id="nb-pm">9</span></div>
+    <div class="nav-item" data-page="tickets"><span class="nav-icon">🎫</span> Service History <span class="nav-badge blue" id="nb-total" style="display:none"></span></div>
+    <div class="nav-item" data-page="open"><span class="nav-icon">🚨</span> Open Tickets <span class="nav-badge" id="nb-open" style="display:none"></span></div>
+    <div class="nav-item" data-page="pm"><span class="nav-icon">📅</span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
     <div class="nav-section">ASSETS & TEAM</div>
     <div class="nav-item" data-page="assets"><span class="nav-icon">🏥</span> Install Base</div>
-    <div class="nav-item" data-page="team"><span class="nav-icon">👷</span> Field Team <span class="nav-badge green" id="nb-team">9</span></div>
+    <div class="nav-item" data-page="team"><span class="nav-icon">👷</span> Field Team <span class="nav-badge green" id="nb-team" style="display:none"></span></div>
     <div class="nav-section">ANALYSIS</div>
     <div class="nav-item admin-only" data-page="ambiguities"><span class="nav-icon">⚠️</span> Flags &amp; Ambiguities <span class="nav-badge amber" id="nb-amb" style="display:none"></span></div>
     <div class="nav-item mgr-plus" data-page="engperf"><span class="nav-icon">🏅</span> Engineer Performance</div>
     <div class="nav-item" data-page="reports"><span class="nav-icon">📈</span> Reports</div>
     <div class="nav-item superadmin-only" data-page="auditlog"><span class="nav-icon">🛡️</span> Audit Log</div>
+    <div class="nav-item" data-page="about"><span class="nav-icon">ℹ️</span> About</div>
   </nav>
   <div class="sidebar-footer">
     <div class="user-card">
@@ -916,6 +917,44 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
         </tr></thead>
         <tbody id="audit-body"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-about">
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">ℹ️ About MRI FieldOps Dashboard</div>
+    </div>
+    <div style="padding:22px 26px;display:grid;gap:22px;max-width:880px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--brand),var(--accent));display:flex;align-items:center;justify-content:center;font-size:28px">🩻</div>
+        <div>
+          <div style="font-family:var(--display);font-weight:700;font-size:20px">MRI FieldOps Dashboard</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:3px">
+            Version <span id="about-version" style="font-family:var(--mono);color:var(--brand);font-weight:600">—</span>
+            · Released <span id="about-release" style="font-family:var(--mono)">—</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:6px;letter-spacing:1px">OBJECTIVE</div>
+        <div style="font-size:13px;line-height:1.7;color:var(--text)">
+          A unified command center for managing MRI field service operations — live visibility into open tickets, preventive-maintenance schedules, install-base coverage, engineer performance and regional SLA health. Role-based logins give engineers, managers and admins just the views and controls they need, while the audit log keeps every sensitive action accountable.
+        </div>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:6px;letter-spacing:1px">VERSIONING</div>
+        <div style="font-size:12px;line-height:1.7;color:var(--text-dim)">
+          Semantic versioning — <span style="font-family:var(--mono);color:var(--text)">MAJOR.MINOR.PATCH</span>.
+          <span style="color:var(--text)">MAJOR</span> for breaking schema or workflow changes,
+          <span style="color:var(--text)">MINOR</span> for new features,
+          <span style="color:var(--text)">PATCH</span> for bug fixes.
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;font-size:11px;color:var(--text-dim);font-family:var(--mono)">
+        © 3i Medtech · Built for internal field-service use.
+      </div>
     </div>
   </div>
 </div>
@@ -1846,22 +1885,19 @@ function renderAll(){
   renderTeam();
   renderAmbiguities();
   renderReports();
-  // Sync nav badges
-  const tb = document.getElementById('nb-team');
-  if(tb) tb.textContent = ENGINEERS.length;
-  const pb = document.getElementById('nb-pm');
-  if(pb){
-    const urgent = PM_SCHEDULE.filter(pm => {const s=pmStatus(pm); return s.code==='overdue'||s.code==='in-window';}).length;
-    pb.textContent = urgent;
-  }
+  // Sync nav badges — route through setNavBadgeCount so they un-hide on first
+  // data load (the static HTML starts with display:none to avoid showing
+  // stale placeholder counts before real data has arrived).
+  setNavBadgeCount('nb-team', ENGINEERS.length);
+  const urgent = PM_SCHEDULE.filter(pm => {const s=pmStatus(pm); return s.code==='overdue'||s.code==='in-window';}).length;
+  setNavBadgeCount('nb-pm', urgent);
   // Hide the nb-open and nb-amb badges when their counts are 0 — an empty-queue
   // tab shouldn't advertise a phantom "0". nb-amb uses the PENDING (unreviewed)
   // count, not AMBIGUITIES.length, so it stays consistent with the tab's own
   // rendering and doesn't show stale totals after every flag is resolved.
   setNavBadgeCount('nb-open', OPEN_TICKETS.length);
   setNavBadgeCount('nb-amb', pendingAmbCount());
-  const tn = document.getElementById('nb-total');
-  if(tn) tn.textContent = RAW_TICKETS.length;
+  setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
   try {
     const openCount = OPEN_TICKETS.length;
@@ -2252,7 +2288,9 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',team:'Field Team',ambiguities:'Flags & Ambiguities',engperf:'Engineer Performance',reports:'Reports',auditlog:'Audit Log'};
+const APP_VERSION = '1.0.0';
+const APP_RELEASE_DATE = '2026-04-21';
+const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',team:'Field Team',ambiguities:'Flags & Ambiguities',engperf:'Engineer Performance',reports:'Reports',auditlog:'Audit Log',about:'About'};
 const SUPERADMIN_EMAIL = 'abhijit.s@3imedtech.com';
 // Cache the currently-active nav item + page so navigate() only has to flip
 // two class toggles, never querySelectorAll across the whole document.
@@ -2274,20 +2312,32 @@ function navigate(page){
     logAudit('restricted_access_attempt', {target: page});
     page='dashboard';
   }
+  // Fall back to dashboard if the caller passed something bogus — empty
+  // string, null, a typo, anything with no matching #page-<id>. Without this
+  // we'd strip .active from the current page and leave the app blank; the
+  // cache would also point at an un-classed element, so the next navigate()
+  // early-returns on the stale reference without re-adding the .active class.
+  if(!page || typeof page !== 'string' || !document.getElementById(`page-${page}`)){
+    page = 'dashboard';
+  }
   // Lazy-init from the DOM on first use — the initial HTML marks one page
   // and nav-item as .active, and if we don't seed the cache from there the
   // initial page's .active class never gets removed and two pages end up
   // "active" simultaneously (user sees the old page stuck on screen).
   if(!_activePage)    _activePage    = document.querySelector('.page.active');
   if(!_activeNavItem) _activeNavItem = document.querySelector('.nav-item.active');
-  // No-op if we're already on this page (clicking the same sidebar item).
-  if(_activePage && _activePage.id === `page-${page}`) return;
+  // No-op if we're already on this page AND the DOM still reflects it.
+  // Verify the class is really there — defends against external DOM edits
+  // that could leave the cache out of sync with what the user sees.
+  if(_activePage && _activePage.id === `page-${page}` && _activePage.classList.contains('active')) return;
   if(_activeNavItem) _activeNavItem.classList.remove('active');
   const nextNav = document.querySelector(`.nav-item[data-page="${page}"]`);
   if(nextNav){ nextNav.classList.add('active'); _activeNavItem = nextNav; }
+  else { _activeNavItem = null; }
   if(_activePage) _activePage.classList.remove('active');
   const nextPage = document.getElementById(`page-${page}`);
   if(nextPage){ nextPage.classList.add('active'); _activePage = nextPage; }
+  else { _activePage = null; }
   document.getElementById('topbar-title').textContent=PAGE_TITLES[page]||page;
   if(page==='ambiguities') renderAmbiguities();
   if(page==='engperf') renderEngineerPerformance();
@@ -3564,10 +3614,11 @@ function pendingAmbCount(){
 }
 // Set a nav-badge pill's count, hiding the pill entirely when the count is 0
 // so empty-queue tabs don't display a misleading "0".
-function setNavBadgeCount(id, count){
+function setNavBadgeCount(id, count, opts){
   const el = document.getElementById(id);
   if(!el) return;
-  if(count > 0){
+  const showZero = opts && opts.showZero;
+  if(count > 0 || showZero){
     el.textContent = count;
     el.style.display = '';
   } else {
@@ -4298,21 +4349,17 @@ async function doFirstPaint(){
 
   // Sync dynamic nav badges (all of them — this ran only in renderAll() before,
   // so after a fresh login these badges kept the hardcoded HTML values).
-  const tb = document.getElementById('nb-team');
-  if(tb) tb.textContent = ENGINEERS.length;
+  setNavBadgeCount('nb-team', ENGINEERS.length);
+  const urgent = PM_SCHEDULE.filter(pm => {const s=pmStatus(pm); return s.code==='overdue'||s.code==='in-window';}).length;
+  setNavBadgeCount('nb-pm', urgent);
   const pb = document.getElementById('nb-pm');
-  if(pb){
-    const urgent = PM_SCHEDULE.filter(pm => {const s=pmStatus(pm); return s.code==='overdue'||s.code==='in-window';}).length;
-    pb.textContent = urgent;
-    pb.className = 'nav-badge ' + (urgent > 0 ? '' : 'green');
-  }
+  if(pb) pb.className = 'nav-badge ' + (urgent > 0 ? '' : 'green') + (urgent > 0 ? ' amber' : '');
   // See setNavBadgeCount comment in the other syncNavBadges copy: hide zero-count
   // action badges, and use PENDING ambiguity count (not total) so the badge stays
   // in sync with renderAmbiguities' own count.
   setNavBadgeCount('nb-open', OPEN_TICKETS.length);
   setNavBadgeCount('nb-amb', pendingAmbCount());
-  const tn = document.getElementById('nb-total');
-  if(tn) tn.textContent = RAW_TICKETS.length;
+  setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
   try {
     const openCount = OPEN_TICKETS.length;
@@ -4372,6 +4419,34 @@ if(IS_STAGING && typeof document !== 'undefined'){
     if(pill) pill.style.display = 'inline-block';
   });
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const v = document.getElementById('about-version');
+  const r = document.getElementById('about-release');
+  if(v) v.textContent = APP_VERSION;
+  if(r) r.textContent = APP_RELEASE_DATE;
+});
+
+// Funnel uncaught errors into the audit log so they don't vanish into the
+// console where nobody sees them. Rate-limited so a render-loop bug can't
+// flood the audit pipe.
+(function installGlobalErrorLogging(){
+  let _errBudget = 5;
+  let _lastReset = Date.now();
+  function reportErr(kind, msg, src){
+    const now = Date.now();
+    if(now - _lastReset > 60_000){ _errBudget = 5; _lastReset = now; }
+    if(_errBudget-- <= 0) return;
+    try { logAudit && logAudit('client_error', {kind, msg: String(msg).slice(0,400), src: String(src||'').slice(0,200)}); } catch(_){}
+  }
+  window.addEventListener('error', (e) => {
+    reportErr('error', e.message || e.error, (e.filename||'') + ':' + (e.lineno||''));
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason;
+    reportErr('unhandledrejection', (r && (r.message || r.toString && r.toString())) || JSON.stringify(r), '');
+  });
+})();
 
 let _sb = null;            // Supabase client
 let _currentUser = null;   // logged-in user
