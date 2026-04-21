@@ -256,6 +256,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
   .viewer-mode.manager-mode .mgr-plus { display: revert !important; }
   .viewer-badge { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(139,92,246,.2); color: #c4b5fd; letter-spacing: 1px; }
 
+  /* Engineer Performance — clickable metric tiles. Each tile opens a drill-down
+     that filters to that metric, so the value on the tile and the rows in the
+     modal always describe the same thing. */
+  .ep-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: border-color .12s, background .12s, transform .08s; user-select: none; }
+  .ep-tile:hover { border-color: var(--brand); background: var(--surface); }
+  .ep-tile:active { transform: translateY(1px); }
+  .ep-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .ep-tile-disabled { cursor: default; opacity: .6; }
+  .ep-tile-disabled:hover { border-color: var(--border); background: var(--surface2); }
+  .ep-tile-label { font-family: var(--mono); font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
+  .ep-tile-value { font-family: var(--display); font-size: 18px; font-weight: 700; margin-top: 3px; }
+  .ep-tile-sub { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
   /* ─────────────────────────────────────────────────────────────
      RESPONSIVE — tablet (<=1024px) and mobile (<=768px)
      Kept as pure add-ons; the desktop rules above are unchanged.
@@ -1888,18 +1901,32 @@ function rosterEngineerCanonicals(eng){
   return out;
 }
 
+// Single source of truth for "which tickets belong to this engineer, filtered by X?".
+// Every engineer-scoped view (Field Team, Engineer Performance, drill-downs) calls
+// through here so counts can never drift apart across tabs.
+// opts:
+//   windowStart: Date | null  — include only tickets whose call_date >= windowStart
+//   monthFilter: string | 'all' | null — include only tickets where t.month === monthFilter
+function ticketsForEngineer(eng, opts){
+  const canonSet = rosterEngineerCanonicals(eng);
+  if(canonSet.size === 0) return [];
+  const { windowStart=null, monthFilter=null } = opts || {};
+  return RAW_TICKETS.filter(t=>{
+    const engs = splitEngineers(t.engineer);
+    if(!engs.some(n => canonSet.has(n))) return false;
+    if(monthFilter && monthFilter !== 'all' && t.month !== monthFilter) return false;
+    if(windowStart){
+      const d = parseFlexDate(t.call_date);
+      if(!d || d < windowStart) return false;
+    }
+    return true;
+  });
+}
+
 // Count calls for a single roster engineer, optionally filtered by month.
 // monthFilter: 'all' or a value from MONTHS array.
 function rosterEngCallCount(eng, monthFilter){
-  const canonSet = rosterEngineerCanonicals(eng);
-  if(canonSet.size === 0) return 0;
-  let count = 0;
-  RAW_TICKETS.forEach(t=>{
-    if(monthFilter && monthFilter !== 'all' && t.month !== monthFilter) return;
-    const ticketEngs = splitEngineers(t.engineer);
-    if(ticketEngs.some(n => canonSet.has(n))) count++;
-  });
-  return count;
+  return ticketsForEngineer(eng, { monthFilter }).length;
 }
 // Map of lowercased variant → canonical display name.
 // Any token not in this map is returned Title-cased as-is.
@@ -3554,17 +3581,11 @@ function dayDiff(a, b){
 function computeEngineerMetrics(eng, windowStart){
   const canonSet = rosterEngineerCanonicals(eng);
   if(canonSet.size === 0){
-    return { calls:0, closed:0, open:0, sites:0, mttrDays:null, slaPct:null, ftfPct:null, pmOnTimePct:null, pmDone:0, pmLate:0, tickets:[] };
+    return { calls:0, closed:0, open:0, sites:0, mttrDays:null, slaPct:null, ftfPct:null, pmOnTimePct:null, pmDone:0, pmLate:0, tickets:[], allTickets:[] };
   }
-  const matched = RAW_TICKETS.filter(t=>{
-    const engs = splitEngineers(t.engineer);
-    return engs.some(n => canonSet.has(n));
-  });
-  const inWindow = matched.filter(t=>{
-    if(!windowStart) return true;
-    const d = parseFlexDate(t.call_date);
-    return d && d >= windowStart;
-  });
+  // Unified ticket selection — same helper Field Team uses, so counts line up.
+  const matched  = ticketsForEngineer(eng, {});
+  const inWindow = ticketsForEngineer(eng, { windowStart });
 
   let mttrSum = 0, mttrN = 0;
   let slaOk = 0, slaN = 0;
@@ -3626,7 +3647,9 @@ function computeEngineerMetrics(eng, windowStart){
     slaPct:   slaN > 0 ? Math.round((slaOk / slaN) * 100) : null,
     ftfPct:   ftfN > 0 ? Math.round((ftfOk / ftfN) * 100) : null,
     pmOnTimePct, pmDone, pmLate,
-    tickets: inWindow
+    tickets: inWindow,
+    allTickets: matched,
+    pmCompletions: comps
   };
 }
 
@@ -3684,75 +3707,182 @@ async function renderEngineerPerformance(){
     + `<strong>${totalPMs}</strong> PM${totalPMs===1?'':'s'} completed · `
     + `window: ${windowLabel}${regionVal==='all'?'':' · '+esc(regionVal)}`;
 
-  const cards = metrics.map(({eng, m}) => epCardHtml(eng, m)).join('');
+  const cards = metrics.map(({eng, m}) => epCardHtml(eng, m, windowLabel)).join('');
   document.getElementById('ep-cards').innerHTML = cards ||
     `<div style="padding:40px;text-align:center;color:var(--text-dim);grid-column:1/-1">No engineers match this filter.</div>`;
 }
 
-function epCardHtml(eng, m){
-  const metric = (label, val, color, sub) =>
-    `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
-       <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px">${label}</div>
-       <div style="font-family:var(--display);font-size:18px;font-weight:700;color:${color||'var(--text)'};margin-top:3px">${val}</div>
-       ${sub ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px">${sub}</div>` : ''}
+function epCardHtml(eng, m, windowLabel){
+  // Each tile is a button so the click target is unambiguous and accessible;
+  // passing metric-type lets the drill-down filter records to match the tile.
+  const tile = (metricKey, label, val, color, sub, clickable=true) =>
+    `<div ${clickable?`class="ep-tile" role="button" tabindex="0" onclick="openEngineerDetail('${esc(eng.id)}','${metricKey}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEngineerDetail('${esc(eng.id)}','${metricKey}')}"`:'class="ep-tile ep-tile-disabled"'} >
+       <div class="ep-tile-label">${label}</div>
+       <div class="ep-tile-value" style="color:${color||'var(--text)'}">${val}</div>
+       ${sub ? `<div class="ep-tile-sub">${sub}</div>` : ''}
      </div>`;
   const pct = v => v == null ? '—' : `${v}%`;
-  const num = v => v == null ? '—' : v;
-  return `<div class="panel" style="padding:14px;margin:0;cursor:pointer" onclick="openEngineerDetail('${esc(eng.id)}')">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  return `<div class="panel ep-card" style="padding:14px;margin:0">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <div>
         <div style="font-family:var(--display);font-weight:700;font-size:15px">${esc(eng.name)}</div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:2px">${esc(eng.region||'Unassigned')}${eng.email?' · '+esc(eng.email):''}</div>
       </div>
       <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${esc(eng.id)}</div>
     </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;margin-bottom:10px">WINDOW · ${esc(windowLabel||'')}</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-      ${metric('CALLS', m.calls, 'var(--brand)')}
-      ${metric('OPEN', m.open, m.open > 3 ? 'var(--amber)' : 'var(--text)')}
-      ${metric('SITES', m.sites)}
-      ${metric('MTTR', m.mttrDays == null ? '—' : m.mttrDays + 'd', m.mttrDays != null && m.mttrDays <= SLA_RESPONSE_DAYS ? 'var(--green)' : m.mttrDays != null && m.mttrDays <= 4 ? 'var(--amber)' : m.mttrDays == null ? 'var(--text-dim)' : 'var(--red)')}
-      ${metric('SLA%', pct(m.slaPct), epPctColor(m.slaPct), `closed within ${SLA_RESPONSE_DAYS}d`)}
-      ${metric('FTF%', pct(m.ftfPct), epPctColor(m.ftfPct, 70, 50), 'no parts needed')}
+      ${tile('calls','CALLS', m.calls, 'var(--brand)', 'open + closed')}
+      ${tile('open','OPEN', m.open, m.open > 3 ? 'var(--amber)' : 'var(--text)', 'backlog (all time)')}
+      ${tile('sites','SITES', m.sites, null, 'customers visited')}
+      ${tile('mttr','MTTR', m.mttrDays == null ? '—' : m.mttrDays + 'd', m.mttrDays != null && m.mttrDays <= SLA_RESPONSE_DAYS ? 'var(--green)' : m.mttrDays != null && m.mttrDays <= 4 ? 'var(--amber)' : m.mttrDays == null ? 'var(--text-dim)' : 'var(--red)', 'avg TAT')}
+      ${tile('sla','SLA%', pct(m.slaPct), epPctColor(m.slaPct), `within ${SLA_RESPONSE_DAYS}d`)}
+      ${tile('ftf','FTF%', pct(m.ftfPct), epPctColor(m.ftfPct, 70, 50), 'one-shot fix')}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-      ${metric('PM COMPLIANCE', pct(m.pmOnTimePct), epPctColor(m.pmOnTimePct, 90, 70), `${m.pmDone} done · ${m.pmLate} late`)}
-      ${metric('REOPEN RATE', '—', 'var(--text-dim)', 'v2 — not tracked yet')}
+      ${tile('pm','PM COMPLIANCE', pct(m.pmOnTimePct), epPctColor(m.pmOnTimePct, 90, 70), `${m.pmDone} done · ${m.pmLate} late`)}
+      ${tile('reopen','REOPEN RATE', '—', 'var(--text-dim)', 'v2 — not tracked yet', false)}
     </div>
   </div>`;
 }
 
-function openEngineerDetail(engId){
+// metricKey: 'calls' | 'open' | 'sites' | 'mttr' | 'sla' | 'ftf' | 'pm' | 'reopen'
+// The drill-down filters the record set and the column layout to match the
+// tile the user clicked, so each number has exactly one obvious explanation.
+function openEngineerDetail(engId, metricKey){
   const eng = ENGINEERS.find(e=>e.id===engId);
   if(!eng) return;
+  const key = metricKey || 'calls';
+  if(key === 'reopen'){
+    // No backing data yet — placeholder tile is unclickable, but guard anyway.
+    return;
+  }
   const windowVal = document.getElementById('ep-window')?.value || '90';
   const windowStart = epWindowStart(windowVal);
+  const windowLabel = ({'30':'last 30 days','90':'last 90 days','180':'last 6 months','365':'last 12 months','ytd':'year to date','all':'all time'})[windowVal] || 'window';
   const m = computeEngineerMetrics(eng, windowStart);
 
-  document.getElementById('ep-detail-title').textContent = eng.name;
-  document.getElementById('ep-detail-sub').textContent =
-    `${eng.region||'Unassigned'}${eng.email?' · '+eng.email:''} · ${m.calls} call${m.calls===1?'':'s'} in window · ${m.open} open now`;
-
-  // Sorted by most recent call first, cap at 40 rows to keep modal scannable.
-  const sorted = [...m.tickets].sort((a,b)=>{
+  const byDateDesc = (a, b) => {
     const da = parseFlexDate(a.call_date);
     const db = parseFlexDate(b.call_date);
     return (db?.getTime()||0) - (da?.getTime()||0);
-  }).slice(0, 40);
+  };
 
-  const rows = sorted.map(t=>{
-    const call = parseFlexDate(t.call_date);
-    const up = parseFlexDate(t.sys_up_date);
-    const tat = (call && up) ? dayDiff(call, up)+'d' : '—';
-    const st = isOpen(t) ? '<span class="badge critical">OPEN</span>' : '<span class="badge">CLOSED</span>';
-    return `<tr>
-      <td style="font-family:var(--mono);font-size:10px">${esc(t.call_date||'—')}</td>
-      <td style="font-size:11px">${esc(t.customer||'—')}</td>
-      <td style="font-size:11px;color:var(--text-dim)">${esc(t.call_type||'—')}</td>
-      <td style="font-size:11px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.issue||'—')}</td>
-      <td style="font-family:var(--mono);font-size:10px;text-align:center">${tat}</td>
-      <td>${st}</td>
-    </tr>`;
-  }).join('');
+  // Resolve the record set and display strategy per metric.
+  const plan = (() => {
+    switch(key){
+      case 'calls':
+        return { title:'All Calls', scope:`${m.calls} call${m.calls===1?'':'s'} · ${windowLabel}`, records:[...m.tickets].sort(byDateDesc), mode:'tickets' };
+      case 'open':
+        // Backlog is intentionally all-time — an open ticket from last year is still open.
+        return { title:'Open Backlog', scope:`${m.open} open · all-time backlog`, records:m.allTickets.filter(isOpen).sort(byDateDesc), mode:'tickets' };
+      case 'sites': {
+        const bySite = new Map();
+        m.tickets.forEach(t=>{
+          const key = customerKey(t.customer) || (t.customer||'—');
+          const entry = bySite.get(key) || { name: t.customer||'—', visits:0, open:0, last:null };
+          entry.visits += 1;
+          if(isOpen(t)) entry.open += 1;
+          const d = parseFlexDate(t.call_date);
+          if(d && (!entry.last || d > entry.last)) entry.last = d;
+          bySite.set(key, entry);
+        });
+        const list = [...bySite.values()].sort((a,b)=> b.visits - a.visits);
+        return { title:'Sites Visited', scope:`${m.sites} customer${m.sites===1?'':'s'} · ${windowLabel}`, records:list, mode:'sites' };
+      }
+      case 'mttr':
+      case 'sla':
+        return { title: key==='mttr'?'Closed Calls — TAT':`SLA — within ${SLA_RESPONSE_DAYS}d`, scope:`${m.closed} closed · ${windowLabel}`, records:m.tickets.filter(isClosed).sort(byDateDesc), mode:'tickets-sla' };
+      case 'ftf':
+        return { title:'FTF — one-shot fix', scope:`${m.closed} closed · ${windowLabel}`, records:m.tickets.filter(isClosed).sort(byDateDesc), mode:'tickets-ftf' };
+      case 'pm':
+        return { title:'PM Completions', scope:`${m.pmDone} done · ${m.pmLate} late · ${windowLabel}`, records:[...m.pmCompletions].sort((a,b)=>{
+          const da = parseFlexDate(a.completion_date);
+          const db = parseFlexDate(b.completion_date);
+          return (db?.getTime()||0) - (da?.getTime()||0);
+        }), mode:'pm' };
+      default:
+        return { title:'Calls', scope:`${m.calls} · ${windowLabel}`, records:[...m.tickets].sort(byDateDesc), mode:'tickets' };
+    }
+  })();
+
+  document.getElementById('ep-detail-title').textContent = `${eng.name} — ${plan.title}`;
+  document.getElementById('ep-detail-sub').textContent = `${eng.region||'Unassigned'}${eng.email?' · '+eng.email:''} · ${plan.scope}`;
+
+  const capped = plan.records.slice(0, 60);
+  const cappedNote = plan.records.length > capped.length ? `(showing ${capped.length} of ${plan.records.length})` : '';
+
+  let tableHtml = '';
+  if(plan.mode === 'sites'){
+    const rows = capped.map(s=>{
+      const last = s.last ? s.last.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+      return `<tr>
+        <td style="font-size:11px;font-weight:600">${esc(s.name)}</td>
+        <td style="font-family:var(--mono);font-size:10px;text-align:center">${s.visits}</td>
+        <td style="font-family:var(--mono);font-size:10px;text-align:center">${s.open > 0 ? `<span class="badge critical">${s.open}</span>` : '0'}</td>
+        <td style="font-family:var(--mono);font-size:10px">${last}</td>
+      </tr>`;
+    }).join('');
+    tableHtml = `<table class="data-table" style="margin:0">
+      <thead><tr><th>CUSTOMER</th><th style="text-align:center">VISITS</th><th style="text-align:center">OPEN</th><th>LAST VISIT</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-dim)">No sites in this window.</td></tr>'}</tbody>
+    </table>`;
+  } else if(plan.mode === 'pm'){
+    const rows = capped.map(c=>{
+      const pm = PM_SCHEDULE.find(p => p.id === c.pm_id);
+      const due = pm ? parseFlexDate(pm.nextPMS) : null;
+      const done = parseFlexDate(c.completion_date);
+      const late = (due && done) ? dayDiff(due, done) > PM_WINDOW_DAYS : false;
+      return `<tr>
+        <td style="font-family:var(--mono);font-size:10px">${esc(c.completion_date||'—')}</td>
+        <td style="font-size:11px">${esc(pm?.customer || c.engineer_name || '—')}</td>
+        <td style="font-size:11px;color:var(--text-dim)">${esc(pm?.system || pm?.modality || '—')}</td>
+        <td style="font-family:var(--mono);font-size:10px">${pm ? esc(pm.nextPMS||'—') : '—'}</td>
+        <td>${late ? '<span class="badge critical">LATE</span>' : '<span class="badge">ON TIME</span>'}</td>
+      </tr>`;
+    }).join('');
+    tableHtml = `<table class="data-table" style="margin:0">
+      <thead><tr><th>COMPLETED</th><th>CUSTOMER</th><th>SYSTEM</th><th>DUE</th><th>STATUS</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-dim)">No PM completions in this window.</td></tr>'}</tbody>
+    </table>`;
+  } else {
+    // tickets / tickets-sla / tickets-ftf share the same row shape, extra column by mode.
+    const extraHead = plan.mode === 'tickets-sla' ? `<th style="text-align:center">SLA</th>` : plan.mode === 'tickets-ftf' ? `<th style="text-align:center">FTF</th>` : '';
+    const rows = capped.map(t=>{
+      const call = parseFlexDate(t.call_date);
+      const up = parseFlexDate(t.sys_up_date);
+      const tat = (call && up) ? dayDiff(call, up) : null;
+      const tatStr = tat == null ? '—' : tat+'d';
+      const st = isOpen(t) ? '<span class="badge critical">OPEN</span>' : '<span class="badge">CLOSED</span>';
+      let extraCell = '';
+      if(plan.mode === 'tickets-sla'){
+        extraCell = tat == null ? `<td style="text-align:center;color:var(--text-dim)">—</td>`
+          : tat <= SLA_RESPONSE_DAYS ? `<td style="text-align:center"><span class="badge" style="background:rgba(16,185,129,.2);color:#6ee7b7">MET</span></td>`
+          : `<td style="text-align:center"><span class="badge critical">MISSED</span></td>`;
+      } else if(plan.mode === 'tickets-ftf'){
+        const parts = (t.parts||'').trim().toUpperCase();
+        const hasParts = parts && parts !== 'NA' && parts !== 'N/A' && parts !== '-';
+        extraCell = isClosed(t)
+          ? (hasParts ? `<td style="text-align:center"><span class="badge critical">PARTS</span></td>`
+                      : `<td style="text-align:center"><span class="badge" style="background:rgba(16,185,129,.2);color:#6ee7b7">ONE-SHOT</span></td>`)
+          : `<td style="text-align:center;color:var(--text-dim)">—</td>`;
+      }
+      return `<tr>
+        <td style="font-family:var(--mono);font-size:10px">${esc(t.call_date||'—')}</td>
+        <td style="font-size:11px">${esc(t.customer||'—')}</td>
+        <td style="font-size:11px;color:var(--text-dim)">${esc(t.call_type||'—')}</td>
+        <td style="font-size:11px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.issue||'—')}</td>
+        <td style="font-family:var(--mono);font-size:10px;text-align:center">${tatStr}</td>
+        ${extraCell}
+        <td>${st}</td>
+      </tr>`;
+    }).join('');
+    const colCount = 6 + (extraHead ? 1 : 0);
+    tableHtml = `<table class="data-table" style="margin:0">
+      <thead><tr><th>CALL DATE</th><th>CUSTOMER</th><th>TYPE</th><th>ISSUE</th><th>TAT</th>${extraHead}<th>STATUS</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${colCount}" style="text-align:center;padding:24px;color:var(--text-dim)">No records in this window.</td></tr>`}</tbody>
+    </table>`;
+  }
 
   const pct = v => v == null ? '—' : `${v}%`;
   const header = `
@@ -3764,13 +3894,8 @@ function openEngineerDetail(engId){
     </div>`;
 
   document.getElementById('ep-detail-body').innerHTML = header + `
-    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">RECENT CALLS ${sorted.length < m.tickets.length ? `(showing ${sorted.length} of ${m.tickets.length})` : ''}</div>
-    <div style="overflow:auto;max-height:48vh;border:1px solid var(--border);border-radius:8px">
-      <table class="data-table" style="margin:0">
-        <thead><tr><th>CALL DATE</th><th>CUSTOMER</th><th>TYPE</th><th>ISSUE</th><th>TAT</th><th>STATUS</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-dim)">No calls in this window.</td></tr>'}</tbody>
-      </table>
-    </div>`;
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">${esc(plan.title.toUpperCase())} ${cappedNote}</div>
+    <div style="overflow:auto;max-height:48vh;border:1px solid var(--border);border-radius:8px">${tableHtml}</div>`;
   document.getElementById('ep-detail-modal').classList.add('open');
 }
 
