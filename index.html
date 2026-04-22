@@ -3995,25 +3995,68 @@ function computeEngineerMetrics(eng, windowStart){
 
   // PM compliance: how many of this engineer's completions in the window
   // landed on or before the scheduled due date?
+  //
+  // IMPORTANT: `pm.nextPMS` on a PM row rolls forward to the *next* cycle
+  // after every completion, so it is ALWAYS in the future relative to a
+  // historical completion — comparing the two would mark every completion
+  // as "on time" and inflate compliance to ~100% for every engineer.
+  //
+  // The correct scheduled due for the i-th completion of a given PM (0-
+  // indexed, chronological) is `contractStart + (i + 1) * intervalMonths`.
+  // We build that series per PM here and attach `_due` + `_done` to each
+  // completion so the drill-down can reuse it.
   const engIds = new Set([eng.id]);
-  const comps = _PM_COMPLETIONS.filter(c=>{
-    if(!engIds.has(c.engineer_id)) return false;
-    if(!windowStart) return true;
-    const d = parseFlexDate(c.completion_date);
-    return d && d >= windowStart;
+
+  // Group all completions by pm_id, sorted by date ascending, so the index
+  // of each completion maps to its scheduled slot.
+  const _compsByPm = new Map();
+  _PM_COMPLETIONS.forEach(c => {
+    if(!_compsByPm.has(c.pm_id)) _compsByPm.set(c.pm_id, []);
+    _compsByPm.get(c.pm_id).push(c);
   });
-  let pmDone = comps.length, pmLate = 0;
-  comps.forEach(c=>{
-    // O(1) lookup via PM_BY_ID Map instead of a linear PM_SCHEDULE.find().
-    const pm = PM_BY_ID.get(c.pm_id);
-    if(!pm) return;
-    // A completion is "late" if the calendar date slipped past the
-    // scheduled due date by more than the PM window.
-    const due = parseFlexDate(pm.nextPMS);
+  _compsByPm.forEach(arr => arr.sort((a, b) => {
+    const da = parseFlexDate(a.completion_date);
+    const db = parseFlexDate(b.completion_date);
+    return (da?.getTime() || 0) - (db?.getTime() || 0);
+  }));
+
+  const comps = [];
+  let pmLate = 0, pmScored = 0;
+  _PM_COMPLETIONS.forEach(c => {
+    if(!engIds.has(c.engineer_id)) return;
     const done = parseFlexDate(c.completion_date);
-    if(due && done && dayDiff(due, done) > PM_WINDOW_DAYS) pmLate += 1;
+    if(!done) return;
+    if(windowStart && done < windowStart) return;
+
+    const pm = PM_BY_ID.get(c.pm_id);
+    let due = null;
+    if(pm && pm.freq > 0){
+      const start = parseFlexDate(pm.contractStart);
+      const chain = _compsByPm.get(c.pm_id) || [];
+      const idx = chain.indexOf(c);
+      if(start && idx >= 0){
+        const intervalMonths = Math.round(12 / pm.freq);
+        due = new Date(start);
+        due.setMonth(due.getMonth() + (idx + 1) * intervalMonths);
+      }
+    }
+
+    if(due){
+      pmScored += 1;
+      if(dayDiff(due, done) > PM_WINDOW_DAYS) pmLate += 1;
+    }
+    // Attach for the drill-down renderer so both views agree on the same
+    // "due date" instead of re-deriving it from the stale pm.nextPMS.
+    comps.push(Object.assign({}, c, {_due: due, _done: done}));
   });
-  const pmOnTimePct = pmDone > 0 ? Math.round(((pmDone - pmLate) / pmDone) * 100) : null;
+
+  const pmDone = comps.length;
+  // Denominator is the count of completions we could actually score (those
+  // whose PM had both contractStart and a valid frequency). Unscored comps
+  // stay in pmDone for transparency but don't skew the percentage.
+  const pmOnTimePct = pmScored > 0
+    ? Math.round(((pmScored - pmLate) / pmScored) * 100)
+    : null;
 
   return {
     calls: inWindow.length,
@@ -4226,17 +4269,27 @@ function openEngineerDetail(engId, metricKey){
       <tbody>${rows || '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-dim)">No sites in this window.</td></tr>'}</tbody>
     </table>`;
   } else if(plan.mode === 'pm'){
+    const fmtDue = d => d ? d.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}) : '—';
     const rows = capped.map(c=>{
       const pm = PM_BY_ID.get(c.pm_id);
-      const due = pm ? parseFlexDate(pm.nextPMS) : null;
-      const done = parseFlexDate(c.completion_date);
-      const late = (due && done) ? dayDiff(due, done) > PM_WINDOW_DAYS : false;
+      // Prefer the {_due, _done} that computeEngineerMetrics() attached —
+      // those reflect the scheduled due for *this* completion, not the
+      // rolled-forward pm.nextPMS which is always in the future.
+      const due  = c._due  || null;
+      const done = c._done || parseFlexDate(c.completion_date);
+      let late = false, scored = false;
+      if(due && done){ scored = true; late = dayDiff(due, done) > PM_WINDOW_DAYS; }
+      const statusBadge = !scored
+        ? '<span class="badge" style="background:rgba(148,163,184,.2);color:var(--text-dim)">UNSCORED</span>'
+        : late
+          ? '<span class="badge critical">LATE</span>'
+          : '<span class="badge">ON TIME</span>';
       return `<tr>
         <td style="font-family:var(--mono);font-size:10px">${esc(c.completion_date||'—')}</td>
         <td style="font-size:11px">${esc(pm?.customer || c.engineer_name || '—')}</td>
         <td style="font-size:11px;color:var(--text-dim)">${esc(pm?.system || pm?.modality || '—')}</td>
-        <td style="font-family:var(--mono);font-size:10px">${pm ? esc(pm.nextPMS||'—') : '—'}</td>
-        <td>${late ? '<span class="badge critical">LATE</span>' : '<span class="badge">ON TIME</span>'}</td>
+        <td style="font-family:var(--mono);font-size:10px">${esc(fmtDue(due))}</td>
+        <td>${statusBadge}</td>
       </tr>`;
     }).join('');
     tableHtml = `<table class="data-table" style="margin:0">
