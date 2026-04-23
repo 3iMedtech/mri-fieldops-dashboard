@@ -1964,6 +1964,165 @@ function showUploadPreview(result, fileName){
   document.getElementById('upload-modal').classList.add('open');
 }
 
+// Scan a set of just-uploaded tickets for data-quality issues and turn each
+// finding into an AMBIGUITIES row so the admin queue surfaces them without
+// manual curation. Criteria:
+//   (a) Unmatched customer  — normaliseCustomer returned ⚠UNMATCHED
+//   (b) Unmappable engineer — name doesn't resolve to anyone in the roster
+//   (c) Missing critical fields — call_date / customer / engineer blank
+//   (d) Duplicate ticket IDs within the upload
+//   (e) PMS call_type where engineer column is blank / unresolved
+// Idempotent: reuses deterministic IDs of the form `⚠AUTO-<ticket-id>-<code>`
+// so re-running against the same upload doesn't create duplicates, and any
+// prior admin review survives.
+function detectAmbiguousTickets(tickets){
+  if(!Array.isArray(tickets) || tickets.length === 0) return [];
+
+  // Roster canonicals = every canonical name (incl. aliases) we know about.
+  const rosterNames = new Set();
+  (ENGINEERS || []).forEach(e => {
+    rosterEngineerCanonicals(e).forEach(n => rosterNames.add(n));
+  });
+
+  // Count ticket ids to flag duplicates in the upload.
+  const idCounts = new Map();
+  tickets.forEach(t => {
+    if(t.id) idCounts.set(t.id, (idCounts.get(t.id) || 0) + 1);
+  });
+
+  const findings = [];
+  const seenAmbIds = new Set();
+  const pushAmb = (ambId, payload) => {
+    if(seenAmbIds.has(ambId)) return;
+    seenAmbIds.add(ambId);
+    findings.push({ id: ambId, ...payload });
+  };
+
+  tickets.forEach(t => {
+    const ticketId = t.id || '(no-id)';
+    const month = t.month || '—';
+    const row = t.src_row || 0;
+    const custLabel = t.customer || t.customer_raw || '(no customer)';
+
+    // (a) Unmatched customer
+    if(t.unmatched){
+      pushAmb(`⚠AUTO-${ticketId}-UNMATCHED`, {
+        month, row, customer: custLabel,
+        issue: `Customer "${t.customer_raw || custLabel}" did not match any asset in the install base. Ticket was ingested with asset_code = ⚠UNMATCHED.`,
+        status: 'Review Required', sys_status: t.sys_status || '—',
+        flags: [`Unmatched customer on upload — check spelling or add a new install-base entry.`],
+        suggestion: 'Confirm correct customer spelling, or add a Configuration sheet row if this is a new site.',
+      });
+    }
+
+    // (c) Missing critical fields
+    const missing = [];
+    if(!t.call_date) missing.push('call_date');
+    if(!t.customer || !t.customer_raw) missing.push('customer');
+    if(!t.engineer || !t.engineer.trim()) missing.push('engineer');
+    if(missing.length > 0){
+      pushAmb(`⚠AUTO-${ticketId}-MISSING`, {
+        month, row, customer: custLabel,
+        issue: `Ticket is missing required field(s): ${missing.join(', ')}. This row cannot be fully attributed until filled in.`,
+        status: 'Review Required', sys_status: t.sys_status || '—',
+        flags: [`Missing fields: ${missing.join(', ')}.`],
+        suggestion: 'Update the source sheet row and re-upload, or resolve this flag as "False Positive" if intentional.',
+      });
+    }
+
+    // (b) Unmappable engineer name — only when engineer is present.
+    if(t.engineer && t.engineer.trim()){
+      const names = splitEngineers(t.engineer);
+      const unknown = names.filter(n => !rosterNames.has(n));
+      if(names.length === 0 || unknown.length > 0){
+        const label = unknown.length ? unknown.join(', ') : t.engineer;
+        pushAmb(`⚠AUTO-${ticketId}-ENG`, {
+          month, row, customer: custLabel,
+          issue: `Engineer "${label}" on ticket ${ticketId} did not resolve to the current roster. Attribution may be incorrect.`,
+          status: 'Review Required', sys_status: t.sys_status || '—',
+          flags: [`Unmapped engineer: ${label}.`],
+          suggestion: 'Add this name as an alias under the correct roster entry, or correct the ticket.',
+        });
+      }
+    }
+
+    // (d) Duplicate ticket IDs within this upload
+    if(t.id && (idCounts.get(t.id) || 0) > 1){
+      pushAmb(`⚠AUTO-${ticketId}-DUP`, {
+        month, row, customer: custLabel,
+        issue: `Ticket id ${ticketId} appears more than once in this upload. Only the last occurrence is retained on upsert.`,
+        status: 'Review Required', sys_status: t.sys_status || '—',
+        flags: [`Duplicate ticket id within the same upload.`],
+        suggestion: 'Re-sequence the affected rows in the source xlsx to give each ticket a unique id.',
+      });
+    }
+
+    // (e) PMS call_type with blank/unresolved engineer
+    const ct = (t.call_type || '').toUpperCase();
+    if((ct === 'PMS' || ct === 'PM') && (!t.engineer || !t.engineer.trim())){
+      pushAmb(`⚠AUTO-${ticketId}-PM-ENG`, {
+        month, row, customer: custLabel,
+        issue: `${ct} ticket has no engineer recorded — PM compliance cannot credit anyone for this visit.`,
+        status: 'Review Required', sys_status: t.sys_status || '—',
+        flags: [`PM/PMS ticket with blank engineer.`],
+        suggestion: 'Fill in the engineer who performed the PM in the service log, then re-upload.',
+      });
+    }
+  });
+
+  return findings;
+}
+
+// Merge auto-detected ambiguities into AMBIGUITIES in-memory + Supabase,
+// preserving any prior admin review on matching ids.
+async function persistAutoAmbiguities(findings){
+  if(!Array.isArray(findings) || findings.length === 0) return 0;
+
+  const existingById = new Map(AMBIGUITIES.map(a => [a.id, a]));
+  const toUpsert = [];
+  let newCount = 0;
+
+  findings.forEach(f => {
+    const prior = existingById.get(f.id);
+    if(prior){
+      // Keep prior review intact; refresh the descriptive fields.
+      prior.month = f.month; prior.row = f.row; prior.customer = f.customer;
+      prior.issue = f.issue; prior.status = f.status;
+      prior.sys_status = f.sys_status; prior.flags = f.flags;
+      prior.suggestion = f.suggestion;
+      toUpsert.push({
+        id: prior.id,
+        month: prior.month === '—' ? null : prior.month,
+        row_num: prior.row || 0,
+        customer: prior.customer, issue: prior.issue,
+        status: prior.status, sys_status: prior.sys_status,
+        flags: prior.flags || [], suggestion: prior.suggestion || '',
+      });
+    } else {
+      const fresh = { ...f, review: null, _resolution: null, resolved_at: null };
+      AMBIGUITIES.push(fresh);
+      newCount++;
+      toUpsert.push({
+        id: f.id,
+        month: f.month === '—' ? null : f.month,
+        row_num: f.row || 0,
+        customer: f.customer, issue: f.issue,
+        status: f.status, sys_status: f.sys_status,
+        flags: f.flags || [], suggestion: f.suggestion || '',
+      });
+    }
+  });
+
+  try {
+    suppressRealtimeReload(5000);
+    const { error } = await _sb.from('ambiguities').upsert(toUpsert);
+    if(error) console.warn('Auto-ambiguity upsert failed:', error);
+  } catch(e){
+    console.warn('Auto-ambiguity upsert threw:', e);
+  }
+  return newCount;
+}
+
 async function applyUploadedData(){
   if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
   if(!_pendingUploadResult){ closeModal('upload-modal'); return; }
@@ -2068,6 +2227,18 @@ async function applyUploadedData(){
       a.open_calls = RAW_TICKETS.filter(t => t.asset_code === a.code && isOpen(t)).length;
     });
 
+    // 5b. Scan ingested tickets for data-quality issues and push any new
+    //     findings into the Ambiguity queue. Silent on failure — we don't
+    //     want a soft detector error to undo a successful upload.
+    let newAmbCount = 0;
+    try {
+      showLoading('Scanning for data flags…');
+      const findings = detectAmbiguousTickets(RAW_TICKETS);
+      newAmbCount = await persistAutoAmbiguities(findings);
+    } catch(e){
+      console.warn('Auto-ambiguity scan failed:', e);
+    }
+
     hideLoading();
 
     // Update UI label
@@ -2079,8 +2250,11 @@ async function applyUploadedData(){
     _pendingUploadResult = null;
     renderAll();
 
-    logAudit('upload_success', {tickets: RAW_TICKETS.length, months: MONTHS});
-    alert(`Successfully saved ${RAW_TICKETS.length} tickets to the database. All team members will see the updated data on their next refresh.`);
+    logAudit('upload_success', {tickets: RAW_TICKETS.length, months: MONTHS, new_ambiguities: newAmbCount});
+    const ambMsg = newAmbCount > 0
+      ? `\n\n⚠ ${newAmbCount} new data flag${newAmbCount===1?'':'s'} auto-detected — review them in the Ambiguity tab.`
+      : '';
+    alert(`Successfully saved ${RAW_TICKETS.length} tickets to the database. All team members will see the updated data on their next refresh.${ambMsg}`);
 
   } catch(e){
     hideLoading();
@@ -3913,6 +4087,23 @@ function getAmbReview(ambId){
   const a = AMBIGUITIES.find(x => x.id === ambId);
   return (a && a.review) ? a.review : null;
 }
+// Grace window for resolved items: they remain visible for 24 hours after
+// `resolved_at`, then fall off the Flags/Ambiguity queue. The row stays in
+// the `ambiguities` table for audit — only the UI hides it.
+const AMB_GRACE_MS = 24 * 60 * 60 * 1000;
+function isAmbStaleResolved(a){
+  if(!a || !a.review) return false;
+  const ts = a.resolved_at || (a.review && a.review.timestamp);
+  if(!ts) return false;
+  const when = Date.parse(ts);
+  if(!Number.isFinite(when)) return false;
+  return (Date.now() - when) > AMB_GRACE_MS;
+}
+// Active ambiguities = pending reviews + recently-resolved (within grace window).
+// All UI counts, badges, dashboard KPIs derive from this.
+function activeAmbiguities(){
+  return AMBIGUITIES.filter(a => !isAmbStaleResolved(a));
+}
 // Number of ambiguities still needing a human review. This is the "pending
 // action" count — NOT the historical total. Anything the app surfaces as an
 // alert (nav badge, dashboard banner, Data Flags KPI) should use this, not
@@ -3939,13 +4130,15 @@ async function saveAmbReview(ambId, data){
   if(!a) return;
   a.review = data;
   a._resolution = data.decision + ' — ' + data.notes;
+  const nowIso = new Date().toISOString();
+  a.resolved_at = nowIso;
   // Push to Supabase (wrap dbSaveAmbiguity with review payload)
   try {
     suppressRealtimeReload(3000);
     const { error } = await _sb.from('ambiguities').update({
       review: data,
       resolution: a._resolution,
-      resolved_at: new Date().toISOString(),
+      resolved_at: nowIso,
       resolved_by: _currentUser ? _currentUser.id : null,
     }).eq('id', ambId);
     if(error) throw error;
@@ -3953,11 +4146,15 @@ async function saveAmbReview(ambId, data){
     console.error('Save ambiguity review failed:', e);
     alert('Save failed: ' + (e.message || e));
     delete a.review;  // revert in-memory change
+    delete a.resolved_at;
   }
 }
 function getAmbStats(){
+  // Stats reflect only the active queue (pending + within-grace resolved).
+  // Stale-resolved items are audit-only and should not inflate totals.
+  const active = activeAmbiguities();
   let reviewed=0,confirmed=0,fp=0,resolved=0;
-  AMBIGUITIES.forEach(a=>{
+  active.forEach(a=>{
     const r=getAmbReview(a.id);
     if(r){
       reviewed++;
@@ -3966,7 +4163,7 @@ function getAmbStats(){
       else if(r.decision==='Resolved') resolved++;
     }
   });
-  return {reviewed,confirmed,fp,resolved,total:AMBIGUITIES.length};
+  return {reviewed,confirmed,fp,resolved,total:active.length};
 }
 
 // ══════════════════════════════════════════
@@ -4792,7 +4989,9 @@ function renderAmbiguities(){
     </div>`;
   }
 
-  const listHtml=AMBIGUITIES.map((a,i)=>{
+  // Only active items render; resolved entries fall off after AMB_GRACE_MS.
+  const visible = activeAmbiguities();
+  const listHtml=visible.map((a,i)=>{
     const review=getAmbReview(a.id);
     if(review){
       const dateStr=new Date(review.timestamp).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
@@ -4857,7 +5056,12 @@ function renderAmbiguities(){
     </div>`;
   }).join('');
 
-  document.getElementById('ambiguity-list').innerHTML=progressHtml+listHtml;
+  const emptyHtml = visible.length === 0
+    ? `<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:8px;padding:18px 22px;text-align:center;font-size:12px;color:var(--text-dim)">
+         ✓ No active ambiguities. Resolved items auto-clear 24 hours after review.
+       </div>`
+    : '';
+  document.getElementById('ambiguity-list').innerHTML=progressHtml+listHtml+emptyHtml;
 }
 
 function openReviewPanel(i){
@@ -4897,6 +5101,7 @@ async function undoReview(ambId){
     if(error) throw error;
     delete a.review;
     delete a._resolution;
+    delete a.resolved_at;
     renderAmbiguities();
   } catch(e){
     console.error('Undo review failed:', e);
@@ -4934,7 +5139,7 @@ function renderReports(){
         <tr><td>MTTR (Mean Time to Restore)</td><td style="font-family:var(--mono);color:var(--accent)">${mttrDisplay}</td><td style="font-size:11px">call_date to sys_up_date, closed Incidents only</td></tr>
         <tr><td>Repeat Failure Customers</td><td style="font-family:var(--mono);color:var(--amber)">${repeatResult.customerCount}</td><td style="font-size:11px">${repeatResult.ticketsInvolved} tickets involved, 45-day window</td></tr>
         <tr><td>Calls Involving Parts</td><td style="font-family:var(--mono);color:var(--purple)">${withParts}</td><td style="font-size:11px">${Math.round(withParts/RAW_TICKETS.length*100)}% of calls</td></tr>
-        ${(()=>{ const p=pendingAmbCount(); const t=AMBIGUITIES.length; return `<tr class="admin-only"><td>Data Flags</td><td style="font-family:var(--mono);color:${p>0?'var(--amber)':'var(--green)'}">${p}</td><td style="font-size:11px">${p>0 ? `Pending review (${t} total)` : `✓ All ${t} reviewed`}</td></tr>`; })()}
+        ${(()=>{ const p=pendingAmbCount(); const t=activeAmbiguities().length; return `<tr class="admin-only"><td>Data Flags</td><td style="font-family:var(--mono);color:${p>0?'var(--amber)':'var(--green)'}">${p}</td><td style="font-size:11px">${p>0 ? `Pending review (${t} active)` : (t>0 ? `✓ ${t} reviewed (within grace window)` : `✓ Queue clear`)}</td></tr>`; })()}
         <tr style="border-top:1px solid var(--border)"><td colspan="3" style="font-family:var(--mono);font-size:9px;color:var(--text-faint);padding-top:10px">MODALITY BREAKDOWN</td></tr>
         <tr><td>MRI Calls</td><td style="font-family:var(--mono);color:var(--brand)">${mriTickets.length}</td><td style="font-size:11px">${Math.round(mriTickets.length/RAW_TICKETS.length*100)}% of total</td></tr>
         <tr><td>PET-CT Calls</td><td style="font-family:var(--mono);color:var(--purple)">${petCtTickets.length}</td><td style="font-size:11px">${Math.round(petCtTickets.length/RAW_TICKETS.length*100)}% of total</td></tr>
@@ -5037,6 +5242,21 @@ function updateClock(){
   document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})+' IST';
 }
 setInterval(updateClock,1000); updateClock();
+
+// Every 5 minutes, prune items whose 24h grace window has lapsed from the
+// visible Flags/Ambiguity UI. No DB writes — the `ambiguities` row stays
+// put for audit; only the rendered list and its badges refresh.
+setInterval(() => {
+  try {
+    if(!Array.isArray(AMBIGUITIES) || AMBIGUITIES.length === 0) return;
+    const hasStale = AMBIGUITIES.some(isAmbStaleResolved);
+    if(!hasStale) return;
+    const navBadge = document.getElementById('nb-amb');
+    if(navBadge) setNavBadgeCount('nb-amb', pendingAmbCount());
+    const listEl = document.getElementById('ambiguity-list');
+    if(listEl) renderAmbiguities();
+  } catch(e){ /* never let the tick break the UI */ }
+}, 5 * 60 * 1000);
 
 // ══════════════════════════════════════════
 // INIT
@@ -5353,6 +5573,7 @@ async function loadAllFromDB(opts = {}){
     flags: r.flags || [], suggestion: r.suggestion || '',
     review: r.review || null,
     _resolution: r.resolution || null,
+    resolved_at: r.resolved_at || null,
   }));
 
   // Tickets — paginate because Supabase caps at 1000 rows per request.
