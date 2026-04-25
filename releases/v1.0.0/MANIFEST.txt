@@ -1,0 +1,18 @@
+release:    v1.0.0
+date:       2026-04-24
+file:       index.html
+size_bytes: 447037
+sha256:     5583438002ee7ebb7309f379256e8b6fece66af6cc3b40bb6298095b5a6f544a
+snapshotted_at_utc: 2026-04-25T07:21:29Z
+prod_url:    https://3imedtech.github.io/mri-fieldops-dashboard/
+staging_url: https://3imedtech.github.io/mri-fieldops-dashboard/staging/
+
+# Pre-baseline reference (the build immediately before the v1.0.0 tag)
+prev_prod_commit: 4e38616
+prev_prod_etag:   69eb524d-6d098
+
+# After "git push origin main v1.0.0", verify prod is serving v1.0.0 by:
+#   curl -sI https://3imedtech.github.io/mri-fieldops-dashboard/index.html
+# The new etag should differ from prev_prod_etag above. Then in the browser:
+#   window.APP_VERSION  // '1.0.0'
+#   window.APP_BUILD    // { version, released, commit }
