@@ -14,6 +14,11 @@
 :root{--bg:#0a0e17;--surface:#111827;--surface2:#1a2235;--surface3:#1f2d44;--border:#243044;--brand:#3b82f6;--brand-dim:#1d4ed8;--accent:#06b6d4;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--text:#e2e8f0;--text-dim:#94a3b8;--text-faint:#4b5a72;--mono:'JetBrains Mono',ui-monospace,monospace;--sans:'Inter',system-ui,-apple-system,sans-serif;--display:'Syne',sans-serif;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:'cv11','ss01','ss03';letter-spacing:-.005em;}
+/* Form controls inherit the body font instead of falling back to UA default
+   (Arial on macOS Chrome). Without this, the login submit / password reset
+   submit / forgot reset buttons render in Arial while the rest of the UI
+   uses Inter. (audit D-02) */
+button,input,select,textarea{font-family:inherit;}
 .sidebar{position:fixed;left:0;top:0;bottom:0;width:224px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;}
 .logo{padding:18px 18px 14px;border-bottom:1px solid var(--border);}
 .logo-mark{display:flex;align-items:center;gap:10px;}
@@ -56,7 +61,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .alert-banner{background:linear-gradient(90deg,rgba(239,68,68,.12),rgba(239,68,68,.04));border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:11px 16px;display:flex;align-items:center;gap:12px;margin-bottom:18px;}
 .alert-close{color:var(--text-faint);cursor:pointer;font-size:18px;padding:4px;margin-left:auto;}
 .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px;}
-.kpi-card{background:linear-gradient(180deg,var(--surface),#0f172a);border:1px solid var(--border);border-radius:14px;padding:15px;cursor:pointer;transition:transform .25s cubic-bezier(.2,.7,.2,1),border-color .2s,box-shadow .25s;position:relative;overflow:hidden;}
+/* Default cursor stays inactive; clickable cards opt in via inline style="cursor:pointer" + onclick (PM tiles)
+   or via cursor:help for tooltip-only cards (SLA / MTTR / Repeat Failures). The dashboard top-row KPIs are
+   summary tiles with no drill-in yet, so they should not falsely advertise clickability. (audit F-01) */
+.kpi-card{background:linear-gradient(180deg,var(--surface),#0f172a);border:1px solid var(--border);border-radius:14px;padding:15px;cursor:default;transition:transform .25s cubic-bezier(.2,.7,.2,1),border-color .2s,box-shadow .25s;position:relative;overflow:hidden;}
 .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;z-index:1;}
 .kpi-card::after{content:'';position:absolute;inset:0;border-radius:14px;padding:1px;background:linear-gradient(135deg,transparent 40%,rgba(59,130,246,.0) 50%,transparent 60%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity .25s,background .25s;}
 .kpi-card.blue::before{background:var(--brand);}
@@ -757,7 +765,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 <div class="page" id="page-assets">
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title">🏥 Install Base — 22 Systems</div>
+      <div class="panel-title">🏥 Install Base — <span id="install-base-count">—</span> Systems</div>
       <input class="search-box" placeholder="Search customer, town, model…" oninput="filterAssets(this.value)">
     </div>
     <div style="overflow-x:auto">
@@ -3928,6 +3936,13 @@ function renderAssets(search=''){
   const rows=CONFIG_ASSETS.filter(a=>!search||[a.name,a.town,a.model,a.code].some(v=>v&&v.toLowerCase().includes(search.toLowerCase())));
   const unmatchedTickets=RAW_TICKETS.filter(t=>t.unmatched);
 
+  // Keep the panel header in sync with the actual asset roster (audit F-12).
+  // When searching, show "<filtered>/<total>"; otherwise just the total.
+  const ibCount = document.getElementById('install-base-count');
+  if(ibCount){
+    ibCount.textContent = search ? `${rows.length}/${CONFIG_ASSETS.length}` : String(CONFIG_ASSETS.length);
+  }
+
   document.getElementById('asset-body').innerHTML=rows.map(a=>{
     // Strict asset_code matching for ticket counts
     const assetTickets=RAW_TICKETS.filter(t=>t.asset_code&&t.asset_code===a.code);
@@ -4871,9 +4886,12 @@ function epCardHtml(eng, m, windowLabel){
       ${tile('sla','SLA%', pct(m.slaPct), epPctColor(m.slaPct), `within ${SLA_RESPONSE_DAYS}d`)}
       ${tile('ftf','FTF%', pct(m.ftfPct), epPctColor(m.ftfPct, 70, 50), 'one-shot fix')}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+    <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px">
       ${tile('pm','PM COMPLIANCE', pct(m.pmOnTimePct), epPctColor(m.pmOnTimePct, 90, 70), `${m.pmDone} done · ${m.pmLate} late`)}
-      ${tile('reopen','REOPEN RATE', '—', 'var(--text-dim)', 'v2 — not tracked yet', false)}
+      <!-- REOPEN RATE tile removed in v1.0.2 (audit F-14): the placeholder copy
+           "v2 — not tracked yet" was reaching end users. Reinstate as a real
+           tile once reopen tracking lands; until then PM COMPLIANCE spans
+           the row. -->
     </div>
   </div>`;
 }
@@ -5724,7 +5742,16 @@ async function loadAllFromDB(opts = {}){
     a.open_calls = calls.filter(isOpen).length;
   });
 
-  console.log(`Loaded: ${RAW_TICKETS.length} tickets, ${CONFIG_ASSETS.length} assets, ${ENGINEERS.length} engineers, ${PM_SCHEDULE.length} PMs, months: [${MONTHS.join(', ')}]`);
+  // Dedupe the load log: realtime listeners can fire several reloads in
+  // quick succession when multiple tables update from a single XLSX upload,
+  // and the identical "Loaded: …" line was being printed 4× per sign-in
+  // (audit F-16). Only log when at least one count or the months list
+  // actually changes.
+  const _loadFingerprint = `${RAW_TICKETS.length}|${CONFIG_ASSETS.length}|${ENGINEERS.length}|${PM_SCHEDULE.length}|${MONTHS.join(',')}`;
+  if(window._lastLoadFingerprint !== _loadFingerprint){
+    window._lastLoadFingerprint = _loadFingerprint;
+    console.log(`Loaded: ${RAW_TICKETS.length} tickets, ${CONFIG_ASSETS.length} assets, ${ENGINEERS.length} engineers, ${PM_SCHEDULE.length} PMs, months: [${MONTHS.join(', ')}]`);
+  }
 }
 
 // ── Write helpers ─────────────────────────────────────────────────────
