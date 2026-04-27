@@ -7,11 +7,70 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%233b82f6'/><stop offset='100%25' stop-color='%2306b6d4'/></linearGradient></defs><rect width='64' height='64' rx='14' fill='url(%23g)'/><text x='50%25' y='56%25' text-anchor='middle' dominant-baseline='middle' font-family='system-ui,-apple-system,Helvetica,Arial' font-weight='800' font-size='34' fill='white'>F</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<!-- Syne dropped in v1.1.0 (Phase 1 chrome cleanup): one type system across the
+     UI; all former --display usages resolve to Inter via the redefined token below. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Lucide icons (v1.1.0 chrome cleanup): replaces decorative emoji with consistent
+     stroke-based SVG icons. After any DOM render with new <i data-lucide=...>
+     elements, call window.refreshIcons() (defined later in this file) to swap
+     them for SVGs. -->
+<script src="https://unpkg.com/lucide@0.300.0/dist/umd/lucide.js"></script>
 <style>
-:root{--bg:#0a0e17;--surface:#111827;--surface2:#1a2235;--surface3:#1f2d44;--border:#243044;--brand:#3b82f6;--brand-dim:#1d4ed8;--accent:#06b6d4;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--text:#e2e8f0;--text-dim:#94a3b8;--text-faint:#4b5a72;--mono:'JetBrains Mono',ui-monospace,monospace;--sans:'Inter',system-ui,-apple-system,sans-serif;--display:'Syne',sans-serif;}
+/* ════════════════════════════════════════════════════════════════════════════
+   v1.1.0 DESIGN TOKEN CATALOG
+   Phase 1 sub-phase 1a. This is the single source of truth for every visual
+   primitive in the app. Every hardcoded color/space/radius/shadow added from
+   here forward should resolve to one of these tokens; legacy hardcoded values
+   in the existing CSS will be migrated as files are touched.
+   ════════════════════════════════════════════════════════════════════════════ */
+:root{
+  /* — surface + text (legacy names preserved for back-compat) — */
+  --bg:#0a0e17; --surface:#111827; --surface2:#1a2235; --surface3:#1f2d44;
+  --border:#243044;
+  --text:#e2e8f0; --text-dim:#94a3b8; --text-faint:#4b5a72;
+
+  /* — brand + accent — */
+  --brand:#3b82f6; --brand-dim:#1d4ed8;
+  --accent:#06b6d4;
+
+  /* — semantic state colors (new in v1.1.0; legacy aliases below) — */
+  --success:#10b981; --success-dim:#047857;
+  --warning:#f59e0b; --warning-dim:#b45309;
+  --danger:#ef4444;  --danger-dim:#b91c1c;
+  --info:#06b6d4;    --info-dim:#0e7490;
+
+  /* — legacy color aliases (existing CSS still references these) — */
+  --green:var(--success); --amber:var(--warning); --red:var(--danger); --purple:#8b5cf6;
+
+  /* — type stack — */
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sans:'Inter',system-ui,-apple-system,sans-serif;
+  --display:var(--sans); /* Syne dropped in v1.1.0; everything is Inter now */
+
+  /* — type scale (use these instead of font-size:Npx) — */
+  --text-xs:11px; --text-sm:12px; --text-md:13px; --text-base:14px;
+  --text-lg:16px; --text-xl:20px; --text-2xl:24px; --text-3xl:30px; --text-4xl:36px;
+
+  /* — spacing scale (4-pt grid) — */
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-5:24px; --space-6:32px; --space-7:48px; --space-8:64px;
+
+  /* — radius scale — */
+  --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:12px; --radius-2xl:16px; --radius-pill:999px;
+
+  /* — elevation (layered shadows that read on dark surfaces) — */
+  --shadow-1:0 1px 2px rgba(0,0,0,.20);
+  --shadow-2:0 2px 4px rgba(0,0,0,.25),0 1px 2px rgba(0,0,0,.20);
+  --shadow-3:0 4px 8px rgba(0,0,0,.30),0 2px 4px rgba(0,0,0,.20);
+  --shadow-4:0 8px 16px rgba(0,0,0,.35),0 4px 8px rgba(0,0,0,.20);
+  --shadow-5:0 16px 32px rgba(0,0,0,.40),0 8px 16px rgba(0,0,0,.25);
+  --shadow-6:0 24px 48px rgba(0,0,0,.45),0 12px 24px rgba(0,0,0,.30);
+
+  /* — focus ring (used by Phase 1b accessibility work) — */
+  --focus-ring:0 0 0 3px rgba(59,130,246,.45);
+}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:'cv11','ss01','ss03';letter-spacing:-.005em;}
 /* Form controls inherit the body font instead of falling back to UA default
@@ -22,17 +81,32 @@ button,input,select,textarea{font-family:inherit;}
 .sidebar{position:fixed;left:0;top:0;bottom:0;width:224px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;}
 .logo{padding:18px 18px 14px;border-bottom:1px solid var(--border);}
 .logo-mark{display:flex;align-items:center;gap:10px;}
-.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--brand),var(--accent));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--brand),var(--accent));border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;color:#fff;}
+.logo-icon svg{width:18px;height:18px;stroke-width:2.25;}
 .logo-text{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:-.5px;}
 .logo-sub{font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;margin-top:2px;}
 .nav{padding:14px 10px;flex:1;overflow-y:auto;}
-.nav-section{font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:2px;padding:8px 10px 5px;margin-top:6px;}
+/* v1.1.0 1a: section labels switch from mono-uppercase ("OPERATIONS") to sans
+   sentence-case ("Operations"). Keeps the typographic separator but reads
+   less shouty / more enterprise. */
+.nav-section{font-family:var(--sans);font-size:var(--text-xs);color:var(--text-faint);letter-spacing:.2px;font-weight:600;padding:10px 10px 6px;margin-top:8px;text-transform:none;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px 9px 13px;border-radius:8px;cursor:pointer;color:var(--text-dim);font-size:13px;font-weight:500;transition:background .18s,color .18s,transform .18s,border-color .18s;margin-bottom:2px;border:1px solid transparent;user-select:none;position:relative;}
 .nav-item::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--brand),var(--accent));transform:scaleY(0);transform-origin:center;transition:transform .25s cubic-bezier(.2,.7,.2,1);}
 .nav-item:hover{background:var(--surface2);color:var(--text);transform:translateX(1px);}
 .nav-item.active{background:rgba(59,130,246,.13);color:var(--brand);border-color:rgba(59,130,246,.22);}
 .nav-item.active::before{transform:scaleY(1);}
-.nav-icon{width:18px;text-align:center;font-size:15px;}
+.nav-icon{width:18px;text-align:center;font-size:15px;display:inline-flex;align-items:center;justify-content:center;}
+/* Lucide icon sizing classes (v1.1.0 chrome cleanup). Lucide replaces <i data-lucide=…>
+   with an inline <svg>; we control size via these wrapper rules. The svg inherits
+   currentColor for stroke, so an icon's color is set by its container's color. */
+.nav-icon svg{width:16px;height:16px;stroke-width:2;color:currentColor;}
+.icon{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;}
+.icon svg{stroke-width:2;}
+.icon-sm svg{width:12px;height:12px;}
+.icon-md svg{width:14px;height:14px;}
+.icon-lg svg{width:16px;height:16px;}
+.icon-xl svg{width:20px;height:20px;}
+.icon-2xl svg{width:24px;height:24px;}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:10px;}
 .nav-badge.amber{background:var(--amber);color:#000;}
 .nav-badge.green{background:var(--green);}
@@ -46,11 +120,26 @@ button,input,select,textarea{font-family:inherit;}
 .topbar-title{font-family:var(--display);font-weight:700;font-size:17px;flex:1;}
 .static-dataset-label{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:.5px;}
 .clock{font-family:var(--mono);font-size:12px;color:var(--text-dim);}
-.btn{padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:var(--sans);transition:all .15s;}
+/* v1.1.0 1a button system. The base .btn establishes typography, radius, and
+   inline-flex layout so an icon (Lucide SVG) can sit alongside the label with
+   consistent spacing. Variants: primary (filled brand), secondary (filled
+   surface w/ border), danger (filled red — destructive only), ghost (subtle
+   outline), link (text-only). All variants share the same height and radius
+   so they line up in toolbars and modal footers. */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);padding:7px 14px;border-radius:var(--radius-md);font-size:var(--text-sm);font-weight:600;cursor:pointer;border:1px solid transparent;font-family:var(--sans);transition:background .15s,border-color .15s,color .15s,box-shadow .15s;line-height:1;white-space:nowrap;}
+.btn:focus-visible{outline:none;box-shadow:var(--focus-ring);}
+.btn[disabled]{opacity:.5;cursor:not-allowed;}
+.btn svg{width:14px;height:14px;stroke-width:2;flex-shrink:0;}
 .btn-primary{background:var(--brand);color:#fff;}
 .btn-primary:hover{background:var(--brand-dim);}
-.btn-ghost{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);}
+.btn-secondary{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.btn-secondary:hover{border-color:var(--brand);background:var(--surface2);}
+.btn-danger{background:var(--danger);color:#fff;}
+.btn-danger:hover{background:var(--danger-dim);}
+.btn-ghost{background:var(--surface2);color:var(--text-dim);border-color:var(--border);}
 .btn-ghost:hover{color:var(--text);border-color:var(--brand);}
+.btn-link{background:transparent;color:var(--brand);padding:4px 6px;border-color:transparent;}
+.btn-link:hover{color:var(--accent);text-decoration:underline;}
 .notif-btn{position:relative;width:34px;height:34px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;}
 .notif-pip{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--red);border:2px solid var(--surface);}
 .main{margin-left:224px;padding-top:54px;min-height:100vh;}
@@ -59,7 +148,10 @@ button,input,select,textarea{font-family:inherit;}
 .page.active{display:block;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .alert-banner{background:linear-gradient(90deg,rgba(239,68,68,.12),rgba(239,68,68,.04));border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:11px 16px;display:flex;align-items:center;gap:12px;margin-bottom:18px;}
-.alert-close{color:var(--text-faint);cursor:pointer;font-size:18px;padding:4px;margin-left:auto;}
+.alert-close{color:var(--text-faint);cursor:pointer;background:transparent;border:1px solid transparent;border-radius:var(--radius-sm);padding:4px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;}
+.alert-close svg{width:16px;height:16px;}
+.alert-close:hover{color:var(--text);background:rgba(255,255,255,.05);}
+.alert-close:focus-visible{outline:none;box-shadow:var(--focus-ring);}
 .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px;}
 /* Default cursor stays inactive; clickable cards opt in via inline style="cursor:pointer" + onclick (PM tiles)
    or via cursor:help for tooltip-only cards (SLA / MTTR / Repeat Failures). The dashboard top-row KPIs are
@@ -73,17 +165,21 @@ button,input,select,textarea{font-family:inherit;}
 .kpi-card.red::before{background:var(--red);}
 .kpi-card.purple::before{background:var(--purple);}
 .kpi-card.cyan::before{background:var(--accent);}
-.kpi-card:hover{transform:translateY(-3px);border-color:transparent;box-shadow:0 10px 30px -10px rgba(0,0,0,.5),0 0 0 1px rgba(59,130,246,.35);}
-.kpi-card:hover::after{opacity:1;background:linear-gradient(135deg,rgba(59,130,246,.6),rgba(6,182,212,.6));}
-.kpi-card.green:hover{box-shadow:0 10px 30px -10px rgba(0,0,0,.5),0 0 0 1px rgba(16,185,129,.4);}
-.kpi-card.green:hover::after{background:linear-gradient(135deg,rgba(16,185,129,.6),rgba(6,182,212,.5));}
-.kpi-card.amber:hover{box-shadow:0 10px 30px -10px rgba(0,0,0,.5),0 0 0 1px rgba(245,158,11,.4);}
-.kpi-card.amber:hover::after{background:linear-gradient(135deg,rgba(245,158,11,.6),rgba(239,68,68,.4));}
-.kpi-card.red:hover{box-shadow:0 10px 30px -10px rgba(0,0,0,.5),0 0 0 1px rgba(239,68,68,.4);}
-.kpi-card.red:hover::after{background:linear-gradient(135deg,rgba(239,68,68,.6),rgba(245,158,11,.4));}
-.kpi-card.purple:hover{box-shadow:0 10px 30px -10px rgba(0,0,0,.5),0 0 0 1px rgba(139,92,246,.4);}
-.kpi-card.purple:hover::after{background:linear-gradient(135deg,rgba(139,92,246,.6),rgba(59,130,246,.5));}
-.kpi-card.cyan:hover{box-shadow:0 10px 30px -10px rgba(0,0,0,.5),0 0 0 1px rgba(6,182,212,.4);}
+/* v1.1.0 1a: KPI hover toned down. Lift reduced (-3px → -1px) and gradient
+   overlay opacity halved (.6 → .25). Strong hover-lift on every card was
+   suggesting clickability everywhere; the new treatment is gentle visual
+   feedback that doesn't compete with actually-clickable elements. */
+.kpi-card:hover{transform:translateY(-1px);border-color:rgba(59,130,246,.3);box-shadow:var(--shadow-2);}
+.kpi-card:hover::after{opacity:1;background:linear-gradient(135deg,rgba(59,130,246,.25),rgba(6,182,212,.25));}
+.kpi-card.green:hover{border-color:rgba(16,185,129,.3);}
+.kpi-card.green:hover::after{background:linear-gradient(135deg,rgba(16,185,129,.25),rgba(6,182,212,.2));}
+.kpi-card.amber:hover{border-color:rgba(245,158,11,.3);}
+.kpi-card.amber:hover::after{background:linear-gradient(135deg,rgba(245,158,11,.25),rgba(239,68,68,.18));}
+.kpi-card.red:hover{border-color:rgba(239,68,68,.3);}
+.kpi-card.red:hover::after{background:linear-gradient(135deg,rgba(239,68,68,.25),rgba(245,158,11,.18));}
+.kpi-card.purple:hover{border-color:rgba(139,92,246,.3);}
+.kpi-card.purple:hover::after{background:linear-gradient(135deg,rgba(139,92,246,.25),rgba(59,130,246,.2));}
+.kpi-card.cyan:hover{border-color:rgba(6,182,212,.3);}
 .kpi-card.cyan:hover::after{background:linear-gradient(135deg,rgba(6,182,212,.6),rgba(59,130,246,.5));}
 .kpi-label{font-size:10px;color:var(--text-dim);font-family:var(--mono);letter-spacing:1px;margin-bottom:8px;text-transform:uppercase;}
 .kpi-value{font-family:var(--display);font-weight:800;font-size:30px;line-height:1;margin-bottom:5px;}
@@ -99,7 +195,8 @@ button,input,select,textarea{font-family:inherit;}
 .kpi-delta.warn{color:var(--amber);}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
 .panel-head{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
-.panel-title{font-family:var(--display);font-weight:700;font-size:14px;flex:1;}
+.panel-title{font-family:var(--sans);font-weight:600;font-size:var(--text-base);flex:1;display:inline-flex;align-items:center;gap:var(--space-2);}
+.panel-title svg{width:16px;height:16px;stroke-width:2;color:var(--text-dim);flex-shrink:0;}
 .panel-action{font-size:11px;color:var(--brand);cursor:pointer;font-weight:600;}
 .panel-body{padding:16px 18px;}
 .data-table{width:100%;border-collapse:collapse;}
@@ -161,8 +258,13 @@ button,input,select,textarea{font-family:inherit;}
 .modal-overlay.open .modal{transform:scale(1);}
 .modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;position:sticky;top:0;background:var(--surface);z-index:1;}
 .modal-body{padding:20px 22px;}
-.modal-close{margin-left:auto;cursor:pointer;font-size:20px;color:var(--text-dim);line-height:1;padding:2px 6px;border-radius:4px;}
-.modal-close:hover{background:var(--surface2);}
+/* v1.1.0 1a: modal-close upgraded from <div>×</div> to a real <button> with a
+   Lucide x icon. Matches button accessibility expectations (Phase 1b will add
+   focus trap on modal open). */
+.modal-close{margin-left:auto;cursor:pointer;color:var(--text-dim);background:transparent;border:1px solid transparent;border-radius:var(--radius-md);padding:6px;display:inline-flex;align-items:center;justify-content:center;line-height:1;}
+.modal-close svg{width:18px;height:18px;stroke-width:2;}
+.modal-close:hover{background:var(--surface2);color:var(--text);}
+.modal-close:focus-visible{outline:none;box-shadow:var(--focus-ring);}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
 .detail-field label{font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1.5px;text-transform:uppercase;display:block;margin-bottom:4px;}
 .detail-field span{font-size:12px;font-weight:500;line-height:1.5;}
@@ -287,10 +389,12 @@ button,input,select,textarea{font-family:inherit;}
   /* Hamburger button (hidden on desktop, shown on narrow screens) */
   .hamburger {
     display: none; background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); border-radius: 7px; width: 40px; height: 40px;
-    font-size: 18px; cursor: pointer; align-items: center; justify-content: center;
+    color: var(--text); border-radius: var(--radius-md); width: 40px; height: 40px;
+    cursor: pointer; align-items: center; justify-content: center;
     flex-shrink: 0;
   }
+  .hamburger svg { width: 20px; height: 20px; stroke-width: 2; }
+  .hamburger:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .sidebar-backdrop {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
     z-index: 98; backdrop-filter: blur(2px);
@@ -542,25 +646,25 @@ button,input,select,textarea{font-family:inherit;}
 <aside class="sidebar">
   <div class="logo">
     <div class="logo-mark">
-      <div class="logo-icon">🧲</div>
+      <div class="logo-icon"><i data-lucide="activity-square"></i></div>
       <div><div class="logo-text">FieldOps</div><div class="logo-sub">3i MEDTECH · MEDICAL IMAGING</div></div>
     </div>
   </div>
   <nav class="nav">
-    <div class="nav-section">OPERATIONS</div>
-    <div class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span> Dashboard</div>
-    <div class="nav-item" data-page="tickets"><span class="nav-icon">🎫</span> Service History <span class="nav-badge blue" id="nb-total" style="display:none"></span></div>
-    <div class="nav-item" data-page="open"><span class="nav-icon">🚨</span> Open Tickets <span class="nav-badge" id="nb-open" style="display:none"></span></div>
-    <div class="nav-item" data-page="pm"><span class="nav-icon">📅</span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
-    <div class="nav-section">ASSETS & TEAM</div>
-    <div class="nav-item" data-page="assets"><span class="nav-icon">🏥</span> Install Base</div>
-    <div class="nav-item" data-page="team"><span class="nav-icon">👷</span> Field Team <span class="nav-badge green" id="nb-team" style="display:none"></span></div>
-    <div class="nav-section">ANALYSIS</div>
-    <div class="nav-item admin-only" data-page="ambiguities"><span class="nav-icon">⚠️</span> Flags &amp; Ambiguities <span class="nav-badge amber" id="nb-amb" style="display:none"></span></div>
-    <div class="nav-item mgr-plus" data-page="engperf"><span class="nav-icon">🏅</span> Engineer Performance</div>
-    <div class="nav-item" data-page="reports"><span class="nav-icon">📈</span> Reports</div>
-    <div class="nav-item superadmin-only" data-page="auditlog"><span class="nav-icon">🛡️</span> Audit Log</div>
-    <div class="nav-item" data-page="about"><span class="nav-icon">ℹ️</span> About</div>
+    <div class="nav-section">Operations</div>
+    <div class="nav-item active" data-page="dashboard"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Dashboard</div>
+    <div class="nav-item" data-page="tickets"><span class="nav-icon"><i data-lucide="ticket"></i></span> Service History <span class="nav-badge blue" id="nb-total" style="display:none"></span></div>
+    <div class="nav-item" data-page="open"><span class="nav-icon"><i data-lucide="alert-circle"></i></span> Open Tickets <span class="nav-badge" id="nb-open" style="display:none"></span></div>
+    <div class="nav-item" data-page="pm"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
+    <div class="nav-section">Assets &amp; team</div>
+    <div class="nav-item" data-page="assets"><span class="nav-icon"><i data-lucide="building-2"></i></span> Install Base</div>
+    <div class="nav-item" data-page="team"><span class="nav-icon"><i data-lucide="users"></i></span> Field Team <span class="nav-badge green" id="nb-team" style="display:none"></span></div>
+    <div class="nav-section">Analysis</div>
+    <div class="nav-item admin-only" data-page="ambiguities"><span class="nav-icon"><i data-lucide="alert-triangle"></i></span> Flags &amp; Ambiguities <span class="nav-badge amber" id="nb-amb" style="display:none"></span></div>
+    <div class="nav-item mgr-plus" data-page="engperf"><span class="nav-icon"><i data-lucide="award"></i></span> Engineer Performance</div>
+    <div class="nav-item" data-page="reports"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span> Reports</div>
+    <div class="nav-item superadmin-only" data-page="auditlog"><span class="nav-icon"><i data-lucide="shield"></i></span> Audit Log</div>
+    <div class="nav-item" data-page="about"><span class="nav-icon"><i data-lucide="info"></i></span> About</div>
   </nav>
   <div class="sidebar-footer">
     <div class="user-card">
@@ -573,13 +677,13 @@ button,input,select,textarea{font-family:inherit;}
 <div class="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
 
 <header class="topbar">
-  <button class="hamburger" id="hamburger-btn" onclick="toggleSidebar()" aria-label="Open navigation" aria-expanded="false">☰</button>
+  <button class="hamburger" id="hamburger-btn" onclick="toggleSidebar()" aria-label="Open navigation" aria-expanded="false"><i data-lucide="menu"></i></button>
   <div class="topbar-title" id="topbar-title">Dashboard</div>
   <div id="env-pill" style="display:none;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;padding:4px 10px;border-radius:4px;background:#f59e0b;color:#000;box-shadow:0 0 0 1px #b45309 inset" title="You are on the STAGING environment. Data here is isolated from production.">STAGING</div>
   <div class="static-dataset-label" id="dataset-label">DATASET · OCT 2025 – MAR 2026</div>
   <input type="file" id="xlsx-upload" accept=".xlsx" style="display:none" class="admin-only" onchange="handleXLSXUpload(event)">
-  <button class="btn btn-ghost admin-only" style="font-size:11px;padding:6px 12px" onclick="document.getElementById('xlsx-upload').click()" title="Upload service operations Excel file">📤 Upload XLSX</button>
-  <button class="btn btn-ghost" id="reset-data-btn" style="font-size:11px;padding:6px 12px" onclick="resetToBundledData()" title="Refresh data from database">↻ Refresh</button>
+  <button class="btn btn-ghost admin-only" style="font-size:11px;padding:6px 12px" onclick="document.getElementById('xlsx-upload').click()" title="Upload service operations Excel file"><i data-lucide="upload"></i>Upload XLSX</button>
+  <button class="btn btn-ghost" id="reset-data-btn" style="font-size:11px;padding:6px 12px" onclick="resetToBundledData()" title="Refresh data from database"><i data-lucide="rotate-cw"></i>Refresh</button>
   <div class="clock" id="clock">—</div>
   <div id="live-badge" class="live-badge" data-state="idle" title="Connecting…">
     <span class="live-badge__dot"></span><span class="live-badge__label">LIVE</span>
@@ -611,7 +715,7 @@ button,input,select,textarea{font-family:inherit;}
   <div class="grid-2 g-3-1">
     <div class="panel">
       <div class="panel-head">
-        <div class="panel-title">🚨 Currently Open Tickets</div>
+        <div class="panel-title"><i data-lucide="alert-circle"></i>Currently Open Tickets</div>
         <div class="panel-action" onclick="navigate('open')">View All →</div>
       </div>
       <div style="overflow-x:auto">
@@ -622,14 +726,14 @@ button,input,select,textarea{font-family:inherit;}
       </div>
     </div>
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">👷 Field Team</div><div class="panel-action" onclick="navigate('team')">All →</div></div>
+      <div class="panel-head"><div class="panel-title"><i data-lucide="users"></i>Field Team</div><div class="panel-action" onclick="navigate('team')">All →</div></div>
       <div class="panel-body"><div class="eng-list" id="dash-eng-list"></div></div>
     </div>
   </div>
 
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title">📆 Upcoming Contract Renewals</div>
+      <div class="panel-title"><i data-lucide="calendar-range"></i>Upcoming Contract Renewals</div>
       <div class="panel-action" onclick="navigate('pm')">PM Schedule →</div>
     </div>
     <div class="panel-body"><div id="renewals-panel"></div></div>
@@ -637,21 +741,21 @@ button,input,select,textarea{font-family:inherit;}
 
   <div class="grid-2 g-1-1-1" style="grid-template-columns:1fr 1fr 1fr">
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">📊 Calls by Month</div></div>
+      <div class="panel-head"><div class="panel-title"><i data-lucide="bar-chart-3"></i>Calls by Month</div></div>
       <div class="panel-body"><div class="bar-chart-wrap" id="bar-monthly"></div></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">🔵 Call Type Breakdown</div></div>
+      <div class="panel-head"><div class="panel-title"><i data-lucide="pie-chart"></i>Call Type Breakdown</div></div>
       <div class="panel-body" id="call-type-chart"></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">📋 Top 5 Customers by Calls</div></div>
+      <div class="panel-head"><div class="panel-title"><i data-lucide="trophy"></i>Top 5 Customers by Calls</div></div>
       <div class="panel-body"><div class="bar-chart-wrap" id="bar-customers"></div></div>
     </div>
   </div>
 
   <div class="panel">
-    <div class="panel-head"><div class="panel-title" id="kpi-band-title">📐 Live KPIs</div></div>
+    <div class="panel-head"><div class="panel-title" id="kpi-band-title"><i data-lucide="gauge"></i>Live KPIs</div></div>
     <div class="panel-body"><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:20px;text-align:center" id="kpi-band"></div></div>
   </div>
 </div>
@@ -660,11 +764,11 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-tickets">
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title" id="history-panel-title">📋 Full Service History</div>
+      <div class="panel-title" id="history-panel-title"><i data-lucide="clipboard-list"></i>Full Service History</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input class="search-box" placeholder="Search customer, issue, engineer, parts…" oninput="filterHistory(this.value)" id="history-search">
-        <button class="btn btn-ghost export-btn" style="font-size:11px;padding:5px 10px" onclick="exportHistoryCSV()" title="Export filtered rows to CSV">⬇ CSV</button>
-        <button class="btn btn-ghost export-btn" style="font-size:11px;padding:5px 10px" onclick="printCurrentPage('Service History')" title="Print / Save as PDF">🖨 PDF</button>
+        <button class="btn btn-ghost export-btn" style="font-size:11px;padding:5px 10px" onclick="exportHistoryCSV()" title="Export filtered rows to CSV"><i data-lucide="download"></i>CSV</button>
+        <button class="btn btn-ghost export-btn" style="font-size:11px;padding:5px 10px" onclick="printCurrentPage('Service History')" title="Print / Save as PDF"><i data-lucide="printer"></i>PDF</button>
       </div>
     </div>
     <div style="padding:12px 18px 0">
@@ -689,7 +793,7 @@ button,input,select,textarea{font-family:inherit;}
 <!-- ██ OPEN TICKETS ██ -->
 <div class="page" id="page-open">
   <div class="panel">
-    <div class="panel-head"><div class="panel-title" id="open-panel-title">🚨 Open Tickets</div></div>
+    <div class="panel-head"><div class="panel-title" id="open-panel-title"><i data-lucide="alert-circle"></i>Open Tickets</div></div>
     <div style="overflow-x:auto">
       <table class="data-table">
         <thead><tr>
@@ -711,7 +815,7 @@ button,input,select,textarea{font-family:inherit;}
   <!-- PM Master Schedule -->
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title">📅 PM Master Schedule — <span id="pm-count-label">22</span> Machines</div>
+      <div class="panel-title"><i data-lucide="calendar-clock"></i>PM Master Schedule — <span id="pm-count-label">22</span> Machines</div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px" onclick="pmFilterStatus='all';renderPM()">All</button>
         <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px;color:var(--red)" onclick="pmFilterStatus='overdue';renderPM()">Overdue</button>
@@ -733,14 +837,14 @@ button,input,select,textarea{font-family:inherit;}
 
   <!-- PM Timeline (visual calendar) -->
   <div class="panel">
-    <div class="panel-head"><div class="panel-title">📊 PM Timeline — Next 6 Months</div></div>
+    <div class="panel-head"><div class="panel-title"><i data-lucide="bar-chart-3"></i>PM Timeline — Next 6 Months</div></div>
     <div class="panel-body" id="pm-timeline" style="overflow-x:auto"></div>
   </div>
 
   <!-- PM Email Reminders -->
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title">📧 PM Reminders Due This Week</div>
+      <div class="panel-title"><i data-lucide="mail"></i>PM Reminders Due This Week</div>
       <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)" id="pm-reminder-count"></div>
     </div>
     <div class="panel-body" id="pm-reminders"></div>
@@ -749,8 +853,8 @@ button,input,select,textarea{font-family:inherit;}
   <!-- PM Calls from Service Log -->
   <div class="panel">
     <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-      <div class="panel-title">📅 PM Calls from Service Log</div>
-      <button class="btn btn-ghost admin-only" id="pm-sync-btn" style="font-size:10px;padding:5px 12px" onclick="runPMSyncManual()" title="Create pm_completions rows from PMS tickets so engineer compliance tiles credit this work">↻ Sync to PM Compliance</button>
+      <div class="panel-title"><i data-lucide="calendar-check"></i>PM Calls from Service Log</div>
+      <button class="btn btn-ghost admin-only" id="pm-sync-btn" style="font-size:10px;padding:5px 12px" onclick="runPMSyncManual()" title="Create pm_completions rows from PMS tickets so engineer compliance tiles credit this work"><i data-lucide="refresh-cw"></i>Sync to PM Compliance</button>
     </div>
     <div style="overflow-x:auto">
       <table class="data-table">
@@ -765,7 +869,7 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-assets">
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title">🏥 Install Base — <span id="install-base-count">—</span> Systems</div>
+      <div class="panel-title"><i data-lucide="building-2"></i>Install Base — <span id="install-base-count">—</span> Systems</div>
       <input class="search-box" placeholder="Search customer, town, model…" oninput="filterAssets(this.value)">
     </div>
     <div style="overflow-x:auto">
@@ -790,9 +894,9 @@ button,input,select,textarea{font-family:inherit;}
   <div class="grid-2 g-1-1" style="margin-bottom:16px">
     <div class="panel" style="margin-bottom:0">
       <div class="panel-head">
-        <div class="panel-title">👷 Engineers — Master List</div>
+        <div class="panel-title"><i data-lucide="users"></i>Engineers — Master List</div>
         <button class="btn btn-ghost admin-only" style="font-size:10px;padding:4px 10px" onclick="toggleAddEngineerForm()">+ Add</button>
-        <button class="btn btn-ghost admin-only" style="font-size:10px;padding:4px 10px;margin-left:6px" onclick="resetRoster()" title="Reset roster to original list">↺ Reset</button>
+        <button class="btn btn-ghost admin-only" style="font-size:10px;padding:4px 10px;margin-left:6px" onclick="resetRoster()" title="Reset roster to original list"><i data-lucide="rotate-ccw"></i>Reset</button>
       </div>
       <div id="add-eng-form" class="admin-only" style="display:none;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2)">
         <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:10px">ADD ENGINEER</div>
@@ -811,7 +915,7 @@ button,input,select,textarea{font-family:inherit;}
       <div class="panel-body"><div class="eng-list" id="team-eng-list"></div></div>
     </div>
     <div class="panel" style="margin-bottom:0">
-      <div class="panel-head"><div class="panel-title" id="calls-per-eng-title">📊 Calls per Engineer</div></div>
+      <div class="panel-head"><div class="panel-title" id="calls-per-eng-title"><i data-lucide="bar-chart-3"></i>Calls per Engineer</div></div>
       <div class="panel-body"><div class="bar-chart-wrap" id="bar-eng" style="height:220px"></div></div>
     </div>
   </div>
@@ -820,7 +924,7 @@ button,input,select,textarea{font-family:inherit;}
 <!-- ██ FLAGS & AMBIGUITIES ██ -->
 <div class="page" id="page-ambiguities">
   <div class="panel">
-    <div class="panel-head"><div class="panel-title">⚠️ Data Flags & Ambiguities — Requiring Your Review</div></div>
+    <div class="panel-head"><div class="panel-title"><i data-lucide="alert-triangle"></i>Data Flags &amp; Ambiguities — Requiring Your Review</div></div>
     <div class="panel-body">
       <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px;line-height:1.6">
         The following 16 records were flagged during ingestion. <strong style="color:var(--text)">Please review each and confirm the correct interpretation.</strong> Records are imported as-is with their flags shown. Where you confirm the correct status, these can be updated.
@@ -833,21 +937,21 @@ button,input,select,textarea{font-family:inherit;}
 <!-- ██ REPORTS ██ -->
 <div class="page" id="page-reports">
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px" class="export-btn-row">
-    <button class="btn btn-ghost export-btn" style="font-size:11px;padding:6px 12px" onclick="exportReportsCSV()" title="Export KPI + customer frequency to CSV">⬇ Export CSV</button>
-    <button class="btn btn-ghost export-btn" style="font-size:11px;padding:6px 12px" onclick="printCurrentPage('Reports')" title="Print / Save as PDF">🖨 Print / PDF</button>
+    <button class="btn btn-ghost export-btn" style="font-size:11px;padding:6px 12px" onclick="exportReportsCSV()" title="Export KPI + customer frequency to CSV"><i data-lucide="download"></i>Export CSV</button>
+    <button class="btn btn-ghost export-btn" style="font-size:11px;padding:6px 12px" onclick="printCurrentPage('Reports')" title="Print / Save as PDF"><i data-lucide="printer"></i>Print / PDF</button>
   </div>
   <div class="grid-2 g-1-1">
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">📊 KPI Summary — Full Period</div></div>
+      <div class="panel-head"><div class="panel-title"><i data-lucide="bar-chart-3"></i>KPI Summary — Full Period</div></div>
       <div class="panel-body"><div id="report-kpi-table" style="overflow-x:auto"></div></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><div class="panel-title">🔧 Parts & Component Failures</div></div>
+      <div class="panel-head"><div class="panel-title"><i data-lucide="wrench"></i>Parts &amp; Component Failures</div></div>
       <div class="panel-body"><div class="bar-chart-wrap" id="bar-parts" style="height:180px"></div></div>
     </div>
   </div>
   <div class="panel">
-    <div class="panel-head"><div class="panel-title">📋 Customer Call Frequency</div></div>
+    <div class="panel-head"><div class="panel-title"><i data-lucide="clipboard-list"></i>Customer Call Frequency</div></div>
     <div style="overflow-x:auto">
       <table class="data-table">
         <thead><tr><th>CUSTOMER</th><th>TOTAL CALLS</th><th>INCIDENTS</th><th>PMS</th><th>OPEN</th><th>CONTRACT</th></tr></thead>
@@ -862,7 +966,7 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-engperf">
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title">🏅 Engineer Performance — <span id="ep-engineer-count">0</span> Engineers</div>
+      <div class="panel-title"><i data-lucide="award"></i>Engineer Performance — <span id="ep-engineer-count">0</span> Engineers</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">WINDOW:</span>
         <select id="ep-window" onchange="renderEngineerPerformance()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
@@ -893,7 +997,7 @@ button,input,select,textarea{font-family:inherit;}
         <div id="ep-detail-title" style="font-family:var(--display);font-weight:700;font-size:17px">—</div>
         <div id="ep-detail-sub" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
       </div>
-      <div class="modal-close" onclick="closeModal('ep-detail-modal')">×</div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('ep-detail-modal')"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body" id="ep-detail-body">—</div>
   </div>
@@ -902,7 +1006,7 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-auditlog">
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title" id="audit-panel-title">🛡️ Audit Log</div>
+      <div class="panel-title" id="audit-panel-title"><i data-lucide="shield"></i>Audit Log</div>
       <div style="display:flex;gap:8px;align-items:center">
         <select id="audit-filter-action" onchange="renderAuditLog()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
           <option value="all">All actions</option>
@@ -917,7 +1021,7 @@ button,input,select,textarea{font-family:inherit;}
         <select id="audit-filter-user" onchange="renderAuditLog()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
           <option value="all">All users</option>
         </select>
-        <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="reloadAuditLog()">↻ Refresh</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="reloadAuditLog()"><i data-lucide="rotate-cw"></i>Refresh</button>
       </div>
     </div>
     <div style="padding:10px 18px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border)" id="audit-summary">Loading…</div>
@@ -935,11 +1039,11 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-about">
   <div class="panel">
     <div class="panel-head">
-      <div class="panel-title">ℹ️ About MRI FieldOps Dashboard</div>
+      <div class="panel-title"><i data-lucide="info"></i>About MRI FieldOps Dashboard</div>
     </div>
     <div style="padding:22px 26px;display:grid;gap:22px;max-width:880px">
       <div style="display:flex;align-items:center;gap:16px">
-        <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--brand),var(--accent));display:flex;align-items:center;justify-content:center;font-size:28px">🩻</div>
+        <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--brand),var(--accent));display:flex;align-items:center;justify-content:center;"><i data-lucide="activity-square" style="width:30px;height:30px;color:#fff"></i></div>
         <div>
           <div style="font-family:var(--display);font-weight:700;font-size:20px">MRI FieldOps Dashboard</div>
           <div style="font-size:12px;color:var(--text-dim);margin-top:3px">
@@ -972,7 +1076,7 @@ button,input,select,textarea{font-family:inherit;}
         <div style="font-family:var(--display);font-weight:700;font-size:15px" id="dm-title">—</div>
         <div style="margin-top:5px" id="dm-badges"></div>
       </div>
-      <div class="modal-close" onclick="closeModal('detail-modal')">×</div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('detail-modal')"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body" id="dm-body"></div>
   </div>
@@ -987,7 +1091,7 @@ button,input,select,textarea{font-family:inherit;}
         <div style="font-family:var(--display);font-weight:700;font-size:15px">Record Preventive Maintenance</div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:4px" id="pm-complete-context">—</div>
       </div>
-      <div class="modal-close" onclick="closeModal('pm-complete-modal')">×</div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('pm-complete-modal')"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body">
       <div style="margin-bottom:14px">
@@ -1008,7 +1112,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button class="btn btn-ghost" onclick="closeModal('pm-complete-modal')" style="font-size:12px;padding:8px 16px">Cancel</button>
-        <button class="btn btn-primary" id="pm-complete-submit" onclick="submitPMComplete()" style="font-size:12px;padding:8px 18px">✓ Confirm Completion</button>
+        <button class="btn btn-primary" id="pm-complete-submit" onclick="submitPMComplete()" style="font-size:12px;padding:8px 18px"><i data-lucide="check"></i>Confirm Completion</button>
       </div>
     </div>
   </div>
@@ -1022,7 +1126,7 @@ button,input,select,textarea{font-family:inherit;}
         <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:3px">XLSX UPLOAD PREVIEW</div>
         <div style="font-family:var(--display);font-weight:700;font-size:16px" id="upload-modal-title">Review changes before applying</div>
       </div>
-      <div class="modal-close" onclick="closeModal('upload-modal')">×</div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('upload-modal')"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body" id="upload-modal-body"></div>
   </div>
@@ -1034,6 +1138,24 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 window.APP_VERSION = '1.0.2';
 window.APP_BUILD   = { version: '1.0.2', released: '2026-04-26', tag: 'v1.0.2' };
+
+// ══════════════════════════════════════════
+// LUCIDE ICON RENDER HOOK (v1.1.0 1a)
+// ══════════════════════════════════════════
+// Lucide replaces every <i data-lucide="name"> element with an inline <svg>.
+// Anywhere we re-render HTML that may contain <i data-lucide=…>, call
+// window.refreshIcons() to swap them. Safe to call multiple times — already-
+// replaced elements are skipped. Tolerant of Lucide failing to load (e.g.
+// CDN blocked) so the rest of the app still works.
+window.refreshIcons = function refreshIcons(root){
+  try {
+    if (typeof window.lucide === 'undefined' || !window.lucide.createIcons) return;
+    window.lucide.createIcons({
+      attrs: { class: 'lucide-icon', 'aria-hidden': 'true' },
+      ...(root ? { nameAttr: 'data-lucide', icons: undefined } : {}),
+    });
+  } catch (e) { /* ignore — icons are decorative */ }
+};
 
 // ══════════════════════════════════════════
 // MASTER DATA — 143 tickets from Excel
@@ -2373,8 +2495,11 @@ function renderAll(){
   const hpt = document.getElementById('history-panel-title');
   if(hpt){
     const range = MONTHS.length ? ` (${MONTHS[0]} – ${MONTHS[MONTHS.length-1]})` : '';
-    hpt.textContent = `📋 Full Service History — ${RAW_TICKETS.length} Record${RAW_TICKETS.length!==1?'s':''}${range}`;
+    hpt.innerHTML = `<i data-lucide="clipboard-list"></i>Full Service History — ${RAW_TICKETS.length} Record${RAW_TICKETS.length!==1?'s':''}${range}`;
   }
+  // Sweep the document for any newly-injected <i data-lucide=…> nodes and
+  // swap them for SVGs (v1.1.0 1a chrome cleanup).
+  if (window.refreshIcons) window.refreshIcons();
 }
 
 // Note: dataset auto-load from localStorage was removed when this dashboard
@@ -2990,14 +3115,15 @@ function renderAlertBanner(){
     ? `<div class="admin-only" style="font-size:11px;color:var(--text-dim);margin-top:2px">Review <span style="color:var(--amber);cursor:pointer" onclick="navigate('ambiguities')">Flags &amp; Ambiguities →</span></div>`
     : '';
 
-  c.innerHTML=`<div class="alert-banner">
-    <span style="font-size:18px">⚠️</span>
+  c.innerHTML=`<div class="alert-banner" role="alert">
+    <span class="icon icon-xl" style="color:#fcd34d"><i data-lucide="alert-triangle"></i></span>
     <div style="flex:1">
       <div style="font-weight:600;font-size:13px;color:#fcd34d">${parts.join('')}${flagSpan}${dateNote}</div>
       ${reviewCta}
     </div>
-    <div class="alert-close" onclick="this.parentElement.parentElement.style.display='none'">×</div>
+    <button type="button" class="alert-close" aria-label="Dismiss alert" onclick="this.parentElement.style.display='none'"><i data-lucide="x"></i></button>
   </div>`;
+  if (window.refreshIcons) window.refreshIcons();
 }
 
 function renderKPIGrid(){
@@ -3311,9 +3437,11 @@ function renderKPIBand(){
     </div>`).join('');
   const titleEl = document.getElementById('kpi-band-title');
   if(titleEl){
-    titleEl.textContent = dashMonthFilter==='all'
-      ? `📐 Live KPIs — ${MONTHS[0]} to ${MONTHS[MONTHS.length-1]}`
-      : `📐 Live KPIs — ${dashMonthFilter}`;
+    const titleText = dashMonthFilter==='all'
+      ? `Live KPIs — ${MONTHS[0]} to ${MONTHS[MONTHS.length-1]}`
+      : `Live KPIs — ${dashMonthFilter}`;
+    titleEl.innerHTML = `<i data-lucide="gauge"></i>${titleText}`;
+    if (window.refreshIcons) window.refreshIcons();
   }
   document.getElementById('kpi-band').style.gridTemplateColumns='repeat(9,1fr)';
 }
@@ -3558,7 +3686,7 @@ function renderPM(){
     }
     // Gmail mailto link
     const emailAction = (st.code==='overdue'||st.code==='in-window') && engineers.length
-      ? `<button class="btn btn-primary pm-manage" style="font-size:9px;padding:3px 8px" onclick="composePMEmail('${pm.id}')">📧 Remind</button>`
+      ? `<button class="btn btn-primary pm-manage" style="font-size:9px;padding:3px 8px" onclick="composePMEmail('${pm.id}')"><i data-lucide="mail"></i>Remind</button>`
       : (st.code==='installation' || st.code==='not-covered')
         ? `<span style="color:var(--text-faint);font-size:10px">N/A</span>`
         : `<span style="color:var(--text-faint);font-size:10px">Not yet</span>`;
@@ -3680,8 +3808,8 @@ function renderPMReminders(){
       </div>
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Engineers: ${engList}</div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-primary pm-manage" style="font-size:10px;padding:4px 12px" onclick="composePMEmail('${pm.id}')">📧 Compose Reminder Email</button>
-        <button class="btn btn-ghost pm-manage" style="font-size:10px;padding:4px 10px" onclick="openPMCompleteModal('${pm.id}')">✓ Mark PM Completed</button>
+        <button class="btn btn-primary pm-manage" style="font-size:10px;padding:4px 12px" onclick="composePMEmail('${pm.id}')"><i data-lucide="mail"></i>Compose Reminder Email</button>
+        <button class="btn btn-ghost pm-manage" style="font-size:10px;padding:4px 10px" onclick="openPMCompleteModal('${pm.id}')"><i data-lucide="check"></i>Mark PM Completed</button>
       </div>
     </div>`;
   }).join('');
@@ -3870,7 +3998,7 @@ async function submitPMComplete(){
     console.error('PM completion insert failed:', insErr);
     alert('Failed to save PM completion: ' + insErr.message);
     submitBtn.disabled = false;
-    submitBtn.textContent = '✓ Confirm Completion';
+    submitBtn.textContent = '<i data-lucide="check"></i>Confirm Completion';
     return;
   }
   // New completion — drop the TTL cache so the next metrics render reflects it.
@@ -5435,7 +5563,8 @@ async function doFirstPaint(){
   const hpt = document.getElementById('history-panel-title');
   if(hpt){
     const range = MONTHS.length ? ` (${MONTHS[0]} – ${MONTHS[MONTHS.length-1]})` : '';
-    hpt.textContent = `📋 Full Service History — ${RAW_TICKETS.length} Record${RAW_TICKETS.length!==1?'s':''}${range}`;
+    hpt.innerHTML = `<i data-lucide="clipboard-list"></i>Full Service History — ${RAW_TICKETS.length} Record${RAW_TICKETS.length!==1?'s':''}${range}`;
+    if (window.refreshIcons) window.refreshIcons();
   }
 
   // Sync dataset label in the top bar too.
@@ -5488,6 +5617,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const r = document.getElementById('about-release');
   if(v) v.textContent = APP_VERSION;
   if(r) r.textContent = APP_RELEASE_DATE;
+  // Render Lucide icons present in the static HTML (sidebar nav, panel titles,
+  // login overlay, modal-close buttons). Subsequent dynamic renders call
+  // refreshIcons() inside their own render functions.
+  if (window.refreshIcons) window.refreshIcons();
 });
 
 // Funnel uncaught errors into the audit log so they don't vanish into the
