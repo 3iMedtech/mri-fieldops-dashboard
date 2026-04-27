@@ -1158,13 +1158,15 @@ window.refreshIcons = function refreshIcons(){
 
 (function installIconObserver(){
   if (typeof MutationObserver === 'undefined') return;
-  let scheduled = false;
+  // Microtask coalescing: many renders mutate the DOM several times within a
+  // single tick; we only want one refreshIcons() per tick. queueMicrotask is
+  // simpler and more reliable than requestAnimationFrame (RAF can be deferred
+  // when the tab is throttled).
+  let pending = false;
   function schedule(){
-    if (scheduled) return;
-    scheduled = true;
-    // requestAnimationFrame so we batch into a single sweep per paint, even
-    // if multiple render functions mutate within the same tick.
-    requestAnimationFrame(() => { scheduled = false; window.refreshIcons(); });
+    if (pending) return;
+    pending = true;
+    queueMicrotask(() => { pending = false; window.refreshIcons(); });
   }
   function hasIconPlaceholder(node){
     if (!(node instanceof Element)) return false;
@@ -1178,7 +1180,6 @@ window.refreshIcons = function refreshIcons(){
       }
     }
   });
-  // Start observing as soon as <body> exists.
   function start(){ if (document.body) obs.observe(document.body, { childList: true, subtree: true }); }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start);
