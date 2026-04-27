@@ -5576,19 +5576,24 @@ function openModal(id){
   _modalOpenerStack.push({ id, opener: document.activeElement });
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
-  // Wait one frame so display:flex / opacity transition flush, then move focus.
-  requestAnimationFrame(() => {
+  // setTimeout(0) is more reliable than requestAnimationFrame here. RAF is
+  // throttled when the tab/window doesn't have focus; we still want the
+  // modal's first focusable to take focus the moment the modal becomes
+  // visible (otherwise focus stays on the opener and the trap rule never
+  // engages).
+  setTimeout(() => {
     const focusables = _modalFocusables(overlay);
     const target = focusables.find(el => !el.classList.contains('modal-close')) || focusables[0];
-    if(target) target.focus();
-    else {
+    if(target) {
+      target.focus();
+    } else {
       const modal = overlay.querySelector('.modal');
       if(modal){
         if(!modal.hasAttribute('tabindex')) modal.setAttribute('tabindex', '-1');
         modal.focus();
       }
     }
-  });
+  }, 0);
 }
 
 function closeModal(id){
