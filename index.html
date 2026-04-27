@@ -3294,8 +3294,28 @@ function setDashMonth(el, month){
 function renderAlertBanner(){
   const openCount=OPEN_TICKETS.length;
   const pendingFlags=pendingAmbCount();
-  const invalidDates=DATE_AUDIT.invalid.length;
-  const suspiciousDates=DATE_AUDIT.suspicious.length;
+  // Count out-of-window TICKET dates only (call_date / attended_date /
+  // sys_up_date). Previously this read from DATE_AUDIT.suspicious which
+  // also accumulates PM nextPMS, completion_date, and contract.end parses,
+  // inflating the "tickets" count with non-ticket entries. We dedupe by
+  // ticket id so a ticket with two out-of-window dates only counts once.
+  const _isOutsideWindow = (raw) => {
+    if(!raw) return false;
+    const d = parseFlexDate(raw);
+    return d != null && (d < DATA_START || d > DATA_END);
+  };
+  const _isUnreadable = (raw) => raw != null && raw !== '' && parseFlexDate(raw) == null;
+  let suspiciousDates = 0, invalidDates = 0;
+  if(Array.isArray(RAW_TICKETS)){
+    for(const t of RAW_TICKETS){
+      if(_isOutsideWindow(t.call_date) || _isOutsideWindow(t.attended_date) || _isOutsideWindow(t.sys_up_date)){
+        suspiciousDates++;
+      }
+      if(_isUnreadable(t.call_date) || _isUnreadable(t.attended_date) || _isUnreadable(t.sys_up_date)){
+        invalidDates++;
+      }
+    }
+  }
   // Human-readable breakdown: "invalid" = could not be parsed at all (row data is unusable),
   // "suspicious" = parsed but falls outside the reporting window. Show only the categories
   // that have a non-zero count so the banner reads naturally.
