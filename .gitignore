@@ -11,3 +11,6 @@ staging-dump-*.sql
 .claude/
 .vscode/
 node_modules/
+
+# graphify knowledge-graph artifacts (re-buildable from source; can leak token costs)
+graphify-out/

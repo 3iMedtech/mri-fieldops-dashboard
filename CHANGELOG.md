@@ -7,6 +7,43 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.1.0] — 2026-04-28
+
+Phase 1 of the staging audit roadmap (`docs/STAGING_AUDIT_2026-04-26.md`). Three sub-phases shipped together: design system foundation, accessibility floor, and hash routing + IA merge. View-layer architecture upgrade — no schema or auth changes.
+
+### Added
+- **Design token catalog** at `:root`: spacing scale (4-pt grid `--space-1`…`--space-7`), type scale (`--text-xs`…`--text-4xl`), radius scale (`--radius-sm`…`--radius-pill`), 6-step elevation scale (`--shadow-1`…`--shadow-6`), full semantic colors (`--success/--warning/--danger/--info` plus legacy aliases), focus ring (`--focus-ring`).
+- **Lucide icon system** via CDN-hosted `lucide@0.300.0` plus inline `<i data-lucide="x">` placeholders. `window.refreshIcons()` helper plus a `MutationObserver` that auto-swaps placeholders on every render — no per-render-function plumbing needed.
+- **Button variants**: `.btn-secondary`, `.btn-danger`, `.btn-link` join the existing `.btn-primary` / `.btn-ghost`. All variants share radius, typography, and focus-ring via the unified base `.btn` rule.
+- **Hash routing**: every page is a bookmarkable URL. `/#/dashboard`, `/#/tickets`, `/#/tickets?status=open`, `/#/pm`, `/#/assets`, `/#/team`, `/#/ambiguities`, `/#/engperf`, `/#/reports`, `/#/auditlog`, `/#/about`. Refreshing the browser preserves the page; back/forward work; legacy `/#/open` redirects to `/#/tickets?status=open`.
+- **Service History status filter chips**: All / Open / Closed. Open Tickets is now a saved filter — the previous separate "Open Tickets" sidebar entry was removed (audit I-02). The chip's state is round-tripped through the URL.
+- **Skip-to-content link** as the first focusable element on every page (audit A-06).
+- **Two `aria-live` regions** (polite + assertive) plus `window.announce(message, priority)` helper. Sign-in errors are now announced.
+- **`role="dialog"` / `aria-modal="true"` / `aria-labelledby` on all 4 modals** (ticket detail, engineer drill-in, PM completion, XLSX upload). New `openModal(id)` / `closeModal(id)` helpers move focus into the modal on open, restore focus to the opener on close, trap Tab inside the modal, and close on Escape (audit A-03).
+- **Sidebar nav keyboard support**: 11 nav-item divs got `role="button"` + `tabindex="0"` + Enter/Space handler + `aria-current="page"` on the active item (audit A-01).
+- **Heading hierarchy**: 23 panel-title `<div>`s promoted to `<h2>` so screen-reader heading nav (`H` key) produces a real outline (audit A-05).
+- **Input labels**: every static-HTML `<input>` / `<select>` / `<textarea>` got an `aria-label` — closes the most visible part of the 359/370 unlabeled-input gap (audit A-02; dynamic radios deferred).
+
+### Changed
+- **Drop Syne webfont**. `--display` redefined to `var(--sans)` so the 12+ existing `var(--display)` usages now resolve to Inter. One less Google Fonts round-trip; one type system across the UI.
+- **Sidebar section labels**: mono-uppercase `OPERATIONS` / `ASSETS & TEAM` / `ANALYSIS` → sans sentence-case `Operations` / `Assets & team` / `Analysis`. Letter-spacing 2px → 0.2px.
+- **50+ chrome emoji replaced with Lucide SVG icons**: sidebar (11), panel titles (18+), action buttons (10), modal-close × → `<button aria-label="Close"><i data-lucide="x">`, alert-banner ⚠ + ×, menu hamburger ☰, About hero. Emoji preserved in user-generated content (ticket descriptions, customer notes).
+- **KPI hover toned down**: lift `-3px → -1px`; gradient overlay opacity `.6 → .25`. The strong hover effect was implying clickability on every card; the new treatment is gentle visual feedback that doesn't compete with the actually-clickable PM tiles.
+
+### Fixed
+- **Alert banner "tickets dated outside reporting window" count was unbounded.** `parseFlexDate()` pushed to `DATE_AUDIT.suspicious` on every call without dedupe; hot render paths (calcSLA, calcMTTR, calcRepeatFailures, etc.) re-parsed the same dates on every dashboard re-render and the count climbed by ~250 each time. Five team↔dashboard cycles took it from 29 (correct) to 1,277. Dedupe now keys on `${ctx}|${raw}`; `DATE_AUDIT.reset()` runs at the start of `loadAllFromDB`. Banner now also computes its count directly from `RAW_TICKETS` so the number is both stable AND accurate (33 tickets with at least one out-of-window date — was previously polluted by PM, contract, and completion-date parses).
+- **`navigate()` wrapper dropped its second argument.** A doFirstPaint wrapper added in v1.0.0 to re-run page renderers after each navigate had a one-arg signature; the new `opts={fromHash, query}` introduced by 1c hash routing was silently dropped, so deep-links like `/#/tickets?status=open` hydrated to the right page but with the chip stuck on All. Wrapper now forwards every argument.
+- **`navigate()` early-return prevented same-page filter updates.** `/#/tickets?status=closed` → `/#/tickets?status=open` had the same target page so the early-return path skipped the filter update logic. Restructured so the early-return only short-circuits the page+nav class flips; query-driven side effects always run.
+- **Modal focus mover used `requestAnimationFrame`.** RAF is throttled or paused when the tab/window doesn't have focus, leaving focus on the opener element even though the modal was visible. Switched to `setTimeout(0)`.
+
+### Notes
+- All 3 roles (admin, manager, engineer) re-verified on staging before promotion. Restricted-page hashes (`/#/ambiguities`, `/#/auditlog`, `/#/engperf`) bounce to `/#/dashboard` for non-authorised roles. 0 console errors observed across role transitions and 8 cycles of dashboard ↔ pm ↔ tickets ↔ team navigation.
+- Bundle: 448,786 → 476,242 bytes (+27 KB). Cost is mostly comments referencing audit IDs (F-01, A-03, etc.) so future maintainers can trace why each line is the way it is.
+- Sub-phase manifest: 1a (design tokens + Lucide), 1b (a11y floor), 1c (hash routing + IA merge) — 11 commits total on the release branch.
+- Phase 2 is queued for v1.2.0: data-grid table polish (column sort, sticky headers, density), dashboard charts, ticket inline edit (deferred per owner's read-only ruling), Reports page deletion, global search.
+
+---
+
 ## [1.0.2] — 2026-04-26
 
 ### Fixed
