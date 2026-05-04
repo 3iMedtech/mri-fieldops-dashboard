@@ -15,6 +15,9 @@ node_modules/
 # Generated knowledge graph output
 graphify-out/
 
+# Local-only archives of pre-refresh Graphify snapshots — do not commit
+docs/archive/graphify-out-*/
+
 # Local Claude workflow setup — keep local only for now
 CLAUDE.md
 .claude/
