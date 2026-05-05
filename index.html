@@ -669,6 +669,42 @@ button,input,select,textarea{font-family:inherit;}
     .print-header .meta { font-size: 10px; color: #333; }
   }
   .print-header { display: none; }
+
+  /* ── v1.3.0-1a Data Quality Detections (read-only) ─────────── */
+  .aging-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:0 0 14px 0;}
+  .aging-tile{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+  .aging-tile-label{font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase;}
+  .aging-tile-value{font-size:22px;font-weight:700;margin-top:4px;line-height:1;}
+  .aging-tile.good{border-color:rgba(16,185,129,.30);} .aging-tile.good .aging-tile-value{color:var(--green);}
+  .aging-tile.info{border-color:rgba(59,130,246,.30);} .aging-tile.info .aging-tile-value{color:var(--brand);}
+  .aging-tile.warn{border-color:rgba(245,158,11,.35);} .aging-tile.warn .aging-tile-value{color:var(--amber);}
+  .aging-tile.risk{border-color:rgba(239,68,68,.40);}  .aging-tile.risk .aging-tile-value{color:var(--red);}
+  .aging-tile.muted{opacity:.78;} .aging-tile.muted .aging-tile-value{color:var(--text-dim);}
+  @media(max-width:768px){ .aging-strip{grid-template-columns:repeat(2,1fr);} }
+  @media(max-width:420px){ .aging-strip{grid-template-columns:1fr;} }
+
+  .month-completeness-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:6px;vertical-align:middle;}
+  .mc-good{background:var(--green);}
+  .mc-partial{background:var(--amber);}
+  .mc-low{background:var(--red);}
+  .mc-in-progress{background:var(--text-faint);outline:1px solid var(--border);}
+  .mc-unknown{background:transparent;outline:1px dashed var(--text-faint);}
+
+  .dq-section{margin-top:18px;border-top:1px solid var(--border);padding-top:14px;}
+  .dq-section-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .dq-section-title{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--text-dim);text-transform:uppercase;font-weight:700;}
+  .dq-count-pill{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);}
+  .dq-count-pill.warn{color:var(--amber);border-color:rgba(245,158,11,.35);}
+  .dq-count-pill.risk{color:var(--red);border-color:rgba(239,68,68,.4);}
+  .dq-count-pill.ok{color:var(--green);border-color:rgba(16,185,129,.3);}
+  .dq-table{width:100%;border-collapse:collapse;font-size:11px;}
+  .dq-table th{font-family:var(--mono);font-size:9px;color:var(--text-faint);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.04em;}
+  .dq-table td{padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-dim);}
+  .dq-table td.dq-id{font-family:var(--mono);color:var(--brand);}
+  .dq-table td.dq-num{font-family:var(--mono);text-align:right;}
+  .dq-table td.dq-bad{color:var(--red);}
+  .dq-empty{font-size:12px;color:var(--text-dim);padding:8px 12px;background:var(--surface2);border:1px dashed var(--border);border-radius:6px;}
+  /* ── end v1.3.0-1a ────────────────────────────────────────── */
 </style>
 </head>
 <body>
@@ -936,6 +972,7 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-open">
   <div class="panel">
     <div class="panel-head"><h2 class="panel-title" id="open-panel-title"><i data-lucide="alert-circle"></i>Open Tickets</h2></div>
+    <div id="open-aging-strip" class="aging-strip" role="group" aria-label="Open ticket aging buckets"></div>
     <div style="overflow-x:auto">
       <table class="data-table">
         <thead><tr>
@@ -4217,6 +4254,141 @@ function renderKPIBand(){
 }
 
 // ══════════════════════════════════════════
+// v1.3.0-1a DATA QUALITY DETECTIONS (read-only)
+// Pure helpers — no DB writes, no Supabase calls, no state mutation.
+// All consume already-loaded in-memory arrays.
+// ══════════════════════════════════════════
+function _computeAgingBuckets(openTickets){
+  const today = TODAY;
+  const b = {'0-7':0,'8-30':0,'31-90':0,'90+':0,undated:0,total:0,oldestDays:0};
+  (openTickets||[]).forEach(t=>{
+    b.total++;
+    const d = t._callDate || parseFlexDate(t.call_date);
+    if(!d){ b.undated++; return; }
+    const ageDays = Math.floor((today - d) / 86400000);
+    if(ageDays > b.oldestDays) b.oldestDays = ageDays;
+    if(ageDays <= 7) b['0-7']++;
+    else if(ageDays <= 30) b['8-30']++;
+    else if(ageDays <= 90) b['31-90']++;
+    else b['90+']++;
+  });
+  return b;
+}
+
+function _computeMonthCompleteness(rawTickets){
+  // Median of last 3 *complete* (non-current) months.
+  // Current month → 'in-progress'. <3 prior months → 'unknown'.
+  const counts = {};
+  (MONTHS||[]).forEach(m => counts[m] = 0);
+  (rawTickets||[]).forEach(t => { if(counts[t.month] !== undefined) counts[t.month]++; });
+  const todayMonth = TODAY.toLocaleString('en-US', { month:'short', year:'numeric' });
+  const result = {};
+  for(let i = 0; i < MONTHS.length; i++){
+    const m = MONTHS[i];
+    const entries = counts[m] || 0;
+    if(m === todayMonth){
+      result[m] = { entries, baseline:null, ratio:null, level:'in-progress' };
+      continue;
+    }
+    const prior = MONTHS.slice(Math.max(0, i-3), i).filter(pm => pm !== todayMonth);
+    if(prior.length < 3){
+      result[m] = { entries, baseline:null, ratio:null, level:'unknown' };
+      continue;
+    }
+    const priorCounts = prior.map(pm => counts[pm]).sort((a,b)=>a-b);
+    const median = priorCounts[Math.floor(priorCounts.length/2)];
+    const ratio = median > 0 ? entries/median : null;
+    let level;
+    if(ratio === null) level = 'unknown';
+    else if(ratio >= 0.85) level = 'good';
+    else if(ratio >= 0.65) level = 'partial';
+    else level = 'low';
+    result[m] = { entries, baseline:median, ratio, level };
+  }
+  return result;
+}
+
+function _findUnmatchedAssetCodes(tickets, configAssets){
+  // Per locked decision: include '⚠UNMATCHED' (already-flagged), exclude only empty.
+  const norm = s => (s||'').trim().toUpperCase().replace(/\s+/g,'');
+  const masterSet = new Set((configAssets||[]).map(a => norm(a.asset_code)).filter(Boolean));
+  const out = [];
+  const seen = new Set();
+  (tickets||[]).forEach(t => {
+    const raw = (t.asset_code || '').trim();
+    if(!raw) return;                       // exclude only empty
+    const alreadyMarked = raw === '⚠UNMATCHED';
+    const inMaster = masterSet.has(norm(raw));
+    if(alreadyMarked || !inMaster){
+      const key = `${t.id}|${raw}`;
+      if(seen.has(key)) return;
+      seen.add(key);
+      out.push({
+        ticketId: t.id,
+        customer: t.customer || t.customer_raw || '',
+        claimedCode: raw,
+        month: t.month || '',
+        alreadyMarked
+      });
+    }
+  });
+  return out;
+}
+
+function _findStalePartsAwaited(tickets, thresholdDays){
+  const TH = thresholdDays || 14;
+  const today = TODAY;
+  const out = [];
+  (tickets||[]).forEach(t => {
+    if((t.parts_status||'').trim() !== 'Parts Awaited') return;
+    if(t.parts_recv_date && t.parts_recv_date.trim() !== '') return;
+    const anchor = parseFlexDate(t.parts_req_date) || t._callDate || parseFlexDate(t.call_date);
+    if(!anchor){
+      out.push({
+        ticketId:t.id, customer:t.customer||'', parts:t.parts||'',
+        sinceDate:t.parts_req_date||t.call_date||'(unknown)',
+        daysStale:null, anchorMissing:true
+      });
+      return;
+    }
+    const daysStale = Math.floor((today - anchor) / 86400000);
+    if(daysStale > TH){
+      out.push({
+        ticketId:t.id, customer:t.customer||'', parts:t.parts||'',
+        sinceDate:t.parts_req_date||t.call_date||'',
+        daysStale, anchorMissing:false
+      });
+    }
+  });
+  out.sort((a,b) => (b.daysStale||0) - (a.daysStale||0));
+  return out;
+}
+
+function _findBlankStatusTickets(tickets){
+  // Per locked enum from current code/data: KNOWN = {Open, Closed}.
+  const KNOWN = new Set(['OPEN','CLOSED']);
+  const out = [];
+  (tickets||[]).forEach(t => {
+    const raw = t.status;
+    const trimmed = (raw || '').trim();
+    if(!trimmed || !KNOWN.has(trimmed.toUpperCase())){
+      let display;
+      if(raw === undefined || raw === null) display = '(null)';
+      else if(raw === '') display = '(empty)';
+      else if(trimmed === '') display = '(whitespace)';
+      else display = raw;
+      out.push({
+        ticketId: t.id,
+        customer: t.customer || '',
+        month: t.month || '',
+        rawStatus: display
+      });
+    }
+  });
+  return out;
+}
+
+// ══════════════════════════════════════════
 // RENDER SERVICE HISTORY (FIX 8 — dynamic tabs)
 // ══════════════════════════════════════════
 let historyFilter='all', historySearch='', historyModalityFilter='all', historyStatusFilter='all';
@@ -4224,10 +4396,18 @@ let historyFilter='all', historySearch='', historyModalityFilter='all', historyS
 function buildHistoryTabs(){
   const mc=countByMonth(RAW_TICKETS);
   const total=RAW_TICKETS.length;
+  // v1.3.0-1a — month completeness dots (median of last 3 complete months)
+  const completenessMap = _computeMonthCompleteness(RAW_TICKETS);
   let html=`<div class="tab${historyFilter==='all'?' active':''}" role="button" tabindex="0" onclick="filterHistoryMonth(this,'all')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterHistoryMonth(this,'all')}">All (${total})</div>`;
   MONTHS.forEach(m=>{
     const cnt=mc[m]||0;
-    html+=`<div class="tab${historyFilter===m?' active':''}" role="button" tabindex="0" onclick="filterHistoryMonth(this,'${m}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterHistoryMonth(this,'${m}')}">${m} (${cnt})</div>`;
+    const c = completenessMap[m] || { level:'unknown', baseline:null, ratio:null };
+    let dotTitle;
+    if(c.level === 'in-progress') dotTitle = 'In progress (current month)';
+    else if(c.level === 'unknown') dotTitle = 'No baseline yet';
+    else dotTitle = `${c.level} — ${cnt} entries vs baseline ${c.baseline}${c.ratio !== null ? ` (${(c.ratio*100).toFixed(0)}%)` : ''}`;
+    const ariaLbl = `${m}, ${cnt} entries, completeness ${dotTitle}`;
+    html+=`<div class="tab${historyFilter===m?' active':''}" role="button" tabindex="0" aria-label="${esc(ariaLbl)}" onclick="filterHistoryMonth(this,'${m}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterHistoryMonth(this,'${m}')}">${m} (${cnt})<span class="month-completeness-dot mc-${c.level}" aria-hidden="true" title="${esc(dotTitle)}"></span></div>`;
   });
   document.getElementById('history-month-tabs').innerHTML=html;
 
@@ -4468,6 +4648,21 @@ function renderOpen(){
       ? `Open Tickets — ${openCount} Active (${siteCount} site${siteCount===1?'':'s'})`
       : `Open Tickets — None`;
     title.innerHTML = `<i data-lucide="alert-circle"></i>${tail}`;
+  }
+  // v1.3.0-1a — aging buckets strip (read-only, all roles, non-clickable)
+  const agingStrip = document.getElementById('open-aging-strip');
+  if(agingStrip){
+    if(openCount === 0){
+      agingStrip.innerHTML = '';
+    } else {
+      const b = _computeAgingBuckets(OPEN_TICKETS);
+      agingStrip.innerHTML = `
+        <div class="aging-tile good"  role="status" aria-label="${b['0-7']} open tickets aged 0 to 7 days"><div class="aging-tile-label">0–7d</div><div class="aging-tile-value">${b['0-7']}</div></div>
+        <div class="aging-tile info"  role="status" aria-label="${b['8-30']} open tickets aged 8 to 30 days"><div class="aging-tile-label">8–30d</div><div class="aging-tile-value">${b['8-30']}</div></div>
+        <div class="aging-tile warn"  role="status" aria-label="${b['31-90']} open tickets aged 31 to 90 days"><div class="aging-tile-label">31–90d</div><div class="aging-tile-value">${b['31-90']}</div></div>
+        <div class="aging-tile risk"  role="status" aria-label="${b['90+']} open tickets aged over 90 days"><div class="aging-tile-label">&gt;90d</div><div class="aging-tile-value">${b['90+']}</div></div>
+        <div class="aging-tile muted" role="status" aria-label="${b.undated} open tickets with no parseable call date"><div class="aging-tile-label">Undated</div><div class="aging-tile-value">${b.undated}</div></div>`;
+    }
   }
   document.getElementById('open-body').innerHTML=OPEN_TICKETS.map(t=>`
     <tr class="clickable" onclick="openDetail('${t.id}')">
@@ -6218,7 +6413,82 @@ function renderAmbiguities(){
          ✓ No active ambiguities. Resolved items auto-clear 24 hours after review.
        </div>`
     : '';
-  document.getElementById('ambiguity-list').innerHTML=progressHtml+listHtml+emptyHtml;
+  // v1.3.0-1a — Data Quality Detections (admin-only, read-only, no actions)
+  const dqHtml = _renderDataQualitySections();
+  document.getElementById('ambiguity-list').innerHTML=progressHtml+listHtml+emptyHtml+dqHtml;
+}
+
+// v1.3.0-1a — Build the three read-only data-quality detection sections.
+// Inherits admin-only gating from the parent panel context.
+function _renderDataQualitySections(){
+  const unmatched = _findUnmatchedAssetCodes(RAW_TICKETS, CONFIG_ASSETS);
+  const stale     = _findStalePartsAwaited(RAW_TICKETS, 14);
+  const blank     = _findBlankStatusTickets(RAW_TICKETS);
+
+  const pillCls = (n, warnAt=1, riskAt=10) =>
+    n === 0 ? 'ok' : (n >= riskAt ? 'risk' : (n >= warnAt ? 'warn' : 'ok'));
+
+  const unmatchedTable = unmatched.length === 0
+    ? `<div class="dq-empty">✓ No unmatched asset codes detected.</div>`
+    : `<table class="dq-table" aria-label="Unmatched asset codes">
+         <thead><tr><th>Ticket</th><th>Customer</th><th>Month</th><th>Claimed Code</th><th>Note</th></tr></thead>
+         <tbody>${unmatched.map(r=>`<tr>
+           <td class="dq-id">${esc(r.ticketId)}</td>
+           <td>${esc(r.customer)}</td>
+           <td>${esc(r.month)}</td>
+           <td class="dq-id ${r.alreadyMarked?'dq-bad':''}">${esc(r.claimedCode)}</td>
+           <td>${r.alreadyMarked ? 'Already marked unmatched — needs mapping' : 'Not in Install Base'}</td>
+         </tr>`).join('')}</tbody>
+       </table>`;
+
+  const staleTable = stale.length === 0
+    ? `<div class="dq-empty">✓ No stale Parts Awaited records (>14 days).</div>`
+    : `<table class="dq-table" aria-label="Stale Parts Awaited records">
+         <thead><tr><th>Ticket</th><th>Customer</th><th>Parts</th><th>Since</th><th>Days Stale</th></tr></thead>
+         <tbody>${stale.map(r=>`<tr>
+           <td class="dq-id">${esc(r.ticketId)}</td>
+           <td>${esc(r.customer)}</td>
+           <td>${esc(r.parts||'—')}</td>
+           <td>${esc(r.sinceDate||'—')}</td>
+           <td class="dq-num ${r.daysStale && r.daysStale>30?'dq-bad':''}">${r.anchorMissing?'(anchor missing)':r.daysStale+'d'}</td>
+         </tr>`).join('')}</tbody>
+       </table>`;
+
+  const blankTable = blank.length === 0
+    ? `<div class="dq-empty">✓ No blank or unknown ticket statuses detected.</div>`
+    : `<table class="dq-table" aria-label="Tickets with blank or unknown status">
+         <thead><tr><th>Ticket</th><th>Customer</th><th>Month</th><th>Raw Status</th></tr></thead>
+         <tbody>${blank.map(r=>`<tr>
+           <td class="dq-id">${esc(r.ticketId)}</td>
+           <td>${esc(r.customer)}</td>
+           <td>${esc(r.month)}</td>
+           <td class="dq-bad">${esc(r.rawStatus)}</td>
+         </tr>`).join('')}</tbody>
+       </table>`;
+
+  return `
+    <section class="dq-section admin-only" aria-labelledby="dq-unmatched-title">
+      <div class="dq-section-head">
+        <span id="dq-unmatched-title" class="dq-section-title">Unmatched Asset Codes</span>
+        <span class="dq-count-pill ${pillCls(unmatched.length)}">${unmatched.length}</span>
+      </div>
+      ${unmatchedTable}
+    </section>
+    <section class="dq-section admin-only" aria-labelledby="dq-stale-title">
+      <div class="dq-section-head">
+        <span id="dq-stale-title" class="dq-section-title">Stale Parts Awaited (&gt;14 days)</span>
+        <span class="dq-count-pill ${pillCls(stale.length)}">${stale.length}</span>
+      </div>
+      ${staleTable}
+    </section>
+    <section class="dq-section admin-only" aria-labelledby="dq-blank-title">
+      <div class="dq-section-head">
+        <span id="dq-blank-title" class="dq-section-title">Blank / Unknown Status Tickets</span>
+        <span class="dq-count-pill ${pillCls(blank.length)}">${blank.length}</span>
+      </div>
+      ${blankTable}
+    </section>
+  `;
 }
 
 function openReviewPanel(i){
