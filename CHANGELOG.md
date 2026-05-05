@@ -7,6 +7,31 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.0] — 2026-05-05
+
+Phase 1a of the v1.3.0 Data Quality Foundation. Five read-only data quality detections derived purely in-memory from already-loaded arrays. View-layer only — no Supabase writes, no new Supabase requests, no schema/RLS/Auth/XLSX parser changes.
+
+### Added
+- **Open Tickets aging buckets** — a 5-tile strip rendered above the Open Tickets table (`#open-aging-strip`). Buckets: 0–7d (green), 8–30d (blue), 31–90d (amber), >90d (red), Undated (muted). Each tile has `role="status"` and a descriptive `aria-label`. Non-clickable, display only. Visible to all authenticated roles.
+- **Service History month completeness dots** — a coloured dot appended to each month tab. Levels: `good` ≥85%, `partial` ≥65%, `low` <65%, `in-progress` (current month), `unknown` (insufficient history). Baseline is the median of the prior three completed months. `aria-hidden="true"` on the dot itself; the parent tab `aria-label` includes completeness context. Visible to all authenticated roles.
+- **Data Quality sections in Flags & Ambiguities (Admin/Superadmin only)** — three read-only sections gated by the existing `.viewer-mode .admin-only` CSS rule:
+  - **Unmatched Asset Codes** — flags tickets whose `asset_code` is not in `CONFIG_ASSETS` master list (case-insensitive normalised match). Includes records already marked `⚠UNMATCHED` with a "needs mapping" note.
+  - **Stale Parts Awaited (>14 days)** — flags open Parts Awaited tickets with no `parts_recv_date` whose anchor date (parts_req_date → call_date) exceeds 14 days. Sorted by staleness descending. Tickets with no anchor date flagged separately.
+  - **Blank / Unknown Status Tickets** — flags tickets whose `status` field is outside the `{Open, Closed}` enum. Distinguishes `(null)` / `(empty)` / `(whitespace)` / unexpected raw values.
+- New helpers `_computeAgingBuckets`, `_computeMonthCompleteness`, `_findUnmatchedAssetCodes`, `_findStalePartsAwaited`, `_findBlankStatusTickets`, `_renderDataQualitySections` — all pure, no DB writes, no state mutation.
+
+### Changed
+- **About tab** version display now reads `Version 1.3.0` / `5 May 2026`.
+
+### Safety
+- No Supabase writes added.
+- No new Supabase requests triggered by detections (all derived from already-loaded `RAW_TICKETS`, `OPEN_TICKETS`, `CONFIG_ASSETS`).
+- No schema, RLS, Auth, or XLSX parser changes.
+- All user-data fields rendered through `esc()` for XSS safety.
+- Three responsive breakpoints retained: 5-col desktop, 2-col ≤768px, 1-col ≤420px.
+
+---
+
 ## [1.2.0] — 2026-05-04
 
 Phase 2 of the staging audit roadmap. Six sub-phases shipped together: sortable tables, dashboard KPI operational indicators, Reports merged into Dashboard, global search, empty states, and radiogroup accessibility polish. View-layer only — no schema, auth, RLS, or Supabase changes.
