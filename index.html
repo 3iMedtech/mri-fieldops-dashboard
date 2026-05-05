@@ -786,7 +786,7 @@ button,input,select,textarea{font-family:inherit;}
     <div class="nav-item" data-page="assets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="building-2"></i></span> Install Base</div>
     <div class="nav-item" data-page="team" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="users"></i></span> Field Team <span class="nav-badge green" id="nb-team" style="display:none"></span></div>
     <div class="nav-section" role="presentation">Analysis</div>
-    <div class="nav-item admin-only" data-page="ambiguities" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="alert-triangle"></i></span> Flags &amp; Ambiguities <span class="nav-badge amber" id="nb-amb" style="display:none"></span></div>
+    <div class="nav-item admin-only" data-page="ambiguities" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="alert-triangle"></i></span> Flags &amp; Ambiguities <span class="nav-badge amber" id="nb-amb" style="display:none"></span><span class="nav-badge" id="nb-dq" style="display:none" title="Data quality issues needing review"></span></div>
     <div class="nav-item mgr-plus" data-page="engperf" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="award"></i></span> Engineer Performance</div>
     <!-- v1.2.0 2c — Reports nav-item removed. Reports panels are folded
          into Dashboard as a collapsible. /#/reports still resolves via
@@ -2766,6 +2766,7 @@ function renderAll(){
   setNavBadgeCount('nb-open', OPEN_TICKETS.length);
   setNavBadgeCount('nb-amb', pendingAmbCount());
   setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
+  _refreshDQNavBadge();
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
   try {
     const openCount = OPEN_TICKETS.length;
@@ -4542,6 +4543,58 @@ function exportReportsCSV(){
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
   try { logAudit('export_csv', {scope: 'reports', kpi_rows: kpiRows.length, customer_rows: custRows.length}); } catch(_){}
 }
+
+// v1.3.1-1b — Data Quality CSV exports (admin-only, read-only).
+// All three reuse the existing _downloadCSV / _csvEscape pattern.
+// Audit logging matches existing CSV export behaviour (export_csv scope).
+// No new Supabase fetches added.
+function exportUnmatchedAssetsCSV(){
+  const rows = _findUnmatchedAssetCodes(RAW_TICKETS, CONFIG_ASSETS);
+  if(!rows.length) return;
+  const headers = ['ticket_id','customer','month','claimed_asset_code','already_marked_unmatched','note'];
+  const data = rows.map(r => [
+    r.ticketId,
+    r.customer,
+    r.month,
+    r.claimedCode,
+    r.alreadyMarked ? 'Y' : 'N',
+    r.alreadyMarked ? 'Already marked unmatched — needs mapping' : 'Not in Install Base'
+  ]);
+  _downloadCSV(`dq-unmatched-assets-${_tsStamp()}.csv`, headers, data);
+  try { logAudit('export_csv', {scope: 'dq_unmatched_assets', rows: rows.length}); } catch(_){}
+}
+function exportStalePartsCSV(){
+  const rows = _findStalePartsAwaited(RAW_TICKETS, 14);
+  if(!rows.length) return;
+  const headers = ['ticket_id','customer','parts_description','since_date','days_stale','anchor_missing'];
+  const data = rows.map(r => [
+    r.ticketId,
+    r.customer,
+    r.parts || '',
+    r.sinceDate || '',
+    r.anchorMissing ? '' : r.daysStale,
+    r.anchorMissing ? 'Y' : 'N'
+  ]);
+  _downloadCSV(`dq-stale-parts-${_tsStamp()}.csv`, headers, data);
+  try { logAudit('export_csv', {scope: 'dq_stale_parts', rows: rows.length}); } catch(_){}
+}
+function exportBlankStatusCSV(){
+  const rows = _findBlankStatusTickets(RAW_TICKETS);
+  if(!rows.length) return;
+  const headers = ['ticket_id','customer','month','raw_status_value','status_label'];
+  const data = rows.map(r => {
+    const raw = r.rawStatus;
+    let label;
+    if(raw === null || raw === undefined) label = '(null)';
+    else if(typeof raw === 'string' && raw.length === 0) label = '(empty)';
+    else if(typeof raw === 'string' && raw.trim().length === 0) label = '(whitespace)';
+    else label = String(raw);
+    return [r.ticketId, r.customer, r.month, raw == null ? '' : String(raw), label];
+  });
+  _downloadCSV(`dq-blank-status-${_tsStamp()}.csv`, headers, data);
+  try { logAudit('export_csv', {scope: 'dq_blank_status', rows: rows.length}); } catch(_){}
+}
+
 function printCurrentPage(label){
   const titleEl = document.getElementById('print-header-title');
   const metaEl  = document.getElementById('print-header-meta');
@@ -5425,6 +5478,30 @@ function setNavBadgeCount(id, count, opts){
     el.textContent = '';
     el.style.display = 'none';
   }
+}
+// v1.3.1-1b — Total count of admin-facing data-quality issues. Drives the new
+// #nb-dq sibling badge on the Flags & Ambiguities nav item. Pure in-memory:
+// no Supabase calls, no state mutation. #nb-amb semantics are unchanged.
+function _computeDQTotal(){
+  if(typeof RAW_TICKETS === 'undefined' || typeof CONFIG_ASSETS === 'undefined') return 0;
+  try {
+    return _findUnmatchedAssetCodes(RAW_TICKETS, CONFIG_ASSETS).length
+         + _findStalePartsAwaited(RAW_TICKETS, 14).length
+         + _findBlankStatusTickets(RAW_TICKETS).length;
+  } catch(_){ return 0; }
+}
+// Update #nb-dq count + tooltip breakdown ("N unmatched · N stale parts · N blank status").
+function _refreshDQNavBadge(){
+  if(typeof RAW_TICKETS === 'undefined' || typeof CONFIG_ASSETS === 'undefined') return;
+  let u = 0, s = 0, b = 0;
+  try {
+    u = _findUnmatchedAssetCodes(RAW_TICKETS, CONFIG_ASSETS).length;
+    s = _findStalePartsAwaited(RAW_TICKETS, 14).length;
+    b = _findBlankStatusTickets(RAW_TICKETS).length;
+  } catch(_){ return; }
+  setNavBadgeCount('nb-dq', u + s + b);
+  const el = document.getElementById('nb-dq');
+  if(el) el.title = `${u} unmatched · ${s} stale parts · ${b} blank status`;
 }
 async function saveAmbReview(ambId, data){
   const a = AMBIGUITIES.find(x => x.id === ambId);
@@ -6471,6 +6548,7 @@ function _renderDataQualitySections(){
       <div class="dq-section-head">
         <span id="dq-unmatched-title" class="dq-section-title">Unmatched Asset Codes</span>
         <span class="dq-count-pill ${pillCls(unmatched.length)}">${unmatched.length}</span>
+        ${unmatched.length > 0 ? `<button class="btn btn-ghost export-btn" style="font-size:11px;padding:5px 10px;margin-left:auto" onclick="exportUnmatchedAssetsCSV()" aria-label="Export unmatched asset codes to CSV" title="Export unmatched asset codes to CSV"><i data-lucide="download"></i>CSV</button>` : ''}
       </div>
       ${unmatchedTable}
     </section>
@@ -6478,6 +6556,7 @@ function _renderDataQualitySections(){
       <div class="dq-section-head">
         <span id="dq-stale-title" class="dq-section-title">Stale Parts Awaited (&gt;14 days)</span>
         <span class="dq-count-pill ${pillCls(stale.length)}">${stale.length}</span>
+        ${stale.length > 0 ? `<button class="btn btn-ghost export-btn" style="font-size:11px;padding:5px 10px;margin-left:auto" onclick="exportStalePartsCSV()" aria-label="Export stale Parts Awaited records to CSV" title="Export stale Parts Awaited records to CSV"><i data-lucide="download"></i>CSV</button>` : ''}
       </div>
       ${staleTable}
     </section>
@@ -6485,6 +6564,7 @@ function _renderDataQualitySections(){
       <div class="dq-section-head">
         <span id="dq-blank-title" class="dq-section-title">Blank / Unknown Status Tickets</span>
         <span class="dq-count-pill ${pillCls(blank.length)}">${blank.length}</span>
+        ${blank.length > 0 ? `<button class="btn btn-ghost export-btn" style="font-size:11px;padding:5px 10px;margin-left:auto" onclick="exportBlankStatusCSV()" aria-label="Export blank or unknown status tickets to CSV" title="Export blank or unknown status tickets to CSV"><i data-lucide="download"></i>CSV</button>` : ''}
       </div>
       ${blankTable}
     </section>
@@ -6859,6 +6939,7 @@ async function doFirstPaint(){
   setNavBadgeCount('nb-open', OPEN_TICKETS.length);
   setNavBadgeCount('nb-amb', pendingAmbCount());
   setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
+  _refreshDQNavBadge();
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
   try {
     const openCount = OPEN_TICKETS.length;
