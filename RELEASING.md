@@ -2,132 +2,160 @@
 
 How to cut a new tagged release of the MRI FieldOps Dashboard.
 
-We use [Semantic Versioning](https://semver.org/):
+We use Semantic Versioning:
 
-- **MAJOR** (`x.0.0`) — breaking changes (DB schema rewrite, role model change, anything that requires user re-onboarding)
-- **MINOR** (`1.x.0`) — new features, backward-compatible
-- **PATCH** (`1.0.x`) — bug fixes only
+- MAJOR (`x.0.0`): breaking changes, role model redesign, schema rewrite, or workflow changes requiring user re-onboarding
+- MINOR (`1.x.0`): backward-compatible new features
+- PATCH (`1.0.x`): bug fixes only
 
-Rule of thumb: if a careful user wouldn't notice anything different about how they use the app, it's a PATCH. If they'd notice a new tab or feature, it's a MINOR. If their workflow changes, it's a MAJOR.
+All production releases must be validated on staging first.
 
 ---
 
-## The release flow
+## Release Flow
 
-```
-feature branch  →  staging  →  main  →  tag  →  snapshot
-   (dev)         (validate)   (prod)   (lock)  (archive)
+```text
+feature branch → staging → main → tag → snapshot
 ```
 
 Every tagged release must have:
-1. Been merged to `main` (so the prod URL serves it)
-2. Been validated on `staging` first (no exceptions for prod-only releases)
-3. A row in `CHANGELOG.md`
-4. A snapshot in `releases/<tag>/`
-5. An updated `VERSION` file
-6. An updated `window.APP_VERSION` block in `index.html`
+
+1. Been merged to `main`
+2. Been validated on `staging`
+3. A `CHANGELOG.md` entry
+4. Updated `VERSION`
+5. Updated in-bundle version block in `index.html`
+6. Snapshot in `releases/<tag>/`
+7. Known rollback target
 
 ---
 
-## Cutting a release — step by step
+## Pre-flight
 
-### 0. Pre-flight
 ```bash
 git checkout main
 git pull origin main
-git status                   # must be clean
+git status
 ```
 
-### 1. Make sure staging is the source
-The release commit lives on `main`, but it should already have lived on `staging` first. Confirm:
+Working tree must be clean.
+
+Confirm staging and main are aligned before release:
+
 ```bash
-git log --oneline staging..main    # should be empty — main has nothing staging doesn't
-git log --oneline main..staging    # should be empty too — fully merged
+git log --oneline staging..main
+git log --oneline main..staging
 ```
-If either has commits, sort that out before tagging.
 
-### 2. Pick the version
+Resolve differences before tagging.
+
+---
+
+## Version Update
+
+1. Check current version:
+
 ```bash
-cat VERSION                    # current
+cat VERSION
 ```
-Bump per semver. For this guide assume new version = `1.1.0`.
 
-### 3. Update `VERSION` and the in-bundle version block
+2. Update `VERSION`.
+3. Update `window.APP_VERSION` and `window.APP_BUILD` in `index.html`.
+4. Add a new `CHANGELOG.md` entry.
+
+Do not update version for documentation-only guidance changes unless the release process requires it.
+
+---
+
+## Release Script
+
+Run the project release script only after staging validation and approval:
+
 ```bash
-echo "1.1.0" > VERSION
+./scripts/release.sh <version>
 ```
 
-In `index.html`, find the `APP VERSION` comment block near the top of the main `<script>` and update both lines:
-```js
-window.APP_VERSION = '1.1.0';
-window.APP_BUILD   = { version: '1.1.0', released: 'YYYY-MM-DD', commit: '<short-sha-after-commit>' };
-```
-(Commit hash is filled in **after** the commit — use a placeholder, then amend in step 6.)
+The script should verify:
 
-### 4. Update `CHANGELOG.md`
-Add a new `## [1.1.0] — YYYY-MM-DD` block above the previous entry. Follow [Keep a Changelog](https://keepachangelog.com/) sections: `### Added`, `### Changed`, `### Fixed`, `### Removed`. Keep entries terse and user-facing.
+- clean working tree
+- correct branch
+- `VERSION` matches argument
+- changelog heading exists
+- snapshot is created
+- manifest is written
 
-### 5. Run the release script
+---
+
+## Commit, Tag, Push
+
 ```bash
-./scripts/release.sh 1.1.0
-```
-This script:
-- Verifies the working tree is clean and on `main`
-- Verifies `VERSION` matches the argument
-- Verifies `CHANGELOG.md` has a `## [1.1.0]` heading
-- Snapshots `index.html` to `releases/v1.1.0/`
-- Writes `releases/v1.1.0/MANIFEST.txt` with size, sha256, and source commit
-
-If any check fails, the script aborts without modifying anything.
-
-### 6. Commit, tag, push
-```bash
-git add VERSION CHANGELOG.md index.html releases/v1.1.0/
-git commit -m "release: v1.1.0"
-git tag -a v1.1.0 -m "Release v1.1.0"
+git add VERSION CHANGELOG.md index.html releases/<tag>/
+git commit -m "release: v<tag>"
+git tag -a v<tag> -m "Release v<tag>"
 git push origin main
-git push origin v1.1.0
+git push origin v<tag>
 ```
 
-(If you used a placeholder commit hash in `window.APP_BUILD`, amend it now: edit the file to the real short-sha from `git rev-parse --short HEAD`, then `git commit --amend --no-edit` and re-push. **Do this only if no one else has pulled yet.**)
+Do not push production without explicit approval.
 
-### 7. Verify prod
-Wait ~60s for Pages to rebuild:
+---
+
+## Production Verification
+
+After GitHub Pages rebuilds:
+
 ```bash
 curl -sI https://3imedtech.github.io/mri-fieldops-dashboard/index.html | grep -iE "etag|last-modified"
 ```
-Open the app, hard-refresh, check console:
+
+Open app and verify:
+
 ```js
-window.APP_VERSION   // should be '1.1.0'
-window.APP_BUILD     // should match the commit
+window.APP_VERSION
+window.APP_BUILD
 ```
 
-### 8. Announce
-Post in the team channel:
-```
-v1.1.0 released. Notes: <link to CHANGELOG section>. Rollback target if needed: v1.0.0.
-```
+Run relevant role checks from `TEST_MATRIX.md`.
 
 ---
 
-## Hotfix flow
+## Release Agent Checklist
 
-When prod is broken and you can't wait for normal staging cycle:
+Use `fieldops-release-agent` before release.
 
-1. **Roll back first if users are blocked.** See `ROLLBACK.md`.
-2. Branch from the last good tag: `git checkout -b hotfix/<bug> v1.0.0`
-3. Make the minimal fix.
-4. Push to `staging`, validate the failing flow.
-5. Merge to `main`, cut a PATCH release (`1.0.1`) following the steps above.
+Confirm:
 
-Do **not** skip the staging validation step even for hotfixes. Ten extra minutes here prevents a rollback-of-rollback.
+- semver level is correct
+- staging validation completed
+- role testing completed where relevant
+- changelog updated
+- version updated
+- snapshot created
+- rollback target identified
+- production approval received
 
 ---
 
-## What NOT to do
+## Hotfix Flow
 
-- ❌ Tag a commit that wasn't promoted via staging
-- ❌ Edit a published tag (`git tag -d` + re-push) — pull from anyone tracking is now broken
-- ❌ Skip the snapshot in `releases/` — that's the only thing that lets us diff bundles between releases when investigating regressions
-- ❌ Skip the CHANGELOG entry — future-you will not remember what `v1.4.2` was
-- ❌ Bump MAJOR for a new feature — bump MINOR. Reserve MAJOR for genuine breakage.
+If production is broken:
+
+1. Roll back first if users are blocked.
+2. Branch from last known good tag.
+3. Apply minimal fix.
+4. Push to staging and validate failing flow.
+5. Merge to main.
+6. Cut PATCH release.
+
+Do not skip staging validation for hotfixes.
+
+---
+
+## What Not To Do
+
+- Do not tag a commit that was not validated on staging.
+- Do not edit published tags.
+- Do not skip release snapshot.
+- Do not skip changelog.
+- Do not bundle unrelated changes.
+- Do not deploy production from a normal implementation prompt.
