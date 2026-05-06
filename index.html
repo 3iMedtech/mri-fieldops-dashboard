@@ -894,8 +894,11 @@ button,input,select,textarea{font-family:inherit;}
       <div class="panel-body" id="call-type-chart"></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><h2 class="panel-title"><i data-lucide="trophy"></i>Top 5 Customers by Calls</h2></div>
-      <div class="panel-body"><div class="bar-chart-wrap" id="bar-customers"></div></div>
+      <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <h2 class="panel-title"><i data-lucide="shield-alert"></i>Repeated Breakdown Hotspots</h2>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1px">INCIDENT CALLS ONLY</span>
+      </div>
+      <div class="panel-body"><div class="bar-chart-wrap" id="bar-customers" aria-label="Repeated Breakdown Hotspots — top 5 customers by incident call count"></div></div>
     </div>
   </div>
 
@@ -1286,8 +1289,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.3.1';
-window.APP_BUILD   = { version: '1.3.1', released: '2026-05-06', tag: 'v1.3.1' };
+window.APP_VERSION = '1.3.2';
+window.APP_BUILD   = { version: '1.3.2', released: '2026-05-06', tag: 'v1.3.2' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -3212,7 +3215,7 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.3.2';
 const APP_RELEASE_DATE = '6 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',team:'Field Team',ambiguities:'Flags & Ambiguities',engperf:'Engineer Performance',reports:'Reports',auditlog:'Audit Log',about:'About'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
@@ -4183,8 +4186,11 @@ function renderCallTypeChart(){
 }
 
 function renderTopCustomers(){
-  const scope = filteredTickets();
-  // Inline group-by-normalised-key to respect the month filter
+  // v1.3.2 — incident-only filter. Renamed visual to "Repeated Breakdown
+  // Hotspots". Counts only call_type containing "incident" (via isIncident),
+  // so PM, install, remote, testing, meeting, admin calls are excluded.
+  // Bar styling switched to the red incident family used in renderCallTypeChart.
+  const scope = filteredTickets().filter(isIncident);
   const groups = {};
   scope.forEach(t=>{
     const k = customerKey(t.customer);
@@ -4201,14 +4207,14 @@ function renderTopCustomers(){
   const sorted = entries.sort((a,b)=>b[1]-a[1]).slice(0,5);
   const container = document.getElementById('bar-customers');
   if(sorted.length === 0){
-    container.innerHTML = `<div style="text-align:center;color:var(--text-faint);font-size:11px;padding:30px 0">No calls in ${esc(dashMonthFilter)}</div>`;
+    container.innerHTML = `<div style="text-align:center;color:var(--text-faint);font-size:11px;padding:30px 0">No incident calls in ${esc(dashMonthFilter)}</div>`;
     return;
   }
   const max = sorted[0][1];
   container.innerHTML = sorted.map(([name,v])=>`
-    <div class="bar-col" title="${esc(name)}: ${v} call${v!==1?'s':''}">
+    <div class="bar-col" title="${esc(name)}: ${v} incident call${v!==1?'s':''}">
       <div class="bar-val">${v}</div>
-      <div class="bar" style="height:${Math.max(4,Math.round(v/max*72))}px;background:#06b6d420;border:1px solid #06b6d440"></div>
+      <div class="bar" style="height:${Math.max(4,Math.round(v/max*72))}px;background:#ef444420;border:1px solid #ef444440"></div>
       <div class="bar-label" style="width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px">${esc(name.split(' ')[0].slice(0,10))}</div>
     </div>`).join('');
 }
@@ -6509,7 +6515,9 @@ function renderAmbiguities(){
     : '';
   // v1.3.0-1a — Data Quality Detections (admin-only, read-only, no actions)
   const dqHtml = _renderDataQualitySections();
-  document.getElementById('ambiguity-list').innerHTML=progressHtml+listHtml+emptyHtml+dqHtml;
+  // v1.3.2 — Intelligent Matching Audit (admin-only, read-only, no actions)
+  const maHtml = _renderMatchingAuditSection();
+  document.getElementById('ambiguity-list').innerHTML=progressHtml+listHtml+emptyHtml+dqHtml+maHtml;
 }
 
 // v1.3.0-1a — Build the three read-only data-quality detection sections.
@@ -6586,6 +6594,225 @@ function _renderDataQualitySections(){
       ${blankTable}
     </section>
   `;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// v1.3.2 — Intelligent Matching Audit (read-only)
+//
+// Pure in-memory analysis. Reads RAW_TICKETS and CONFIG_ASSETS that are
+// already loaded; no Supabase calls, no XLSX parser changes, no writes,
+// no alias-table mutation, no auto-mapping. Renders inside the Flags
+// & Ambiguities page (admin-only by parent gate). For each ticket whose
+// canonical match looks uncertain, scores every CONFIG_ASSETS row by
+// multiple signals and reports the top candidate, confidence, signals
+// used, reason, and alternates.
+// ──────────────────────────────────────────────────────────────────
+
+// Token-overlap (Jaccard) similarity on lowercase word tokens.
+// Returns null if either string is empty so callers can skip the signal.
+function _maTokenOverlap(a, b){
+  const tok = s => (s||'').toString().toLowerCase()
+    .replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(Boolean);
+  const A = tok(a), B = tok(b);
+  if(A.length === 0 || B.length === 0) return null;
+  const setA = new Set(A), setB = new Set(B);
+  let inter = 0;
+  setA.forEach(x => { if(setB.has(x)) inter++; });
+  const union = new Set([...A, ...B]).size;
+  return union > 0 ? inter/union : 0;
+}
+
+// Score an uploaded ticket against a single CONFIG_ASSETS candidate.
+// Returns {score:0..100, signals:[{label,value,weight}]}.
+// Weights are intentionally explicit so the audit explains itself.
+function _maScoreSignals(ticket, candidate){
+  const signals = [];
+  let totalScore = 0, totalWeight = 0;
+
+  // Customer name token overlap (weight 0.40)
+  const nameSim = _maTokenOverlap(
+    ticket.customer_raw || ticket.customer || '',
+    candidate.name || ''
+  );
+  if(nameSim !== null){
+    signals.push({label:'name', value:nameSim, weight:0.40});
+    totalScore += nameSim * 0.40; totalWeight += 0.40;
+  }
+
+  // Asset code similarity (weight 0.25)
+  const codeSim = _maTokenOverlap(ticket.asset_code || '', candidate.code || '');
+  if(codeSim !== null){
+    signals.push({label:'asset_code', value:codeSim, weight:0.25});
+    totalScore += codeSim * 0.25; totalWeight += 0.25;
+  }
+
+  // Town/site match (weight 0.20)
+  if(ticket.town && candidate.town){
+    const townSim = _maTokenOverlap(ticket.town, candidate.town);
+    if(townSim !== null){
+      signals.push({label:'town', value:townSim, weight:0.20});
+      totalScore += townSim * 0.20; totalWeight += 0.20;
+    }
+  }
+
+  // Model / modality substring match (weight 0.15)
+  if(ticket.model && candidate.model){
+    const tm = ticket.model.toLowerCase(), cm = candidate.model.toLowerCase();
+    const modSim = (tm.includes(cm) || cm.includes(tm)) ? 1 : _maTokenOverlap(tm, cm) || 0;
+    signals.push({label:'model', value:modSim, weight:0.15});
+    totalScore += modSim * 0.15; totalWeight += 0.15;
+  }
+
+  const score = totalWeight > 0 ? Math.round((totalScore/totalWeight)*100) : 0;
+  return {score, signals};
+}
+
+// Build a one-line human reason from the strongest signals.
+function _maExplainSignals(signals){
+  const strong = signals.filter(s => s.value >= 0.5)
+    .map(s => `${s.label} (${Math.round(s.value*100)}%)`);
+  if(strong.length > 0) return strong.join(' + ');
+  const any = signals.filter(s => s.value > 0)
+    .map(s => `${s.label} (${Math.round(s.value*100)}%)`);
+  return any.length > 0 ? 'weak: ' + any.join(', ') : 'no signal coverage';
+}
+
+// Decide a status band from the best/second scores.
+function _maStatus(best, second){
+  if(!best || best.score === 0) return {key:'reject', label:'NO SAFE MATCH'};
+  const closeRunnerUp = second && (best.score - second.score) < 5 && second.score >= 70;
+  if(closeRunnerUp) return {key:'conflict', label:'CONFLICT — REVIEW REQUIRED'};
+  if(best.score >= 90) return {key:'strong', label:'STRONG MATCH CANDIDATE'};
+  if(best.score >= 70) return {key:'review', label:'NEEDS REVIEW'};
+  return {key:'ambiguous', label:'AMBIGUOUS'};
+}
+
+// Compute audit rows. Limit to tickets that look uncertain (unmatched,
+// orphaned, or canonical name drifted from raw upload). Cap at 50 for DOM
+// safety; show truncation in the header.
+function _maComputeAudit(){
+  const candidates = (RAW_TICKETS||[]).filter(t => {
+    if(!t) return false;
+    if(t.unmatched) return true;
+    if(t.orphaned) return true;
+    if(t.asset_code === '⚠UNMATCHED') return true;
+    const raw = (t.customer_raw||'').trim(), can = (t.customer||'').trim();
+    if(raw && can && raw !== can){
+      const sim = _maTokenOverlap(raw, can);
+      if(sim !== null && sim < 1) return true;
+    }
+    return false;
+  });
+
+  const pool = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
+  const totalEvaluated = candidates.length;
+  const rows = candidates.slice(0, 50).map(t => {
+    const scored = pool
+      .map(c => Object.assign({candidate:c}, _maScoreSignals(t, c)))
+      .filter(s => s.score > 0)
+      .sort((a,b) => b.score - a.score);
+    const best = scored[0], second = scored[1];
+    const status = _maStatus(best, second);
+    return {
+      ticketId: t.id || '',
+      uploadedCustomer: t.customer_raw || t.customer || '',
+      uploadedAsset: t.asset_code || '',
+      suggestedCustomer: best ? (best.candidate.name || '') : '',
+      suggestedAsset: best ? (best.candidate.code || '') : '',
+      score: best ? best.score : 0,
+      signals: best ? best.signals : [],
+      reason: best ? _maExplainSignals(best.signals) : 'no candidate found in install base',
+      status: status.key,
+      statusLabel: status.label,
+      alternates: scored.slice(1, 3).map(s => ({
+        name: s.candidate.name || '',
+        code: s.candidate.code || '',
+        score: s.score
+      }))
+    };
+  });
+  return {rows, totalEvaluated, truncated: totalEvaluated > rows.length};
+}
+
+// Render the audit section. Read-only: no buttons, no inputs, no handlers.
+function _renderMatchingAuditSection(){
+  const {rows, totalEvaluated, truncated} = _maComputeAudit();
+
+  const counts = {strong:0, review:0, ambiguous:0, conflict:0, reject:0};
+  rows.forEach(r => { if(counts[r.status] !== undefined) counts[r.status]++; });
+
+  const statusColor = {
+    strong: 'var(--green)',
+    review: 'var(--amber)',
+    ambiguous: 'var(--red)',
+    conflict: 'var(--amber)',
+    reject: 'var(--text-faint)'
+  };
+
+  const headerPill = totalEvaluated === 0
+    ? 'ok'
+    : (counts.ambiguous > 0 || counts.conflict > 0 ? 'risk'
+       : (counts.review > 0 ? 'warn' : 'ok'));
+
+  const intro = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;line-height:1.6">
+    Read-only analysis of uncertain customer/asset matches against the current install base. No actions are available in this view; nothing is auto-mapped.${truncated ? ` Showing top ${rows.length} of ${totalEvaluated} evaluated tickets.` : ''}
+  </div>`;
+
+  if(rows.length === 0){
+    return `<section class="dq-section admin-only" aria-labelledby="ma-title">
+      <div class="dq-section-head">
+        <span id="ma-title" class="dq-section-title">Intelligent Matching Audit (Read-Only)</span>
+        <span class="dq-count-pill ok">0</span>
+      </div>
+      ${intro}
+      <div class="dq-empty">✓ No uncertain matches detected — all tickets resolve cleanly against the install base.</div>
+    </section>`;
+  }
+
+  const summaryStrip = `<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;font-family:var(--mono);font-size:10px;letter-spacing:.04em">
+    <span style="color:var(--green)"><strong>${counts.strong}</strong> STRONG MATCH</span>
+    <span style="color:var(--amber)"><strong>${counts.review}</strong> NEEDS REVIEW</span>
+    <span style="color:var(--red)"><strong>${counts.ambiguous}</strong> AMBIGUOUS</span>
+    <span style="color:var(--amber)"><strong>${counts.conflict}</strong> CONFLICT</span>
+    <span style="color:var(--text-faint)"><strong>${counts.reject}</strong> NO SAFE MATCH</span>
+  </div>`;
+
+  const tableHtml = `<table class="dq-table" aria-label="Intelligent Matching Audit — read only">
+    <thead><tr>
+      <th>Ticket</th>
+      <th>Status</th>
+      <th>Conf.</th>
+      <th>Uploaded Customer</th>
+      <th>Uploaded Asset</th>
+      <th>Suggested Customer</th>
+      <th>Suggested Asset</th>
+      <th>Signals</th>
+      <th>Reason</th>
+      <th>Alternates</th>
+    </tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td class="dq-id">${esc(r.ticketId)}</td>
+      <td><span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.05em;color:${statusColor[r.status]}">${esc(r.statusLabel)}</span></td>
+      <td class="dq-num" style="color:${statusColor[r.status]};font-weight:600">${r.score}%</td>
+      <td>${esc(r.uploadedCustomer || '—')}</td>
+      <td class="dq-id">${esc(r.uploadedAsset || '—')}</td>
+      <td>${esc(r.suggestedCustomer || '—')}</td>
+      <td class="dq-id">${esc(r.suggestedAsset || '—')}</td>
+      <td style="font-size:10px;color:var(--text-dim)">${r.signals.map(s => `${esc(s.label)}:${Math.round(s.value*100)}%`).join(', ') || '—'}</td>
+      <td style="font-size:11px;color:var(--text-dim)">${esc(r.reason)}</td>
+      <td style="font-size:10px;color:var(--text-faint)">${r.alternates.length ? r.alternates.map(a => `${esc(a.name)} (${a.score}%)`).join('; ') : '—'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+
+  return `<section class="dq-section admin-only" aria-labelledby="ma-title">
+    <div class="dq-section-head">
+      <span id="ma-title" class="dq-section-title">Intelligent Matching Audit (Read-Only)</span>
+      <span class="dq-count-pill ${headerPill}">${rows.length}</span>
+    </div>
+    ${intro}
+    ${summaryStrip}
+    ${tableHtml}
+  </section>`;
 }
 
 function openReviewPanel(i){

@@ -7,6 +7,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.2] — 2026-05-06
+
+Dashboard correction and read-only matching audit panel. Pure view-layer — no Supabase reads, no DB writes, no schema/RLS/Auth/XLSX parser changes.
+
+### Changed
+- **Repeated Breakdown Hotspots (Dashboard)** — renamed from "Top 5 Customers by Calls". Now filters to incident/breakdown calls only via the existing `isIncident()` helper; PM, install, remote, testing, meeting, and admin calls are excluded. Trophy/champion icon replaced with `shield-alert` (risk icon). Bar colour changed from teal to red family (`#ef4444`) to reflect incident severity. Subtitle "INCIDENT CALLS ONLY" added in monospace. Tooltip updated to "X incident call(s)". Empty state updated to "No incident calls in \<month\>".
+
+### Added
+- **Intelligent Matching Audit (Flags & Ambiguities — Admin/Superadmin only)** — read-only panel appended below existing Data Quality sections. Surfaces tickets with uncertain customer/asset matches from already-loaded in-memory data. Scores each ticket against `CONFIG_ASSETS` using weighted signals: customer name (0.40), asset code (0.25), town (0.20), model/modality (0.15). Jaccard token-overlap similarity. Status bands: `STRONG MATCH CANDIDATE` / `NEEDS REVIEW` / `AMBIGUOUS` / `CONFLICT — REVIEW REQUIRED` / `NO SAFE MATCH`. Capped at 50 rows with truncation notice. Shows top-2 alternates and per-signal scores. Zero buttons, zero inputs, zero write actions, zero auto-mapping.
+
+### Safety
+- No Supabase calls — matching audit is purely in-memory against `RAW_TICKETS` and `CONFIG_ASSETS`.
+- No DB writes of any kind.
+- No schema, RLS, Auth, or XLSX parser changes.
+- Matching Audit hidden from Manager and Engineer/Viewer roles via existing `.admin-only` CSS gate.
+
+---
+
 ## [1.3.1] — 2026-05-06
 
 Admin-only Data Quality CSV export utilities and live DQ nav badge. Pure view-layer — no Supabase reads, no schema/RLS/Auth/XLSX parser changes.
