@@ -7,6 +7,30 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.1] — 2026-05-06
+
+Admin-only Data Quality CSV export utilities and live DQ nav badge. Pure view-layer — no Supabase reads, no schema/RLS/Auth/XLSX parser changes.
+
+### Added
+- **DQ CSV exports (Admin/Superadmin only)** — three export buttons rendered inline in each Data Quality section header when the section count is > 0:
+  - **Unmatched Asset Codes** (`exportUnmatchedAssetsCSV`) — columns: `ticket_id`, `customer`, `month`, `claimed_asset_code`, `already_marked_unmatched`, `note`. Filename: `dq-unmatched-assets-<timestamp>.csv`.
+  - **Stale Parts Awaited** (`exportStalePartsCSV`) — columns: `ticket_id`, `customer`, `parts_description`, `since_date`, `days_stale`, `anchor_missing`. Filename: `dq-stale-parts-<timestamp>.csv`.
+  - **Blank / Unknown Status Tickets** (`exportBlankStatusCSV`) — columns: `ticket_id`, `customer`, `month`, `raw_status_value`, `status_label`. Filename: `dq-blank-status-<timestamp>.csv`.
+- **`#nb-dq` nav badge** — sibling badge next to the existing `#nb-amb` badge on the Flags & Ambiguities nav item. Count = unmatched + stale + blank DQ issues. Auto-hides when total is zero. Tooltip shows per-category breakdown (`N unmatched · N stale parts · N blank status`). Driven by `_refreshDQNavBadge()` called in both existing nav-badge sync blocks.
+- New helpers `_computeDQTotal`, `_refreshDQNavBadge` — pure in-memory, no DB writes, no state mutation.
+
+### Unchanged
+- `#nb-amb` ambiguity badge — count, display logic, and `pendingAmbCount()` semantics fully preserved.
+- Audit logging uses the existing `logAudit('export_csv', {scope, rows})` pattern, consistent with `exportReportsCSV`. Wrapped in `try/catch` — fail-safe.
+
+### Safety
+- No Supabase writes other than the existing `logAudit('export_csv', ...)` call when admin clicks an export button.
+- No new Supabase data fetches. All detections derived from already-loaded `RAW_TICKETS`, `CONFIG_ASSETS`.
+- No schema, RLS, Auth, or XLSX parser changes.
+- Export buttons hidden from Manager and Engineer/Viewer roles via inherited `.viewer-mode .admin-only` CSS gate.
+
+---
+
 ## [1.3.0] — 2026-05-05
 
 Phase 1a of the v1.3.0 Data Quality Foundation. Five read-only data quality detections derived purely in-memory from already-loaded arrays. View-layer only — no Supabase writes, no new Supabase requests, no schema/RLS/Auth/XLSX parser changes.
