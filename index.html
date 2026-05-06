@@ -2764,7 +2764,7 @@ function renderAll(){
   // count, not AMBIGUITIES.length, so it stays consistent with the tab's own
   // rendering and doesn't show stale totals after every flag is resolved.
   setNavBadgeCount('nb-open', OPEN_TICKETS.length);
-  setNavBadgeCount('nb-amb', pendingAmbCount());
+  _setAmbBadge(pendingAmbCount());
   setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
   _refreshDQNavBadge();
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
@@ -5479,6 +5479,19 @@ function setNavBadgeCount(id, count, opts){
     el.style.display = 'none';
   }
 }
+// v1.3.1 — label-prefix wrappers for the two Flags & Ambiguities nav badges.
+// setNavBadgeCount handles show/hide; these add the "AMB N" / "DQ N" prefix
+// so the two badges are visually distinguishable at a glance.
+function _setAmbBadge(count){
+  setNavBadgeCount('nb-amb', count);
+  const el = document.getElementById('nb-amb');
+  if(el && el.style.display !== 'none'){
+    el.textContent = 'AMB ' + count;
+    el.title = 'Ambiguity review items: ' + count;
+    el.setAttribute('aria-label', 'Ambiguity review items: ' + count);
+  }
+}
+
 // v1.3.1-1b — Total count of admin-facing data-quality issues. Drives the new
 // #nb-dq sibling badge on the Flags & Ambiguities nav item. Pure in-memory:
 // no Supabase calls, no state mutation. #nb-amb semantics are unchanged.
@@ -5501,7 +5514,11 @@ function _refreshDQNavBadge(){
   } catch(_){ return; }
   setNavBadgeCount('nb-dq', u + s + b);
   const el = document.getElementById('nb-dq');
-  if(el) el.title = `${u} unmatched · ${s} stale parts · ${b} blank status`;
+  if(el && el.style.display !== 'none') el.textContent = 'DQ ' + (u + s + b);
+  if(el){
+    el.title = `Data quality issues: ${u} unmatched · ${s} stale parts · ${b} blank status`;
+    el.setAttribute('aria-label', `Data quality issues: ${u + s + b} total`);
+  }
 }
 async function saveAmbReview(ambId, data){
   const a = AMBIGUITIES.find(x => x.id === ambId);
@@ -6408,7 +6425,7 @@ function renderAmbiguities(){
   const unreviewed=stats.total-stats.reviewed;
 
   // Update nav badge — hide when nothing is pending review.
-  setNavBadgeCount('nb-amb', unreviewed);
+  _setAmbBadge(unreviewed);
 
   let progressHtml='';
   if(stats.total>0){
@@ -6855,8 +6872,7 @@ setInterval(() => {
     if(!Array.isArray(AMBIGUITIES) || AMBIGUITIES.length === 0) return;
     const hasStale = AMBIGUITIES.some(isAmbStaleResolved);
     if(!hasStale) return;
-    const navBadge = document.getElementById('nb-amb');
-    if(navBadge) setNavBadgeCount('nb-amb', pendingAmbCount());
+    _setAmbBadge(pendingAmbCount());
     const listEl = document.getElementById('ambiguity-list');
     if(listEl) renderAmbiguities();
   } catch(e){ /* never let the tick break the UI */ }
@@ -6937,7 +6953,7 @@ async function doFirstPaint(){
   // action badges, and use PENDING ambiguity count (not total) so the badge stays
   // in sync with renderAmbiguities' own count.
   setNavBadgeCount('nb-open', OPEN_TICKETS.length);
-  setNavBadgeCount('nb-amb', pendingAmbCount());
+  _setAmbBadge(pendingAmbCount());
   setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
   _refreshDQNavBadge();
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
