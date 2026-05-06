@@ -7,6 +7,25 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.3] — 2026-05-06
+
+Matching Audit review utilities. Pure view-layer — no new Supabase reads, no DB writes beyond the existing export CSV audit log, no schema/RLS/Auth/XLSX parser changes.
+
+### Added
+- **Intelligent Matching Audit — summary line (Flags & Ambiguities — Admin/Superadmin only)** — "X of Y tickets need review" rendered above the per-status count strip. Denominator is `RAW_TICKETS.length` (all tickets) so admins see the true data-health percentage.
+- **Intelligent Matching Audit — filter tabs (Flags & Ambiguities — Admin/Superadmin only)** — six status filters: All / Strong / Review / Ambiguous / Conflict / No Match. Short labels with full-label `title` attributes. `aria-pressed` state on active tab. Page resets to 1 on filter change.
+- **Intelligent Matching Audit — 25-row pagination (Flags & Ambiguities — Admin/Superadmin only)** — Prev / Next buttons with native `disabled` on edge pages. "Page N of M" indicator with `aria-live="polite"`. Existing 50-row hard cap removed in favour of full pagination over the complete candidate set.
+- **Intelligent Matching Audit — CSV export (Flags & Ambiguities — Admin/Superadmin only)** — `exportMatchingAuditCSV()` exports the full filtered set (not only the visible page) as `dq-matching-audit-<timestamp>.csv`. Columns: `ticket_id`, `uploaded_customer`, `uploaded_asset`, `suggested_customer`, `suggested_asset`, `confidence`, `status`, `signals`, `reason`, `alternates`. Reuses `_downloadCSV` / `_csvEscape` / `_tsStamp`. Fires existing `logAudit('export_csv', {scope:'matching_audit', rows:N})` on click, consistent with v1.3.1 DQ exports.
+
+### Safety
+- No new Supabase reads. All review utilities operate in-memory against already-loaded `RAW_TICKETS` and `CONFIG_ASSETS`.
+- No DB writes other than existing `logAudit('export_csv', {scope:'matching_audit', rows:N})` when admin clicks the CSV button. Wrapped in `try/catch`.
+- No schema, RLS, Auth, session, or XLSX parser changes.
+- `#nb-dq` badge count and tooltip unchanged in this release — Matching Audit problem-row counts not yet rolled up into the badge.
+- Filter, page state held in module-scope JS variables only. No localStorage, no URL state.
+
+---
+
 ## [1.3.2] — 2026-05-06
 
 Dashboard correction and read-only matching audit panel. Pure view-layer — no Supabase reads, no DB writes, no schema/RLS/Auth/XLSX parser changes.

@@ -1289,8 +1289,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.3.2';
-window.APP_BUILD   = { version: '1.3.2', released: '2026-05-06', tag: 'v1.3.2' };
+window.APP_VERSION = '1.3.3';
+window.APP_BUILD   = { version: '1.3.3', released: '2026-05-06', tag: 'v1.3.3' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -3215,7 +3215,7 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.3.2';
+const APP_VERSION = '1.3.3';
 const APP_RELEASE_DATE = '6 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',team:'Field Team',ambiguities:'Flags & Ambiguities',engperf:'Engineer Performance',reports:'Reports',auditlog:'Audit Log',about:'About'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
@@ -4599,6 +4599,33 @@ function exportBlankStatusCSV(){
   });
   _downloadCSV(`dq-blank-status-${_tsStamp()}.csv`, headers, data);
   try { logAudit('export_csv', {scope: 'dq_blank_status', rows: rows.length}); } catch(_){}
+}
+
+// v1.3.3 — Matching Audit CSV export. Exports the FILTERED full set
+// (not the visible page). Reuses _downloadCSV / _csvEscape / _tsStamp /
+// logAudit. No new Supabase reads, no DB writes other than the existing
+// audit_log insert.
+function exportMatchingAuditCSV(){
+  const {rows: allRows} = _maComputeAudit();
+  const filtered = (_maActiveFilter === 'all')
+    ? allRows
+    : allRows.filter(r => r.status === _maActiveFilter);
+  if(filtered.length === 0) return;
+  const headers = ['ticket_id','uploaded_customer','uploaded_asset','suggested_customer','suggested_asset','confidence','status','signals','reason','alternates'];
+  const data = filtered.map(r => [
+    r.ticketId,
+    r.uploadedCustomer,
+    r.uploadedAsset,
+    r.suggestedCustomer,
+    r.suggestedAsset,
+    r.score,
+    r.statusLabel,
+    (r.signals || []).map(s => `${s.label}:${Math.round(s.value * 100)}%`).join('; '),
+    r.reason,
+    (r.alternates || []).map(a => `${a.name} (${a.score}%)`).join('; ')
+  ]);
+  _downloadCSV(`dq-matching-audit-${_tsStamp()}.csv`, headers, data);
+  try { logAudit('export_csv', {scope: 'matching_audit', rows: filtered.length}); } catch(_){}
 }
 
 function printCurrentPage(label){
@@ -6706,7 +6733,7 @@ function _maComputeAudit(){
 
   const pool = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
   const totalEvaluated = candidates.length;
-  const rows = candidates.slice(0, 50).map(t => {
+  const rows = candidates.map(t => {
     const scored = pool
       .map(c => Object.assign({candidate:c}, _maScoreSignals(t, c)))
       .filter(s => s.score > 0)
@@ -6734,12 +6761,33 @@ function _maComputeAudit(){
   return {rows, totalEvaluated, truncated: totalEvaluated > rows.length};
 }
 
-// Render the audit section. Read-only: no buttons, no inputs, no handlers.
+// v1.3.3 — Matching Audit review utilities. In-memory filter + pagination
+// state. No localStorage, no URL state. Reset on full page reload.
+const MA_PAGE_SIZE = 25;
+let _maActiveFilter = 'all';   // 'all' | 'strong' | 'review' | 'ambiguous' | 'conflict' | 'reject'
+let _maPage = 1;
+
+function _maSetFilter(filter){
+  _maActiveFilter = filter;
+  _maPage = 1;
+  renderAmbiguities();
+}
+function _maSetPage(page){
+  _maPage = page;
+  renderAmbiguities();
+}
+
+// Render the audit section. Read-only: filter tabs, pagination, CSV export.
+// No resolve/dismiss/approve/reject actions. No DB writes (CSV click fires
+// existing logAudit('export_csv') only).
 function _renderMatchingAuditSection(){
-  const {rows, totalEvaluated, truncated} = _maComputeAudit();
+  const {rows: allRows, totalEvaluated} = _maComputeAudit();
 
   const counts = {strong:0, review:0, ambiguous:0, conflict:0, reject:0};
-  rows.forEach(r => { if(counts[r.status] !== undefined) counts[r.status]++; });
+  allRows.forEach(r => { if(counts[r.status] !== undefined) counts[r.status]++; });
+
+  const totalTickets = (typeof RAW_TICKETS !== 'undefined' && Array.isArray(RAW_TICKETS)) ? RAW_TICKETS.length : 0;
+  const needsReview = counts.review + counts.ambiguous + counts.conflict + counts.reject;
 
   const statusColor = {
     strong: 'var(--green)',
@@ -6755,10 +6803,10 @@ function _renderMatchingAuditSection(){
        : (counts.review > 0 ? 'warn' : 'ok'));
 
   const intro = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;line-height:1.6">
-    Read-only analysis of uncertain customer/asset matches against the current install base. No actions are available in this view; nothing is auto-mapped.${truncated ? ` Showing top ${rows.length} of ${totalEvaluated} evaluated tickets.` : ''}
+    Read-only analysis of uncertain customer/asset matches against the current install base. No actions are available in this view; nothing is auto-mapped.
   </div>`;
 
-  if(rows.length === 0){
+  if(allRows.length === 0){
     return `<section class="dq-section admin-only" aria-labelledby="ma-title">
       <div class="dq-section-head">
         <span id="ma-title" class="dq-section-title">Intelligent Matching Audit (Read-Only)</span>
@@ -6769,6 +6817,10 @@ function _renderMatchingAuditSection(){
     </section>`;
   }
 
+  const summaryLine = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
+    <strong style="color:var(--text-bright)">${needsReview.toLocaleString()}</strong> of ${totalTickets.toLocaleString()} tickets need review
+  </div>`;
+
   const summaryStrip = `<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;font-family:var(--mono);font-size:10px;letter-spacing:.04em">
     <span style="color:var(--green)"><strong>${counts.strong}</strong> STRONG MATCH</span>
     <span style="color:var(--amber)"><strong>${counts.review}</strong> NEEDS REVIEW</span>
@@ -6776,6 +6828,48 @@ function _renderMatchingAuditSection(){
     <span style="color:var(--amber)"><strong>${counts.conflict}</strong> CONFLICT</span>
     <span style="color:var(--text-faint)"><strong>${counts.reject}</strong> NO SAFE MATCH</span>
   </div>`;
+
+  const tabs = [
+    {key:'all',       short:'All',       full:'All matching audit rows',     n: allRows.length},
+    {key:'strong',    short:'Strong',    full:'STRONG MATCH CANDIDATE',      n: counts.strong},
+    {key:'review',    short:'Review',    full:'NEEDS REVIEW',                n: counts.review},
+    {key:'ambiguous', short:'Ambiguous', full:'AMBIGUOUS',                   n: counts.ambiguous},
+    {key:'conflict',  short:'Conflict',  full:'CONFLICT — REVIEW REQUIRED',  n: counts.conflict},
+    {key:'reject',    short:'No Match',  full:'NO SAFE MATCH',               n: counts.reject}
+  ];
+  const filterButtons = tabs.map(t => {
+    const active = _maActiveFilter === t.key;
+    const activeStyle = active ? 'border-color:var(--brand);color:var(--text-bright);' : '';
+    return `<button type="button" class="btn btn-ghost" aria-pressed="${active}" title="${esc(t.full)}" style="font-size:11px;padding:5px 10px;${activeStyle}" onclick="_maSetFilter('${t.key}')">${esc(t.short)} (${t.n})</button>`;
+  }).join('');
+
+  const filteredRows = (_maActiveFilter === 'all') ? allRows : allRows.filter(r => r.status === _maActiveFilter);
+  const csvButton = filteredRows.length > 0
+    ? `<button type="button" class="btn btn-ghost export-btn" style="font-size:11px;padding:5px 10px;margin-left:auto" onclick="exportMatchingAuditCSV()" aria-label="Export filtered matching audit results to CSV" title="Export filtered matching audit results to CSV"><i data-lucide="download"></i>CSV</button>`
+    : '';
+  const filterRow = `<div role="group" aria-label="Filter matching audit results by status" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">
+    ${filterButtons}${csvButton}
+  </div>`;
+
+  if(filteredRows.length === 0){
+    return `<section class="dq-section admin-only" aria-labelledby="ma-title">
+      <div class="dq-section-head">
+        <span id="ma-title" class="dq-section-title">Intelligent Matching Audit (Read-Only)</span>
+        <span class="dq-count-pill ${headerPill}">${allRows.length}</span>
+      </div>
+      ${intro}
+      ${summaryLine}
+      ${summaryStrip}
+      ${filterRow}
+      <div class="dq-empty" role="status" aria-live="polite">No matching-audit rows in this status</div>
+    </section>`;
+  }
+
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / MA_PAGE_SIZE));
+  if(_maPage > pageCount) _maPage = pageCount;
+  if(_maPage < 1) _maPage = 1;
+  const startIdx = (_maPage - 1) * MA_PAGE_SIZE;
+  const pagedRows = filteredRows.slice(startIdx, startIdx + MA_PAGE_SIZE);
 
   const tableHtml = `<table class="dq-table" aria-label="Intelligent Matching Audit — read only">
     <thead><tr>
@@ -6790,7 +6884,7 @@ function _renderMatchingAuditSection(){
       <th>Reason</th>
       <th>Alternates</th>
     </tr></thead>
-    <tbody>${rows.map(r => `<tr>
+    <tbody>${pagedRows.map(r => `<tr>
       <td class="dq-id">${esc(r.ticketId)}</td>
       <td><span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.05em;color:${statusColor[r.status]}">${esc(r.statusLabel)}</span></td>
       <td class="dq-num" style="color:${statusColor[r.status]};font-weight:600">${r.score}%</td>
@@ -6804,14 +6898,25 @@ function _renderMatchingAuditSection(){
     </tr>`).join('')}</tbody>
   </table>`;
 
+  const paginationHtml = filteredRows.length > MA_PAGE_SIZE
+    ? `<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:10px">
+        <button type="button" class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="_maSetPage(${_maPage - 1})" ${_maPage <= 1 ? 'disabled' : ''} aria-label="Previous page">‹ Prev</button>
+        <span aria-live="polite" style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">Page ${_maPage} of ${pageCount}</span>
+        <button type="button" class="btn btn-ghost" style="font-size:11px;padding:5px 10px" onclick="_maSetPage(${_maPage + 1})" ${_maPage >= pageCount ? 'disabled' : ''} aria-label="Next page">Next ›</button>
+      </div>`
+    : '';
+
   return `<section class="dq-section admin-only" aria-labelledby="ma-title">
     <div class="dq-section-head">
       <span id="ma-title" class="dq-section-title">Intelligent Matching Audit (Read-Only)</span>
-      <span class="dq-count-pill ${headerPill}">${rows.length}</span>
+      <span class="dq-count-pill ${headerPill}">${allRows.length}</span>
     </div>
     ${intro}
+    ${summaryLine}
     ${summaryStrip}
+    ${filterRow}
     ${tableHtml}
+    ${paginationHtml}
   </section>`;
 }
 
