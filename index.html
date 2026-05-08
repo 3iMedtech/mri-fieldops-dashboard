@@ -880,7 +880,7 @@ button,input,select,textarea{font-family:inherit;}
   <div class="panel">
     <div class="panel-head">
       <h2 class="panel-title"><i data-lucide="calendar-range"></i>Upcoming Contract Renewals</h2>
-      <div class="panel-action" onclick="navigate('pm')">PM Schedule →</div>
+      <div class="panel-action" id="renewals-link" style="display:none">Contracts →</div>
     </div>
     <div class="panel-body"><div id="renewals-panel"></div></div>
   </div>
@@ -1303,8 +1303,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.4.0';
-window.APP_BUILD   = { version: '1.4.0', released: '2026-05-08', tag: 'v1.4.0' };
+window.APP_VERSION = '1.4.0.1';
+window.APP_BUILD   = { version: '1.4.0.1', released: '2026-05-08', tag: 'v1.4.0.1' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -3230,7 +3230,7 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.0.1';
 const APP_RELEASE_DATE = '8 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',team:'Field Team',ambiguities:'Flags & Ambiguities',engperf:'Engineer Performance',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
@@ -4059,34 +4059,29 @@ function renderDashEngineers(){
 }
 
 // ── Contract renewals ────────────────────────────────────────────────
-// Merges CMC_DATA and PM_SCHEDULE into a single list of contracts with
-// end-dates, dedupes on customer+model, and annotates days-until-expiry.
-// Returns rows sorted by soonest expiry first. Rows with days < 0
-// (already expired) are included up to 30 days in the past so they
-// stay visible; older expirations are dropped.
+// v1.4.0.1: Install-Base anchored. Derives renewal rows from
+// _aggregateContracts().rows so the dashboard shows one row per real
+// IB asset and customer/model/town are canonical IB values. Eliminates
+// loose-PM/CMC duplicates from customer-name variants.
 function getContractRenewals(){
   const today = new Date(); today.setHours(0,0,0,0);
-  const seen = new Map(); // key = customer|model (lowercase) → row
-
-  function add(customer, model, town, contract, endRaw, source){
-    if(!customer) return;
-    const end = parseFlexDate(endRaw);
-    if(!end) return;
-    const days = Math.round((end - today) / 86400000);
-    // Keep already-expired for 30d of visibility; drop ancient ones
-    if(days < -30) return;
-    const key = (customer + '|' + (model||'')).toLowerCase();
-    const prev = seen.get(key);
-    // Prefer PM_SCHEDULE (more granular) over CMC_DATA when both exist
-    if(!prev || (source === 'pm' && prev.source === 'cmc')){
-      seen.set(key, { customer, model: model||'—', town: town||'—', contract: contract||'—', end, days, source });
-    }
+  let agg;
+  try { agg = _aggregateContracts(); } catch(_){ return []; }
+  const out = [];
+  for(const r of (agg && agg.rows) || []){
+    if(!r._end) continue;
+    const days = (r._days != null) ? r._days : Math.round((r._end - today) / 86400000);
+    out.push({
+      customer: r.customer,
+      model:    r.model || '—',
+      town:     r.town  || '—',
+      contract: r.contract || '—',
+      end:      r._end,
+      days,
+      source:   r.contract_source || null,
+    });
   }
-
-  CMC_DATA.forEach(c => add(c.customer, c.model, c.town, c.contract, c.end, 'cmc'));
-  PM_SCHEDULE.forEach(p => add(p.customer, p.model, p.town, p.contract, p.contractEnd, 'pm'));
-
-  return [...seen.values()].sort((a,b) => a.days - b.days);
+  return out.sort((a,b) => a.days - b.days);
 }
 
 function renewalBucket(days){
@@ -4100,11 +4095,26 @@ function renewalBucket(days){
 function renderRenewals(){
   const container = document.getElementById('renewals-panel');
   if(!container) return;
+
+  // v1.4.0.1: Role-gated header link. Admin/Manager land on Contracts page;
+  // Engineer/Viewer have the Contracts page blocked, so the link is hidden.
+  const link = document.getElementById('renewals-link');
+  if(link){
+    if(canManagePM()){
+      link.style.display = '';
+      link.textContent = 'Contracts →';
+      link.onclick = () => navigate('contracts');
+    } else {
+      link.style.display = 'none';
+      link.onclick = null;
+    }
+  }
+
+  // v1.4.0.1: Urgent renewals only (expired + ≤30 days). 31–60 / 61–90 are
+  // shown on the full Contracts page, not the dashboard summary.
   const all = getContractRenewals();
   const expired = all.filter(r => r.days < 0);
   const d30 = all.filter(r => r.days >= 0 && r.days <= 30);
-  const d60 = all.filter(r => r.days > 30 && r.days <= 60);
-  const d90 = all.filter(r => r.days > 60 && r.days <= 90);
 
   // Top-of-panel tiles
   const tile = (label, count, color, sub) => `
@@ -4117,13 +4127,11 @@ function renderRenewals(){
   const tiles = `
     <div class="renew-tiles">
       ${tile('Expired', expired.length, '#ef4444', expired.length?'Already lapsed':'None lapsed')}
-      ${tile('≤ 30 days', d30.length, '#f59e0b', 'Act this month')}
-      ${tile('31–60 days', d60.length, '#eab308', 'Quote soon')}
-      ${tile('61–90 days', d90.length, '#10b981', 'Plan ahead')}
+      ${tile('≤ 30 days', d30.length, '#f59e0b', d30.length?'Act this month':'None due')}
     </div>`;
 
-  // Top-12 list of contracts expiring soonest (expired + ≤90 days)
-  const list = [...expired, ...d30, ...d60, ...d90].slice(0, 12);
+  // Top-12 list of urgent contracts (expired + ≤30 days)
+  const list = [...expired, ...d30].slice(0, 12);
   const fmt = (d) => {
     const dd = String(d.getDate()).padStart(2,'0');
     const mm = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
@@ -4152,7 +4160,7 @@ function renderRenewals(){
       <td style="font-family:var(--mono);font-size:11px">${fmt(r.end)}</td>
       <td style="text-align:right">${dayBadge(r.days)}</td>
     </tr>`).join('')
-    : `<tr><td colspan="6" style="text-align:center;color:var(--text-faint);padding:24px">No contracts expiring in the next 90 days.</td></tr>`;
+    : `<tr><td colspan="6" style="text-align:center;color:var(--text-faint);padding:24px">No urgent renewals (no contracts expired or expiring within 30 days).</td></tr>`;
 
   container.innerHTML = `
     ${tiles}
