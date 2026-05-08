@@ -7,6 +7,34 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.4.0] — 2026-05-08
+
+Install Base anchoring for Contracts and PM Calendar. Read-only release. Establishes Install Base (`CONFIG_ASSETS`) as the master machine registry; Contracts and PM Calendar are now child views of Install Base. No new Supabase reads on render, no schema/RLS/Auth/XLSX parser changes, no write paths added.
+
+### Added
+- **Contracts page (Admin/Superadmin/Manager only)** — read-only audit view at `#contracts`. One row per Install Base asset (`CONFIG_ASSETS.length`). Layered matcher links each IB asset to a contract via `_findContractForAsset(ib, pool)` using exact (`customerKey + town`) → fuzzy (Jaccard ≥ 0.5 + town) → town_model tiers. PM rows preferred over CMC at same tier. Strict normalized town gate at every tier prevents cross-town false positives. 8 filter tabs (All / Expired / ≤30d / 31-60d / 61-90d / Active / Unknown / No Contract), 4 diagnostic cards (IB No Contract / Unmatched Contract Rows / Unmatched PM Rows / Suspected Duplicate IB), 11-column sortable table, search by code/customer/model/town. CSV export (`exportContractsCSV`) — 13 columns, IB-anchored, fires `logAudit('export_csv', {scope:'contracts', rows:N})`.
+- **`#nb-contracts` nav badge** — IB-anchored count of expired + ≤30d contracts. Tooltip shows breakdown.
+- **PM Calendar IB-anchoring** — `renderPM()` rewritten to iterate `CONFIG_ASSETS` via `_findPmForAsset(ib, pmPool)`. `pm-count-label` = `CONFIG_ASSETS.length`. Unmatched IB assets render with "NO PM ROW" placeholder, no action buttons, opacity 0.7. New `#pm-diagnostics` panel surfaces PM rows that don't match any IB asset.
+- **Helper functions** — `_normalizeName(s)`, `_jaccard(a,b)`, `_rowMatchesIb(ib,row,tier)`, `_findContractForAsset(ib,pool)`, `_findPmForAsset(ib,pmPool)`. All pure, deterministic, used by both Contracts and PM pages.
+- **Route gate** — `navigate('contracts')` for non-admin/non-manager redirects to dashboard and writes `logAudit('restricted_access_attempt', {target:'contracts'})`. Engineer/Viewer cannot reach the page.
+
+### Changed
+- **`_aggregateContracts()`** — return shape is now `{rows, unmatchedContract, unmatchedPm, unmatchedCmc}` (was an array). All callers updated. Loose PM/CMC rows that match some IB but lose to PM priority at same asset are classified as alternates and excluded from "unmatched" diagnostics.
+- **PM Calendar sort accessors (`_PM_SORT_COLS`)** — null-safe fallbacks for unmatched IB rows (`r.ib?.code`, `r.st ? r.st.priority : 99`).
+
+### Safety
+- No new Supabase reads triggered by `renderContracts()`, `renderPM()`, or related filters/sort/search/pagination. All rendering is in-memory against already-loaded `CONFIG_ASSETS`, `PM_SCHEDULE`, `CMC_DATA`.
+- No schema, RLS, Auth/session/login, audit table, or XLSX parser changes.
+- `dbSavePM`, `getContractRenewals`, `logAudit` byte-identical.
+- `#nb-amb`, `#nb-dq`, `#nb-pm` baseline counts unchanged.
+- No Renew/Edit/Add/Delete buttons. No write paths added in this release. Renewal/edit/de-install workflow deferred to v1.4.1.
+- Manager parity preserved via existing `mgr-plus` CSS class. Engineer/Viewer isolation preserved via existing `admin-only` and route-gate patterns.
+
+### Architecture rule established
+- **Install Base = master machine registry.** Contracts and PM Calendar do not maintain independent machine lists. Adding/removing an IB asset will (in v1.4.1) flow automatically into both pages. Loose PM/CMC rows not matching any IB appear only in diagnostics.
+
+---
+
 ## [1.3.3] — 2026-05-06
 
 Matching Audit review utilities. Pure view-layer — no new Supabase reads, no DB writes beyond the existing export CSV audit log, no schema/RLS/Auth/XLSX parser changes.
