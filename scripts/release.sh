@@ -31,8 +31,8 @@ green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
 warn()  { printf '\033[0;33m%s\033[0m\n' "$*"; }
 
 # 1. version format
-if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  red "Version '$VERSION' is not semver (X.Y.Z)."; exit 65
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+  red "Version '$VERSION' is not semver (X.Y.Z or X.Y.Z.W)."; exit 65
 fi
 
 # 2. on main
