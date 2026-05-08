@@ -7,6 +7,22 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.4.0.1] — 2026-05-08
+
+Hotfix. Dashboard "Upcoming Contract Renewals" panel now uses Install-Base-anchored aggregation, eliminating duplicate/mismatched customer rows caused by name variants (e.g., "Isha Diagnostics" vs "Isha Diagnostics Centre", "Ruby Medical Services" vs "Ruby Medical Services (Chiplun)", "OAKTree" vs "Oaktree"). v1.4.0 migrated Contracts and PM Calendar to IB anchoring but missed this dashboard panel.
+
+### Fixed
+- **Dashboard Upcoming Contract Renewals** — `getContractRenewals()` rewritten to derive from `_aggregateContracts().rows`. One row per real Install Base asset, customer/model/town are canonical IB values. Loose PM/CMC duplicate rows no longer appear. Tile counts (Expired / ≤30 / 31-60 / 61-90) now match Contracts page tiles and `#nb-contracts` badge.
+
+### Safety
+- No Supabase, schema, RLS, Auth, or XLSX parser changes.
+- No new Supabase reads on dashboard render.
+- `renderRenewals()` UI byte-identical.
+- Engineer dashboard renewal panel remains visible and read-only (no role-gate change).
+- No Renew/Edit/Add/Delete buttons added.
+
+---
+
 ## [1.4.0] — 2026-05-08
 
 Install Base anchoring for Contracts and PM Calendar. Read-only release. Establishes Install Base (`CONFIG_ASSETS`) as the master machine registry; Contracts and PM Calendar are now child views of Install Base. No new Supabase reads on render, no schema/RLS/Auth/XLSX parser changes, no write paths added.
