@@ -4071,7 +4071,6 @@ function getContractRenewals(){
   for(const r of (agg && agg.rows) || []){
     if(!r._end) continue;
     const days = (r._days != null) ? r._days : Math.round((r._end - today) / 86400000);
-    if(days < -30) continue;
     out.push({
       customer: r.customer,
       model:    r.model || '—',
