@@ -23,7 +23,8 @@
 -- them.
 -- ═════════════════════════════════════════════════════════════════════
 
--- ── 1. Drop policies (reverse of 0003 §5) ───────────────────────────
+-- ── 1. Drop policies (reverse of 0003 §5 + §1c) ─────────────────────
+-- asset_lifecycle / asset_lifecycle_history policies
 drop policy if exists "v141_lifecycle_select_authenticated" on public.asset_lifecycle;
 drop policy if exists "v141_lifecycle_insert_admin_manager" on public.asset_lifecycle;
 drop policy if exists "v141_lifecycle_update_admin_manager" on public.asset_lifecycle;
@@ -33,10 +34,28 @@ drop policy if exists "v141_history_insert_authenticated"   on public.asset_life
 drop policy if exists "v141_history_no_update"              on public.asset_lifecycle_history;
 drop policy if exists "v141_history_no_delete"              on public.asset_lifecycle_history;
 
--- ── 2. Drop triggers + helper function (reverse of 0003 §4) ─────────
-drop trigger  if exists trg_asset_lifecycle_touch on public.asset_lifecycle;
-drop trigger  if exists trg_config_assets_touch   on public.config_assets;
--- Drop the function only if no other table has a trigger on it.
+-- user_roles policies (reverse of 0003 §1c)
+drop policy if exists "v141_user_roles_select_self"  on public.user_roles;
+drop policy if exists "v141_user_roles_select_admin" on public.user_roles;
+drop policy if exists "v141_user_roles_write_admin"  on public.user_roles;
+
+-- ── 2. Drop triggers + helper functions (reverse of 0003 §4 + §1b/§1c)
+drop trigger  if exists trg_user_roles_touch              on public.user_roles;
+drop trigger  if exists trg_user_roles_block_last_admin   on public.user_roles;
+drop trigger  if exists trg_asset_lifecycle_touch         on public.asset_lifecycle;
+drop trigger  if exists trg_config_assets_touch           on public.config_assets;
+
+-- Drop the last-admin guard function (no other consumers).
+drop function if exists public._user_roles_block_last_admin_delete();
+
+-- Drop the role helper functions (reverse of 0003 §1b).
+-- These are referenced by RLS policies on asset_lifecycle and
+-- user_roles; those policies are dropped above so this is safe.
+drop function if exists public.app_is_admin();
+drop function if exists public.app_can_write();
+drop function if exists public.app_user_role();
+
+-- Drop _touch_updated_at() only if no other trigger uses it.
 do $$
 begin
   if not exists (
@@ -56,6 +75,14 @@ drop table if exists public.asset_lifecycle_history cascade;
 -- ── 4. Drop lifecycle table (reverse of 0003 §2) ────────────────────
 -- All rows in asset_lifecycle are dropped.
 drop table if exists public.asset_lifecycle cascade;
+
+-- ── 4a. Drop user_roles table (reverse of 0003 §1a) ─────────────────
+-- ALL rows in user_roles are destroyed. Existing admin/manager/viewer
+-- mappings are lost. Re-running the migration will require re-seeding
+-- via §1d backfill (which depends on the email allowlist still being
+-- correct). Snapshot user_roles with pg_dump before rollback if any
+-- non-default rows have been added since seed time.
+drop table if exists public.user_roles cascade;
 
 -- ── 5. config_assets columns (reverse of 0003 §1) ───────────────────
 -- LEFT IN PLACE BY DEFAULT. These columns are nullable / defaulted and

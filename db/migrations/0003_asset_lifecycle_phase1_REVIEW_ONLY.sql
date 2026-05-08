@@ -5,10 +5,12 @@
 -- │  REVIEW ONLY — DO NOT APPLY TO STAGING OR PRODUCTION YET        │
 -- │  No implementation has been approved.                           │
 -- │                                                                 │
--- │  ▼ ROLE MAPPING IS UNRESOLVED — see ASSUMPTION A1/A2 below.     │
--- │  ▼ SQL EXECUTION IS BLOCKED until role mapping is confirmed     │
--- │    via the Required Pre-SQL Verification Step (§A0) and the    │
--- │    chosen design option (A/B/C) is documented in this file.    │
+-- │  ROLE MAPPING DESIGN: Option B chosen (DB user_roles table).    │
+-- │  See §1a / §1b / §1c below for the table, helpers, and seed.   │
+-- │                                                                 │
+-- │  Pre-SQL §A0 verification step still required before execution │
+-- │  to capture: actual JWT structure (diagnostic), pre-existing   │
+-- │  config_assets policies, and config_assets.code constraint.   │
 -- │                                                                 │
 -- │  Apply order will be: STAGING → verify → PROD, with explicit   │
 -- │  human approval at each gate.                                  │
@@ -70,68 +72,28 @@
 -- DOCUMENT the answers inline in the ASSUMPTIONS A1/A2/A4 below
 -- before this file is approved for execution.
 --
--- ── ASSUMPTIONS — UNRESOLVED until verified per §A0 ─────────────────
---   A1. Role-mapping design. UNRESOLVED. The RLS draft below is a
---       PLACEHOLDER using the inline JWT-claim form. Three viable
---       designs — pick one before execution and replace the policies
---       accordingly:
+-- ── ASSUMPTIONS — chosen design + remaining checks ──────────────────
+--   A1. Role-mapping design. RESOLVED — Option B (DB user_roles
+--       table). New table public.user_roles(user_id pk → auth.users,
+--       email, role check in ('admin','manager','viewer'), active,
+--       audit fields). All RLS gates use the helpers
+--       public.app_user_role(), public.app_can_write(),
+--       public.app_is_admin() — see §1a/§1b/§1c. JWT claim path is
+--       no longer load-bearing for role decisions.
 --
---         Option A — JWT role claim (drafted as placeholder):
---           Each role policy reads `auth.jwt()->'user_metadata'->>'role'`
---           or whichever claim path §A0 step 1 reveals. Simplest, but
---           depends on the JWT being structured as expected and on
---           client/Supabase Auth dashboard setting `role` correctly
---           at signup.
+--   A2. JWT claim path. NOT load-bearing under Option B. Still run
+--       §A0 step 1 for diagnostic value (capture the JWT structure
+--       so future auth changes are documented), but the migration
+--       does not depend on `user_metadata.role` being populated.
+--       App reads role via `_sb.rpc('app_user_role')` (Phase 2
+--       app change, separate review).
 --
---         Option B — DB user_roles table:
---           A new public.user_roles(user_id uuid pk references
---           auth.users(id), role text check in (...), updated_at).
---           Each policy joins `where exists (select 1 from user_roles
---           where user_id = auth.uid() and role in ('admin','manager'))`.
---           Decouples role from JWT claims; survives JWT
---           restructuring; admin can edit roles via SQL editor without
---           re-issuing tokens. Adds a small management surface.
---
---         Option C — Email allowlist mirrored in DB:
---           Policy uses `(auth.jwt()->>'email')` against a hardcoded
---           or table-driven allowlist. Mirrors the current
---           canManagePM() client-side fallback at the DB layer. Works
---           without JWT user_metadata, but couples DB to email
---           strings.
---
---       Until §A0 results are pasted into A1 and the design option is
---       chosen, this migration MUST NOT be executed.
---
---   A2. JWT claim path. UNRESOLVED. The app reads
---       `_currentUser.user_metadata.role` client-side. That MAY map to
---       `auth.jwt()->'user_metadata'->>'role'` in Postgres, but custom
---       Supabase Auth configurations can place the role in
---       `app_metadata.role` or a custom top-level claim. The placeholder
---       policies use `user_metadata.role` and will silently grant zero
---       admin/manager rights if the actual claim is elsewhere.
---       MUST be verified per §A0 step 1 before execution.
---
---   A3. Manager allowlist (`manager@3imedtech.com`). UNRESOLVED.
---       Today canManagePM() in the app code returns true for the
---       email allowlist regardless of `_userRole`. The DB has no
---       knowledge of this mapping. Three options:
---
---         (i)  Treat the allowlist as a transitional client-only
---              hack; require a real `manager` role be set in JWT
---              metadata before Phase 2 ships Manager write paths.
---              DB stays JWT-claim-driven only.
---         (ii) Mirror the allowlist in DB via Option C of A1.
---         (iii) Encode the allowlist in a DB user_roles table per
---               Option B.
---
---       Until this is resolved, **DB-side Manager INSERT/UPDATE rights
---       MUST NOT be enabled.** The placeholder policies admit
---       'admin','manager' from the JWT, which means the manager
---       allowlist user (without `role: 'manager'` in their JWT) will
---       NOT have DB write access. The current Manager-effective UI
---       experience is therefore client-only and will not survive a
---       direct PostgREST call. This is a deliberate gap and a blocker
---       for Phase 2 Manager-write features.
+--   A3. Manager allowlist (`manager@3imedtech.com`). RESOLVED — the
+--       allowlist user gets a `user_roles` row with `role='manager'`
+--       in the §1c backfill block. The client-side email-allowlist
+--       fallback in `canManagePM()` is removed in Phase 2 app code,
+--       coordinated with the migration deploy. DB-side Manager
+--       writes are now first-class.
 --
 --   A4. Existing config_assets RLS. UNRESOLVED until §A0 step 2 is
 --       run. This migration does not touch config_assets policies and
@@ -186,6 +148,284 @@ begin
     end if;
   end if;
 end $$;
+
+-- ═════════════════════════════════════════════════════════════════════
+-- §1a. user_roles table (structure only — RLS in §1c)
+-- ═════════════════════════════════════════════════════════════════════
+-- One row per Supabase auth user, mapping to the app's role string.
+-- PK = user_id (FK -> auth.users with ON DELETE CASCADE) so the row
+-- vanishes if the auth user is deleted. `email` is denormalized for
+-- grep-ability and admin UI; not the identity.
+create table if not exists public.user_roles (
+  user_id     uuid          primary key
+                            references auth.users(id)
+                            on delete cascade,
+  email       text          not null,
+  role        text          not null
+                            check (role in ('admin','manager','viewer')),
+  active      boolean       not null default true,
+  created_at  timestamptz   not null default now(),
+  created_by  uuid          references auth.users(id),
+  updated_at  timestamptz   not null default now(),
+  updated_by  uuid          references auth.users(id),
+  note        text
+);
+
+comment on table public.user_roles is
+  'Role mapping for Supabase auth users. PK = user_id. role values: '
+  '''admin'' (full write incl. config_assets/asset_lifecycle), '
+  '''manager'' (parity with admin for asset/lifecycle writes; cannot '
+  'manage user_roles), ''viewer'' (read-only — also covers Engineer). '
+  'Audit Log access is gated by a separate email check (unchanged).';
+
+create index if not exists user_roles_email_idx
+  on public.user_roles(email);
+create index if not exists user_roles_active_role_idx
+  on public.user_roles(role)
+  where active = true;
+
+
+-- ═════════════════════════════════════════════════════════════════════
+-- §1b. RLS helper functions — security definer, locked search_path
+-- ═════════════════════════════════════════════════════════════════════
+-- All three are STABLE so the planner can cache results within a
+-- statement. SECURITY DEFINER + locked search_path means the helper
+-- runs with the function owner's privileges and cannot be hijacked
+-- by an attacker injecting a search_path entry. They read
+-- public.user_roles directly without re-entering its RLS (the
+-- helper executes as owner, bypassing RLS), which breaks the
+-- recursion that would otherwise occur.
+
+-- Returns the calling user's role string, or null if no active row.
+create or replace function public.app_user_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select role from public.user_roles
+   where user_id = auth.uid()
+     and active = true
+   limit 1;
+$$;
+
+-- Boolean: caller is admin or manager (write parity per product
+-- decision #8).
+create or replace function public.app_can_write()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.user_roles
+     where user_id = auth.uid()
+       and active  = true
+       and role    in ('admin','manager')
+  );
+$$;
+
+-- Boolean: caller is admin (privileged ops only — user_roles writes,
+-- future audit gates if migrated off email check).
+create or replace function public.app_is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.user_roles
+     where user_id = auth.uid()
+       and active  = true
+       and role    = 'admin'
+  );
+$$;
+
+-- Grant execute to authenticated so PostgREST can call them as the
+-- caller's session.
+grant execute on function public.app_user_role() to authenticated;
+grant execute on function public.app_can_write() to authenticated;
+grant execute on function public.app_is_admin() to authenticated;
+
+-- Lock function ownership / discourage rewrite without review.
+comment on function public.app_user_role() is
+  'Returns the caller''s app role from public.user_roles. SECURITY '
+  'DEFINER + locked search_path; do not modify without security review. '
+  'Used by RLS policies and by the app via _sb.rpc(''app_user_role'').';
+comment on function public.app_can_write() is
+  'Boolean: caller has write parity (admin or manager) on lifecycle / '
+  'asset tables. Used by RLS policies on asset_lifecycle and (in '
+  'Phase 2) on config_assets.';
+comment on function public.app_is_admin() is
+  'Boolean: caller is admin. Used by user_roles write policies and '
+  'admin-only routes.';
+
+
+-- ═════════════════════════════════════════════════════════════════════
+-- §1c. user_roles RLS + last-admin guard
+-- ═════════════════════════════════════════════════════════════════════
+-- Now that the helper functions exist (§1b), we can create policies
+-- that reference them. PostgreSQL resolves the function reference at
+-- create-policy time, so this ordering matters.
+
+alter table public.user_roles enable row level security;
+
+drop policy if exists "v141_user_roles_select_self"  on public.user_roles;
+drop policy if exists "v141_user_roles_select_admin" on public.user_roles;
+drop policy if exists "v141_user_roles_write_admin"  on public.user_roles;
+
+-- SELECT: every authenticated user can read their own row.
+create policy "v141_user_roles_select_self"
+  on public.user_roles for select
+  to authenticated
+  using (user_id = auth.uid());
+
+-- SELECT (broad): admins can read all rows (admin UI in Phase 2+).
+-- The helper runs SECURITY DEFINER, bypassing RLS internally, so this
+-- does not recurse. The select_self policy covers non-admins; this
+-- one extends visibility for admins.
+create policy "v141_user_roles_select_admin"
+  on public.user_roles for select
+  to authenticated
+  using ( public.app_is_admin() );
+
+-- INSERT/UPDATE/DELETE: admin only, with the LAST-ADMIN GUARD baked
+-- into the WITH CHECK clause. The guard prevents:
+--   (a) demoting the last active admin (role <> 'admin' WHERE was admin)
+--   (b) deactivating the last active admin (active=false WHERE was admin)
+-- It does NOT prevent NEW admin rows from being created (that's net-positive).
+-- DELETE is handled by the trigger below because Postgres does not
+-- evaluate WITH CHECK on DELETE.
+create policy "v141_user_roles_write_admin"
+  on public.user_roles
+  for all
+  to authenticated
+  using ( public.app_is_admin() )
+  with check (
+    public.app_is_admin()
+    and (
+      -- Allow if the resulting row is still admin+active...
+      (role = 'admin' and active = true)
+      -- ...OR if at least one OTHER active admin will exist after this op.
+      or exists (
+        select 1 from public.user_roles ur
+         where ur.role = 'admin'
+           and ur.active = true
+           and ur.user_id <> user_roles.user_id
+      )
+    )
+  );
+
+-- DELETE protection — the policy USING gate alone does not prevent an
+-- admin from deleting the last admin row. This trigger raises before
+-- the DELETE commits.
+create or replace function public._user_roles_block_last_admin_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.role = 'admin' and old.active = true then
+    if not exists (
+      select 1 from public.user_roles
+       where role = 'admin'
+         and active = true
+         and user_id <> old.user_id
+    ) then
+      raise exception 'cannot delete the last active admin (user_id=%)',
+        old.user_id
+        using errcode = 'check_violation';
+    end if;
+  end if;
+  return old;
+end $$;
+
+drop trigger if exists trg_user_roles_block_last_admin on public.user_roles;
+create trigger trg_user_roles_block_last_admin
+  before delete on public.user_roles
+  for each row execute function public._user_roles_block_last_admin_delete();
+
+-- updated_at maintenance (the function _touch_updated_at() is created
+-- in §4 below; trigger creation only fires at runtime, so the forward
+-- reference is fine).
+drop trigger if exists trg_user_roles_touch on public.user_roles;
+-- Trigger creation deferred to §4 once the function exists.
+
+-- Grants — RLS does the gating; without these grants PostgREST returns
+-- 401 before policies fire.
+revoke all     on public.user_roles from anon;
+grant  select  on public.user_roles to authenticated;
+grant  insert, update, delete on public.user_roles to authenticated;
+
+
+-- ═════════════════════════════════════════════════════════════════════
+-- §1d. user_roles backfill (commented — run separately as service_role)
+-- ═════════════════════════════════════════════════════════════════════
+-- The backfill below MUST be run with the service_role key in the SQL
+-- editor (it bypasses RLS). It is intentionally commented out in this
+-- migration because the email allowlist must be reviewed against the
+-- actual auth.users contents on staging FIRST.
+--
+-- BEFORE running the backfill, run this audit query to list every
+-- existing auth user:
+--
+--   select id, email, raw_user_meta_data->>'role' as meta_role,
+--          last_sign_in_at, created_at
+--     from auth.users
+--    order by created_at;
+--
+-- Verify that:
+--   • every email expected to be admin is in the admin seed list
+--   • every email expected to be manager is in the manager seed list
+--   • there are no surprise users (former staff, test accounts) that
+--     should be deactivated
+--
+-- Then update the seed lists below if needed, uncomment the block,
+-- and run as service_role.
+
+/*
+-- Step 1. Seed known admin + manager rows.
+insert into public.user_roles (user_id, email, role, note)
+select u.id, u.email,
+       case
+         when u.email = 'abhijit.s@3imedtech.com' then 'admin'
+         when u.email = 'manager@3imedtech.com'  then 'manager'
+       end as role,
+       'v1.4.1 backfill seed'
+from auth.users u
+where u.email in (
+  'abhijit.s@3imedtech.com',
+  'manager@3imedtech.com'
+)
+on conflict (user_id) do nothing;
+
+-- Step 2. Default everyone else to viewer.
+insert into public.user_roles (user_id, email, role, note)
+select u.id, u.email, 'viewer', 'v1.4.1 backfill default'
+from auth.users u
+where not exists (
+  select 1 from public.user_roles ur where ur.user_id = u.id
+)
+on conflict (user_id) do nothing;
+
+-- Sanity: confirm at least one active admin exists. If zero, abort
+-- the transaction. This protects against a misconfigured allowlist
+-- locking everyone out.
+do $$
+declare admin_count int;
+begin
+  select count(*) into admin_count
+    from public.user_roles where role='admin' and active=true;
+  if admin_count = 0 then
+    raise exception 'backfill produced zero active admins; aborting';
+  end if;
+end $$;
+*/
+
 
 -- ── 1. Extend config_assets ─────────────────────────────────────────
 -- Adds lifecycle status + audit fields. All nullable except `status`
@@ -365,11 +605,16 @@ create trigger trg_asset_lifecycle_touch
   before update on public.asset_lifecycle
   for each row execute function public._touch_updated_at();
 
--- ── 5. RLS — DRAFT (read ASSUMPTIONS A1–A3 above) ───────────────────
--- These policies use the inline JWT claim form (assumption A1.b).
--- If you choose to create app_user_role(), replace the
--- `auth.jwt()->'user_metadata'->>'role'` expression in each policy
--- accordingly.
+-- user_roles touch trigger (forward-referenced in §1c)
+drop trigger if exists trg_user_roles_touch on public.user_roles;
+create trigger trg_user_roles_touch
+  before update on public.user_roles
+  for each row execute function public._touch_updated_at();
+
+-- ── 5. RLS — Option B (user_roles) ──────────────────────────────────
+-- Policies call public.app_can_write() instead of inspecting the JWT
+-- directly. The helper queries public.user_roles under SECURITY
+-- DEFINER, so RLS evaluation does not depend on JWT structure.
 
 -- Enable RLS on the new tables.
 alter table public.asset_lifecycle         enable row level security;
@@ -392,27 +637,21 @@ create policy "v141_lifecycle_select_authenticated"
   to authenticated
   using (true);
 
--- asset_lifecycle: INSERT — admin or manager only.
--- Manager email allowlist (assumption A3) is intentionally NOT mirrored
--- in DB; keep the database role check pure metadata-based and rely on
--- the app to grant the manager allowlist user the 'manager' role at
--- signup or via Supabase Auth dashboard.
+-- asset_lifecycle: INSERT — admin or manager only (via user_roles).
+-- Manager parity is established by inserting a row in user_roles with
+-- role='manager' (see §1c backfill). The client-side email allowlist
+-- in canManagePM() is removed in Phase 2 app code coordinated with
+-- this migration.
 create policy "v141_lifecycle_insert_admin_manager"
   on public.asset_lifecycle for insert
   to authenticated
-  with check (
-    (auth.jwt()->'user_metadata'->>'role') in ('admin','manager')
-  );
+  with check ( public.app_can_write() );
 
 create policy "v141_lifecycle_update_admin_manager"
   on public.asset_lifecycle for update
   to authenticated
-  using (
-    (auth.jwt()->'user_metadata'->>'role') in ('admin','manager')
-  )
-  with check (
-    (auth.jwt()->'user_metadata'->>'role') in ('admin','manager')
-  );
+  using       ( public.app_can_write() )
+  with check  ( public.app_can_write() );
 
 -- DELETE is denied for everyone (status='cancelled' is the soft-delete
 -- path). Even admin must use UPDATE.
@@ -452,13 +691,15 @@ create policy "v141_history_no_delete"
 -- Revoke broader grants that bypass policies just in case.
 revoke update, delete on public.asset_lifecycle_history from authenticated, anon;
 
--- ── 6. config_assets write policies (additive) ──────────────────────
+-- ── 6. config_assets write policies (deferred to Phase 2) ───────────
 -- This migration intentionally does NOT touch existing config_assets
 -- policies. Any add/edit/de-install policy work happens in a separate
--- review file once we confirm the current policy set on staging via
---   select * from pg_policies where tablename = 'config_assets';
--- The XLSX upload path currently calls .delete() then .insert() — we
--- must not break that bulk path. Phase 2 will introduce a partial
--- write policy or move XLSX upload to service_role only.
+-- review file once:
+--   (a) §A0 step 2 captures the current policy set, AND
+--   (b) the XLSX bulk-upload behavior decision (§6 of phase1_review.md)
+--       is made — A: upsert, B: preserve app_created, or C: disable
+--       bulk replace.
+-- When Phase 2 adds config_assets write policies, they will use the
+-- same public.app_can_write() helper from §1b for consistency.
 
 -- ── End of 0003 ─────────────────────────────────────────────────────
