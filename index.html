@@ -1014,6 +1014,9 @@ button,input,select,textarea{font-family:inherit;}
     </div>
   </div>
 
+  <!-- PM Diagnostics (v1.4.0) — IB vs PM mismatches -->
+  <div id="pm-diagnostics" style="margin:16px 0"></div>
+
   <!-- PM Timeline (visual calendar) -->
   <div class="panel">
     <div class="panel-head"><h2 class="panel-title"><i data-lucide="bar-chart-3"></i>PM Timeline — Next 6 Months</h2></div>
@@ -5361,19 +5364,22 @@ function fmtDate(s){
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
 }
 
-// v1.2.0 2a — PM Schedule column sort.
+// v1.4.0 — PM Schedule column sort. Rows are IB-anchored {ib, pm, st, tier};
+// pm/st may be null for IB assets without a matching PM row, so accessors
+// fall back to ib fields and null-sort to the bottom for PM-only columns.
 const _PM_SORT_COLS = [
-  { key:'id',         label:'ID',        accessor: r => r.pm.id },
-  { key:'customer',   label:'CUSTOMER',  accessor: r => (r.pm.customer||'').toLowerCase() },
-  { key:'place',      label:'PLACE',     accessor: r => (r.pm.town||'').toLowerCase() },
-  { key:'model',      label:'MODEL',     accessor: r => (r.pm.model||'').toLowerCase() },
-  { key:'contract',   label:'CONTRACT',  accessor: r => (r.pm.contract||'').toLowerCase() },
-  { key:'freq',       label:'FREQ',      accessor: r => r.pm.freq ?? null },
-  { key:'last_pms',   label:'LAST PMS',  accessor: r => parseFlexDate(r.pm.lastPMS)?.getTime() ?? null, defaultDir:'desc' },
-  { key:'next_due',   label:'NEXT DUE',  accessor: r => parseFlexDate(r.pm.nextPMS)?.getTime() ?? null },
+  { key:'code',       label:'CODE',      accessor: r => r.ib?.code || '' },
+  { key:'customer',   label:'CUSTOMER',  accessor: r => (r.ib?.name || r.pm?.customer || '').toLowerCase() },
+  { key:'place',      label:'PLACE',     accessor: r => (r.ib?.town || r.pm?.town || '').toLowerCase() },
+  { key:'model',      label:'MODEL',     accessor: r => (r.ib?.model || r.pm?.model || '').toLowerCase() },
+  { key:'contract',   label:'CONTRACT',  accessor: r => (r.pm?.contract||'').toLowerCase() },
+  { key:'freq',       label:'FREQ',      accessor: r => r.pm?.freq ?? null },
+  { key:'last_pms',   label:'LAST PMS',  accessor: r => r.pm ? (parseFlexDate(r.pm.lastPMS)?.getTime() ?? null) : null, defaultDir:'desc' },
+  { key:'next_due',   label:'NEXT DUE',  accessor: r => r.pm ? (parseFlexDate(r.pm.nextPMS)?.getTime() ?? null) : null },
   { key:'window',     label:'WINDOW',    sortable:false },
   { key:'engineers',  label:'ENGINEERS', sortable:false },
-  { key:'status',     label:'STATUS',    accessor: r => r.st.priority },  // sort by urgency bucket
+  { key:'status',     label:'STATUS',    accessor: r => r.st ? r.st.priority : 99 },
+  { key:'match',      label:'MATCH',     accessor: r => ({exact:0,fuzzy:1,town_model:2,none:3}[r.tier] ?? 9) },
   { key:'action',     label:'ACTION',    sortable:false, thAttrs:'class="pm-action-col"' },
 ];
 let _pmSortInited = false;
@@ -5384,62 +5390,123 @@ function _initPmSort(){
 }
 
 function renderPM(){
+  // ── IB-anchored row construction (v1.4.0) ──────────────────
+  // One row per CONFIG_ASSETS entry. Each row pairs an IB asset with its
+  // best-tier PM match (or null if no PM row matches). Loose PM rows that
+  // match no IB asset at any tier are surfaced in a diagnostic, not the
+  // main table — keeping Install Base / Contracts / PM aligned on one
+  // canonical asset list.
+  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
+  const pmAll = (typeof PM_SCHEDULE !== 'undefined' && Array.isArray(PM_SCHEDULE)) ? PM_SCHEDULE.map(p => ({...p, _source:'pm'})) : [];
+  const pmPool = { all: pmAll, consumed: new Set() };
+
+  const allRows = ibAssets.map(ib => {
+    const m = (typeof _findPmForAsset === 'function') ? _findPmForAsset(ib, pmPool) : null;
+    const pm = m ? m.row : null;
+    return { ib, pm, st: pm ? pmStatus(pm) : null, tier: m ? m.tier : 'none' };
+  });
+
+  // Truly unmatched PM rows = leftover candidates that match no IB at any tier.
+  const isMatchableToAnyIb = pm => ibAssets.some(ib =>
+    _rowMatchesIb(ib, pm, 'exact') ||
+    _rowMatchesIb(ib, pm, 'fuzzy') ||
+    _rowMatchesIb(ib, pm, 'town_model')
+  );
+  const leftover = pmAll.filter((_, i) => !pmPool.consumed.has(i));
+  const unmatchedPm = leftover.filter(p => !isMatchableToAnyIb(p));
+
   // ── Overview stats ──────────────────────────────────────────
-  const statuses = PM_SCHEDULE.map(pm=>pmStatus(pm));
-  const overdueCount = statuses.filter(s=>s.code==='overdue').length;
-  const inWindowCount = statuses.filter(s=>s.code==='in-window').length;
-  const upcomingCount = statuses.filter(s=>s.code==='upcoming'||s.code==='scheduled').length;
-  const pendingCount = statuses.filter(s=>s.code==='installation'||s.code==='unscheduled').length;
+  // Status counts only consider matched rows (rows with a PM).
+  const matchedRows = allRows.filter(r => r.pm);
+  const statuses = matchedRows.map(r => r.st);
+  const overdueCount    = statuses.filter(s=>s.code==='overdue').length;
+  const inWindowCount   = statuses.filter(s=>s.code==='in-window').length;
+  const upcomingCount   = statuses.filter(s=>s.code==='upcoming'||s.code==='scheduled').length;
+  const pendingCount    = statuses.filter(s=>s.code==='installation'||s.code==='unscheduled').length;
   const notCoveredCount = statuses.filter(s=>s.code==='not-covered').length;
+  const noPmCount       = allRows.length - matchedRows.length;
 
   document.getElementById('pm-overview-stats').innerHTML = `
     <div class="kpi-card red" style="cursor:pointer" onclick="pmFilterStatus='overdue';renderPM()"><div class="kpi-label">OVERDUE</div><div class="kpi-value red">${overdueCount}</div><div class="kpi-delta down">Immediate action</div></div>
     <div class="kpi-card amber" style="cursor:pointer" onclick="pmFilterStatus='in-window';renderPM()"><div class="kpi-label">IN PM WINDOW</div><div class="kpi-value amber">${inWindowCount}</div><div class="kpi-delta warn">±15 days of due</div></div>
     <div class="kpi-card blue" style="cursor:pointer" onclick="pmFilterStatus='upcoming';renderPM()"><div class="kpi-label">UPCOMING</div><div class="kpi-value blue">${upcomingCount}</div><div class="kpi-delta">Scheduled ahead</div></div>
-    <div class="kpi-card purple"><div class="kpi-label">PENDING / N/A</div><div class="kpi-value purple">${pendingCount + notCoveredCount}</div><div class="kpi-delta">${pendingCount} pending, ${notCoveredCount} not covered</div></div>
-    <div class="kpi-card cyan"><div class="kpi-label">TOTAL MACHINES</div><div class="kpi-value cyan">${PM_SCHEDULE.length}</div><div class="kpi-delta">${PM_SCHEDULE.filter(p=>p.freq>0).length} with PM schedule</div></div>
+    <div class="kpi-card purple"><div class="kpi-label">PENDING / NO PM</div><div class="kpi-value purple">${pendingCount + notCoveredCount + noPmCount}</div><div class="kpi-delta">${pendingCount} pending · ${notCoveredCount} not covered · ${noPmCount} no PM row</div></div>
+    <div class="kpi-card cyan"><div class="kpi-label">TOTAL MACHINES</div><div class="kpi-value cyan">${ibAssets.length}</div><div class="kpi-delta">${matchedRows.filter(r=>(r.pm.freq||0)>0).length} with PM schedule · ${noPmCount} unmatched</div></div>
   `;
 
   // ── PM table ───────────────────────────────────────────────
-  let rows = PM_SCHEDULE.map(pm => ({pm, st: pmStatus(pm)}));
+  let rows = allRows;
   if(pmFilterStatus !== 'all'){
     rows = rows.filter(r => {
+      if(!r.pm || !r.st) return false; // rows without PM cannot be filtered by PM status
       if(pmFilterStatus==='overdue') return r.st.code==='overdue';
       if(pmFilterStatus==='in-window') return r.st.code==='in-window';
       if(pmFilterStatus==='upcoming') return r.st.code==='upcoming'||r.st.code==='scheduled';
       return true;
     });
   }
-  // v1.2.0 2a — sortable headers. Default is by next-due ascending so the
-  // "what's due next" question reads off the top. Users can click any column
-  // to override; sort survives filter clicks via _sortState.
+  // v1.2.0 2a / v1.4.0 — sortable headers. Default is by next-due ascending so
+  // the "what's due next" question reads off the top. IB assets without a PM
+  // row sort to the bottom on PM-only columns thanks to null-sort contract.
   _initPmSort();
   const pmTheadRow = document.getElementById('pm-thead-row');
   if(pmTheadRow) pmTheadRow.innerHTML = renderSortableHeaders('pm');
   rows = applySort('pm', rows);
 
-  document.getElementById('pm-count-label').textContent = PM_SCHEDULE.length;
-  document.getElementById('pm-body').innerHTML = rows.map(({pm, st}) => {
+  document.getElementById('pm-count-label').textContent = ibAssets.length;
+
+  const PM_TIER_PILL_COLOR = { exact:'#10b981', fuzzy:'#3b82f6', town_model:'#f59e0b', none:'#94a3b8' };
+  const PM_TIER_PILL_LABEL = { exact:'exact', fuzzy:'fuzzy', town_model:'town+model', none:'none' };
+
+  document.getElementById('pm-body').innerHTML = rows.map(({ib, pm, st, tier}) => {
+    const cust = ib?.name || pm?.customer || '—';
+    const town = ib?.town || pm?.town || '—';
+    const model = ib?.model || pm?.model || '—';
+    const region = pm?.region || ib?.state || '';
+    const tierColor = PM_TIER_PILL_COLOR[tier] || '#94a3b8';
+    const tierTip   = pm && customerKey(pm.customer || '') !== customerKey(ib?.name || '')
+      ? `Matched PM "${pm.customer}" via ${PM_TIER_PILL_LABEL[tier]} tier`
+      : `Match tier: ${PM_TIER_PILL_LABEL[tier]}`;
+    const matchCell = `<span class="badge low" title="${esc(tierTip)}" style="background:${tierColor}1a;color:${tierColor};font-size:10px">${esc(PM_TIER_PILL_LABEL[tier])}</span>`;
+
+    if(!pm){
+      // IB asset with no PM row — read-only placeholder, no actions.
+      return `<tr style="opacity:.7">
+        <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(ib.code)}</td>
+        <td style="font-weight:500;max-width:180px">${esc(cust)}</td>
+        <td style="font-size:11px;color:var(--text-dim)">${esc(town)}</td>
+        <td style="font-size:11px;color:var(--text-dim)">${esc(model)}</td>
+        <td><span class="badge low">—</span></td>
+        <td style="font-family:var(--mono);text-align:center">—</td>
+        <td style="font-family:var(--mono);font-size:10px">—</td>
+        <td style="font-family:var(--mono);font-size:10px">—</td>
+        <td style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">—</td>
+        <td style="font-size:10px;color:var(--text-faint)">—</td>
+        <td><span class="badge unknown">NO PM ROW</span></td>
+        <td>${matchCell}</td>
+        <td class="pm-action-col"><span style="color:var(--text-faint);font-size:10px">—</span></td>
+      </tr>`;
+    }
+
     const engineers = getEngineersForRegion(pm.region);
     const engNames = engineers.length ? engineers.map(e=>esc(e.name.split(' ')[0])).join(', ') : '<span style="color:var(--red)">Unassigned</span>';
     const dueDate = pm.nextPMS ? parseFlexDate(pm.nextPMS) : null;
     let windowStr = '—';
     if(dueDate){
       const wStart = new Date(dueDate); wStart.setDate(wStart.getDate()-PM_WINDOW_DAYS);
-      const wEnd = new Date(dueDate); wEnd.setDate(wEnd.getDate()+PM_WINDOW_DAYS);
+      const wEnd   = new Date(dueDate); wEnd.setDate(wEnd.getDate()+PM_WINDOW_DAYS);
       windowStr = `${wStart.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} – ${wEnd.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}`;
     }
-    // Gmail mailto link
     const emailAction = (st.code==='overdue'||st.code==='in-window') && engineers.length
       ? `<button class="btn btn-primary pm-manage" style="font-size:9px;padding:3px 8px" onclick="composePMEmail('${pm.id}')"><i data-lucide="mail"></i>Remind</button>`
       : (st.code==='installation' || st.code==='not-covered')
         ? `<span style="color:var(--text-faint);font-size:10px">N/A</span>`
         : `<span style="color:var(--text-faint);font-size:10px">Not yet</span>`;
     return `<tr>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(pm.id)}</td>
-      <td style="font-weight:500;max-width:180px">${esc(pm.customer)}</td>
-      <td style="font-size:11px;color:var(--text-dim)">${esc(pm.town)}</td>
-      <td style="font-size:11px;color:var(--text-dim)">${esc(pm.model)}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(ib?.code || pm.id)}</td>
+      <td style="font-weight:500;max-width:180px">${esc(cust)}</td>
+      <td style="font-size:11px;color:var(--text-dim)">${esc(town)}</td>
+      <td style="font-size:11px;color:var(--text-dim)">${esc(model)}</td>
       <td><span class="badge ${pm.contract.toLowerCase()==='cmc'?'cmc':pm.contract.toLowerCase()==='warranty'?'warranty':'low'}">${esc(pm.contract)}</span></td>
       <td style="font-family:var(--mono);text-align:center">${pm.freq||'—'}</td>
       <td style="font-family:var(--mono);font-size:10px">${fmtDate(pm.lastPMS)}</td>
@@ -5447,9 +5514,34 @@ function renderPM(){
       <td style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">${windowStr}</td>
       <td style="font-size:10px">${engNames}</td>
       <td><span class="badge ${st.cls}">${st.label}</span>${st.daysText?`<div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:2px">${st.daysText}</div>`:''}</td>
+      <td>${matchCell}</td>
       <td class="pm-action-col">${emailAction}</td>
     </tr>`;
   }).join('');
+
+  // ── PM Diagnostics (v1.4.0) ────────────────────────────────
+  // Exposes IB-anchored mismatches: assets with no PM row, and PM rows that
+  // don't fit any IB asset at any tier. Keeps the main table clean while
+  // making the gap visible.
+  const pmDiagEl = document.getElementById('pm-diagnostics');
+  if(pmDiagEl){
+    const noPmSample = allRows.filter(r => !r.pm).slice(0,3).map(r => `${r.ib.name} (${r.ib.code})`).join(' · ');
+    const unmSample  = unmatchedPm.slice(0,3).map(r => `${r.customer || '—'}${r.town ? ' (' + r.town + ')' : ''}`).join(' · ');
+    pmDiagEl.innerHTML = `
+      <h3 style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Data Diagnostics</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+        <div class="kpi-card" style="padding:14px 16px"${noPmSample ? ` title="${esc(noPmSample)}"` : ''}>
+          <div class="kpi-label">IB Assets · No PM Row</div>
+          <div class="kpi-value" style="font-size:24px">${noPmCount}</div>
+          <div class="kpi-foot" style="font-size:11px;color:var(--text-dim)">${noPmCount ? `${noPmCount} of ${allRows.length} install-base assets${noPmSample ? ' · ' + esc(noPmSample) : ''}` : 'All install-base assets have a PM row'}</div>
+        </div>
+        <div class="kpi-card" style="padding:14px 16px"${unmSample ? ` title="${esc(unmSample)}"` : ''}>
+          <div class="kpi-label">Unmatched PM Rows</div>
+          <div class="kpi-value" style="font-size:24px">${unmatchedPm.length}</div>
+          <div class="kpi-foot" style="font-size:11px;color:var(--text-dim)">${unmatchedPm.length ? `PM rows not matched to any IB asset${unmSample ? ' · ' + esc(unmSample) : ''}` : 'All PM rows matched'}</div>
+        </div>
+      </div>`;
+  }
 
   // ── PM Timeline ────────────────────────────────────────────
   renderPMTimeline();
