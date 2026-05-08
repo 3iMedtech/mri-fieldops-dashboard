@@ -1014,6 +1014,9 @@ button,input,select,textarea{font-family:inherit;}
     </div>
   </div>
 
+  <!-- PM Diagnostics (v1.4.0) — IB vs PM mismatches -->
+  <div id="pm-diagnostics" style="margin:16px 0"></div>
+
   <!-- PM Timeline (visual calendar) -->
   <div class="panel">
     <div class="panel-head"><h2 class="panel-title"><i data-lucide="bar-chart-3"></i>PM Timeline — Next 6 Months</h2></div>
@@ -4712,126 +4715,191 @@ const _CONTRACT_BUCKET_COLOR = {
   unknown: '#94a3b8',
 };
 
-// Merge PM_SCHEDULE + CMC_DATA into one row list, dedupe on
-// customerKey+model, prefer PM_SCHEDULE (more granular) when both
-// sources have a row for the same key. Same precedence as
-// getContractRenewals() but keeps every row (incl. active >90d, unknown).
+// ── IB-anchored matching helpers (v1.4.0 correction) ─────────────
+// Lowercase, replace non-alphanumerics with space, collapse whitespace.
+function _normalizeName(s){
+  return (s == null ? '' : String(s))
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+// Jaccard token-overlap. Tokens = alphanumeric runs of length >= 3 after
+// _normalizeName. Returns 0 if either side is empty after filtering.
+function _jaccard(a, b){
+  const tokset = s => new Set(_normalizeName(s).split(' ').filter(t => t.length >= 3));
+  const A = tokset(a), B = tokset(b);
+  if(A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for(const t of A) if(B.has(t)) inter++;
+  const union = A.size + B.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+// True if `row` (PM/CMC shape) matches `ib` (CONFIG_ASSETS shape) at `tier`.
+// All tiers require strict normalized town equality (gate).
+function _rowMatchesIb(ib, row, tier){
+  if(_normalizeName(row.town) !== _normalizeName(ib.town)) return false;
+  if(tier === 'exact')      return customerKey(row.customer || '') === customerKey(ib.name || '');
+  if(tier === 'fuzzy')      return _jaccard(row.customer, ib.name)   >= 0.5;
+  if(tier === 'town_model') return _jaccard(row.model || '', ib.model || '') >= 0.5;
+  return false;
+}
+// Tier-first traversal across `pool.all`. PM rows are placed first in the
+// pool so they take priority over CMC at the same tier. Mutates
+// pool.consumed (Set<index>) on success.
+function _findContractForAsset(ib, pool){
+  for(const tier of ['exact','fuzzy','town_model']){
+    for(let i = 0; i < pool.all.length; i++){
+      if(pool.consumed.has(i)) continue;
+      if(_rowMatchesIb(ib, pool.all[i], tier)){
+        pool.consumed.add(i);
+        return { row: pool.all[i], tier, sourceIdx: i };
+      }
+    }
+  }
+  return null;
+}
+// Same shape, scoped to a PM-only pool. Independent from contract pool.
+function _findPmForAsset(ib, pmPool){
+  for(const tier of ['exact','fuzzy','town_model']){
+    for(let i = 0; i < pmPool.all.length; i++){
+      if(pmPool.consumed.has(i)) continue;
+      if(_rowMatchesIb(ib, pmPool.all[i], tier)){
+        pmPool.consumed.add(i);
+        return { row: pmPool.all[i], tier, sourceIdx: i };
+      }
+    }
+  }
+  return null;
+}
+
+// Build Install-Base-anchored contract rows: one row per CONFIG_ASSETS entry,
+// with the best contract match (PM preferred over CMC at the same tier) and
+// the best PM match attached. Loose PM/CMC rows that don't match any IB asset
+// are returned in unmatched* lists for diagnostic surfacing only — they do
+// NOT appear in the main table.
 function _aggregateContracts(){
   const today = new Date(); today.setHours(0,0,0,0);
-  const seen = new Map();
-  function add(row, source){
-    const customer = (row.customer || '').trim();
-    if(!customer) return;
-    const model = row.model || '';
-    const key = customerKey(customer) + '|' + model.toLowerCase();
-    const prev = seen.get(key);
-    if(prev && prev._source === 'pm' && source === 'cmc') return;
-    const endRaw = row.contractEnd || row.end || '';
-    const startRaw = row.contractStart || row.start || '';
-    const end = parseFlexDate(endRaw);
-    const start = parseFlexDate(startRaw);
-    const days = end ? Math.round((end - today) / 86400000) : null;
-    const status = _contractStatus(end, today);
-    seen.set(key, {
-      customer,
-      model: model || '—',
-      contract: row.contract || '—',
-      town: row.town || '—',
-      region: row.region || '',
-      _start: start, _end: end, _days: days,
-      startRaw, endRaw,
-      status, statusLabel: _CONTRACT_BUCKET_LABEL[status] || status,
-      _source: source,
-    });
-  }
-  if(typeof PM_SCHEDULE !== 'undefined' && Array.isArray(PM_SCHEDULE)){
-    PM_SCHEDULE.forEach(p => add(p, 'pm'));
-  }
-  if(typeof CMC_DATA !== 'undefined' && Array.isArray(CMC_DATA)){
-    CMC_DATA.forEach(c => add(c, 'cmc'));
-  }
-  return [...seen.values()];
-}
 
-function _contractsCoverageGaps(rows){
-  const today = new Date(); today.setHours(0,0,0,0);
-  const byCust = new Map();
-  for(const r of rows){
-    const k = customerKey(r.customer);
-    if(!byCust.has(k)) byCust.set(k, []);
-    byCust.get(k).push(r);
-  }
-  const gapTickets = [];
-  const gapCustomers = new Set();
-  if(typeof RAW_TICKETS === 'undefined') return { tickets: 0, customers: 0 };
-  for(const t of RAW_TICKETS){
-    const k = customerKey(t.customer);
-    if(!k) continue;
-    const cs = byCust.get(k) || [];
-    const covered = cs.some(c => c._end && (c._end - today) >= 0);
-    if(!covered){ gapTickets.push(t); gapCustomers.add(k); }
-  }
-  return { tickets: gapTickets.length, customers: gapCustomers.size };
-}
+  const pmRows  = (typeof PM_SCHEDULE !== 'undefined' && Array.isArray(PM_SCHEDULE)) ? PM_SCHEDULE : [];
+  const cmcRows = (typeof CMC_DATA    !== 'undefined' && Array.isArray(CMC_DATA))    ? CMC_DATA    : [];
+  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
 
-function _contractsMissingCustomers(rows){
-  if(typeof RAW_TICKETS === 'undefined') return 0;
-  const contractKeys = new Set(rows.map(r => customerKey(r.customer)).filter(Boolean));
-  const ticketKeys = new Set();
-  for(const t of RAW_TICKETS){
-    const k = customerKey(t.customer);
-    if(k) ticketKeys.add(k);
-  }
-  let missing = 0;
-  for(const k of ticketKeys) if(!contractKeys.has(k)) missing++;
-  return missing;
-}
+  // PM ordered first so it wins over CMC at the same tier inside the pool.
+  const contractPool = {
+    all: [
+      ...pmRows.map(r => ({ ...r, _source: 'pm'  })),
+      ...cmcRows.map(r => ({ ...r, _source: 'cmc' })),
+    ],
+    consumed: new Set(),
+  };
+  const pmPool = {
+    all: pmRows.map(r => ({ ...r, _source: 'pm' })),
+    consumed: new Set(),
+  };
 
-// Suspected duplicate customer names within the contract list. Reuses the
-// Jaccard token-overlap approach from v1.3.3 _maComputeAudit (threshold 0.8,
-// min token length 3). Returns groups (>=2 names each).
-function _contractsDuplicateCustomers(rows){
-  const names = [...new Set(rows.map(r => (r.customer || '').trim()).filter(Boolean))];
-  const tokens = name => new Set(
-    name.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(t => t.length >= 3)
+  const rows = ibAssets.map(ib => {
+    const c = _findContractForAsset(ib, contractPool);
+    const p = _findPmForAsset(ib, pmPool);
+
+    const startRaw = c ? (c.row.contractStart || c.row.start || '') : '';
+    const endRaw   = c ? (c.row.contractEnd   || c.row.end   || '') : '';
+    const start = startRaw ? parseFlexDate(startRaw) : null;
+    const end   = endRaw   ? parseFlexDate(endRaw)   : null;
+    const days  = end ? Math.round((end - today) / 86400000) : null;
+    const status = c ? _contractStatus(end, today) : 'no_contract';
+
+    const pmStat = p ? pmStatus(p.row) : null;
+    const sourceName = c && (customerKey(c.row.customer || '') !== customerKey(ib.name || ''))
+      ? c.row.customer
+      : null;
+
+    return {
+      // Canonical from Install Base
+      code:     ib.code,
+      customer: ib.name,
+      model:    ib.model,
+      town:     ib.town,
+      state:    ib.state,
+      region:   ib.state || '',
+      // Contract attached
+      contract: c ? (c.row.contract || '—') : '—',
+      _start: start, _end: end, _days: days, startRaw, endRaw,
+      status,
+      statusLabel: _CONTRACT_BUCKET_LABEL[status] || (status === 'no_contract' ? 'No Contract' : status),
+      // PM attached
+      pm_id:           p ? (p.row.id || '') : '',
+      pm_next_raw:     p ? (p.row.nextPMS || '') : '',
+      pm_status_label: pmStat ? pmStat.label : (p ? '—' : 'NO PM ROW'),
+      pm_status_cls:   pmStat ? (pmStat.cls || '') : '',
+      // Match metadata
+      contract_match_tier: c ? c.tier : 'none',
+      contract_source:     c ? c.row._source : null,
+      contract_source_name: sourceName,
+      pm_match_tier:       p ? p.tier : 'none',
+    };
+  });
+
+  // Truly unmatched = candidates with no possible IB match at any tier.
+  // Rows that *could* have matched (but lost to a higher-tier or PM-priority
+  // claim for the same asset) are alternates, not unmatched, so they're
+  // filtered out of diagnostics.
+  const isMatchableToAnyIb = row => ibAssets.some(ib =>
+    _rowMatchesIb(ib, row, 'exact') ||
+    _rowMatchesIb(ib, row, 'fuzzy') ||
+    _rowMatchesIb(ib, row, 'town_model')
   );
-  const tokSets = names.map(tokens);
+  const leftover = contractPool.all.filter((_, i) => !contractPool.consumed.has(i));
+  const unmatchedContract = leftover.filter(r => !isMatchableToAnyIb(r));
+  const unmatchedPm  = unmatchedContract.filter(r => r._source === 'pm');
+  const unmatchedCmc = unmatchedContract.filter(r => r._source === 'cmc');
+
+  return { rows, unmatchedContract, unmatchedPm, unmatchedCmc };
+}
+
+// Suspected duplicate IB asset records: pairs of CONFIG_ASSETS sharing the
+// same normalized town with Jaccard >= 0.8 on customer name. Returns groups
+// of >= 2 IB names (cold-seed should be empty since IB is canonical).
+function _contractsDuplicateCustomers(){
+  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
   const seen = new Set();
   const groups = [];
-  for(let i = 0; i < names.length; i++){
+  for(let i = 0; i < ibAssets.length; i++){
     if(seen.has(i)) continue;
-    if(tokSets[i].size === 0) continue;
-    const group = [names[i]];
-    for(let j = i + 1; j < names.length; j++){
+    const a = ibAssets[i];
+    const aTown = _normalizeName(a.town);
+    const group = [a.name];
+    for(let j = i + 1; j < ibAssets.length; j++){
       if(seen.has(j)) continue;
-      if(tokSets[j].size === 0) continue;
-      const inter = [...tokSets[i]].filter(t => tokSets[j].has(t)).length;
-      const union = new Set([...tokSets[i], ...tokSets[j]]).size;
-      if(union === 0) continue;
-      if((inter / union) >= 0.8){ group.push(names[j]); seen.add(j); }
+      const b = ibAssets[j];
+      if(_normalizeName(b.town) !== aTown) continue;
+      if(_jaccard(a.name, b.name) >= 0.8){ group.push(b.name); seen.add(j); }
     }
     if(group.length >= 2) groups.push(group);
   }
   return groups;
 }
 
+// Stale contract = matched IB asset with no tickets in the last 12 months.
+// Skips rows where contract_match_tier === 'none' (no contract to be stale).
 function _contractsStaleContracts(rows){
   if(typeof RAW_TICKETS === 'undefined') return 0;
   const today = new Date(); today.setHours(0,0,0,0);
   const cutoff = new Date(today); cutoff.setMonth(cutoff.getMonth() - 12);
-  const lastByCust = new Map();
+  const lastByCode = new Map();
   for(const t of RAW_TICKETS){
-    const k = customerKey(t.customer);
-    if(!k) continue;
+    const c = t.asset_code;
+    if(!c) continue;
     const d = t._callDate;
     if(!d) continue;
-    const prev = lastByCust.get(k);
-    if(!prev || d > prev) lastByCust.set(k, d);
+    const prev = lastByCode.get(c);
+    if(!prev || d > prev) lastByCode.set(c, d);
   }
   let stale = 0;
   for(const r of rows){
+    if(r.contract_match_tier === 'none') continue;
     if(r.status === 'expired' || r.status === 'unknown') continue;
-    const last = lastByCust.get(customerKey(r.customer));
+    const last = lastByCode.get(r.code);
     if(!last || last < cutoff) stale++;
   }
   return stale;
@@ -4845,9 +4913,11 @@ function _contractsApplyFilterSearch(rows){
   if(_contractsSearch){
     const q = _contractsSearch;
     out = out.filter(r =>
+      (r.code     || '').toLowerCase().includes(q) ||
       (r.customer || '').toLowerCase().includes(q) ||
-      (r.model || '').toLowerCase().includes(q) ||
-      (r.town || '').toLowerCase().includes(q)
+      (r.model    || '').toLowerCase().includes(q) ||
+      (r.town     || '').toLowerCase().includes(q) ||
+      (r.state    || '').toLowerCase().includes(q)
     );
   }
   return out;
@@ -4856,6 +4926,7 @@ function _contractsApplyFilterSearch(rows){
 function _contractsApplySort(rows){
   const { key, dir } = _contractsSort;
   const mul = dir === 'desc' ? -1 : 1;
+  const TIER_RANK = { exact: 0, fuzzy: 1, town_model: 2, none: 3 };
   const cmp = (a, b) => {
     let va, vb;
     if(key === 'days'){
@@ -4865,6 +4936,15 @@ function _contractsApplySort(rows){
       const ka = key === 'start' ? '_start' : '_end';
       va = a[ka] ? a[ka].getTime() : Number.POSITIVE_INFINITY;
       vb = b[ka] ? b[ka].getTime() : Number.POSITIVE_INFINITY;
+    } else if(key === 'pm_status'){
+      va = (a.pm_status_label || '').toLowerCase();
+      vb = (b.pm_status_label || '').toLowerCase();
+    } else if(key === 'match'){
+      va = TIER_RANK[a.contract_match_tier] ?? 99;
+      vb = TIER_RANK[b.contract_match_tier] ?? 99;
+    } else if(key === 'town'){
+      va = ((a.town || '') + ' ' + (a.state || '')).toLowerCase();
+      vb = ((b.town || '') + ' ' + (b.state || '')).toLowerCase();
     } else {
       va = (a[key] || '').toString().toLowerCase();
       vb = (b[key] || '').toString().toLowerCase();
@@ -4909,16 +4989,15 @@ function _contractsTypePill(c){
 function renderContracts(){
   const container = document.getElementById('contracts-body');
   if(!container) return;
-  const today = new Date(); today.setHours(0,0,0,0);
 
-  const allRows = _aggregateContracts();
-  const counts = { expired:0, d0_30:0, d31_60:0, d61_90:0, active:0, unknown:0 };
+  const agg = _aggregateContracts();
+  const allRows = agg.rows;
+  const counts = { expired:0, d0_30:0, d31_60:0, d61_90:0, active:0, unknown:0, no_contract:0 };
   for(const r of allRows) counts[r.status] = (counts[r.status] || 0) + 1;
 
-  const gaps = _contractsCoverageGaps(allRows);
-  const missing = _contractsMissingCustomers(allRows);
-  const dupGroups = _contractsDuplicateCustomers(allRows);
-  const stale = _contractsStaleContracts(allRows);
+  const noContract = counts.no_contract || 0;
+  const dupGroups  = _contractsDuplicateCustomers();
+  const stale      = _contractsStaleContracts(allRows);
 
   const tile = (key, label, sub) => {
     const color = _CONTRACT_BUCKET_COLOR[key];
@@ -4942,9 +5021,10 @@ function renderContracts(){
       </div>
     </section>`;
 
-  const dupSample = dupGroups.slice(0, 3)
-    .map(g => g.join(' / '))
-    .join(' · ');
+  const noContractSample = allRows.filter(r => r.contract_match_tier === 'none').slice(0,3).map(r => `${r.customer} (${r.code})`).join(' · ');
+  const cmcSample = agg.unmatchedCmc.slice(0,3).map(r => `${r.customer || '—'}${r.town ? ' (' + r.town + ')' : ''}`).join(' · ');
+  const pmSample  = agg.unmatchedPm .slice(0,3).map(r => `${r.customer || '—'}${r.town ? ' (' + r.town + ')' : ''}`).join(' · ');
+  const dupSample = dupGroups.slice(0,3).map(g => g.join(' / ')).join(' · ');
   const diagCard = (label, value, sub, tip) => `
     <div class="kpi-card" ${tip ? `title="${esc(tip)}"` : ''} style="padding:14px 16px">
       <div class="kpi-label">${label}</div>
@@ -4955,10 +5035,10 @@ function renderContracts(){
     <section aria-labelledby="contracts-diag-title" style="margin-top:18px">
       <h3 id="contracts-diag-title" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Data Diagnostics</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
-        ${diagCard('Coverage Gaps', gaps.tickets, `${gaps.customers} customer${gaps.customers===1?'':'s'} · tickets without active contract`)}
-        ${diagCard('Missing Customers', missing, 'In tickets, not in contract list')}
-        ${diagCard('Duplicate Names', dupGroups.length, dupGroups.length ? `Suspected groups${dupSample ? ' · ' + dupSample : ''}` : 'No suspected duplicates', dupGroups.length ? dupSample : '')}
-        ${diagCard('Stale Contracts', stale, 'Active contract · no tickets in last 12 mo')}
+        ${diagCard('IB Assets · No Contract', noContract, noContract ? `${noContract} of ${allRows.length} install-base assets${noContractSample ? ' · ' + esc(noContractSample) : ''}` : 'All install-base assets matched', noContract ? noContractSample : '')}
+        ${diagCard('Unmatched Contract Rows', agg.unmatchedCmc.length, agg.unmatchedCmc.length ? `CMC rows not matched to any IB asset${cmcSample ? ' · ' + esc(cmcSample) : ''}` : 'All CMC rows matched', cmcSample)}
+        ${diagCard('Unmatched PM Rows', agg.unmatchedPm.length, agg.unmatchedPm.length ? `PM rows not matched to any IB asset${pmSample ? ' · ' + esc(pmSample) : ''}` : 'All PM rows matched', pmSample)}
+        ${diagCard('Suspected Duplicate IB', dupGroups.length, dupGroups.length ? `Same town · high name overlap${dupSample ? ' · ' + esc(dupSample) : ''}` : 'No suspected duplicates', dupSample)}
       </div>
     </section>`;
 
@@ -4970,6 +5050,7 @@ function renderContracts(){
     { key:'d61_90',  short:'61–90 d',     full:_CONTRACT_BUCKET_LABEL.d61_90,  n: counts.d61_90 },
     { key:'active',  short:'Active',      full:_CONTRACT_BUCKET_LABEL.active,  n: counts.active },
     { key:'unknown', short:'Unknown',     full:_CONTRACT_BUCKET_LABEL.unknown, n: counts.unknown },
+    { key:'no_contract', short:'No Contract', full:'No contract attached', n: counts.no_contract },
   ];
   const filterButtons = filterDefs.map(t => {
     const active = _contractsActiveFilter === t.key;
@@ -4989,8 +5070,8 @@ function renderContracts(){
     : '';
 
   const searchInput = `
-    <input type="search" class="search-box" placeholder="Search customer, model, or town…"
-           aria-label="Search contracts by customer, model, or town"
+    <input type="search" class="search-box" placeholder="Search code, customer, model, or town…"
+           aria-label="Search contracts by code, customer, model, or town"
            value="${esc(_contractsSearch)}"
            oninput="_contractsSetSearch(this.value)"
            style="max-width:280px">`;
@@ -5006,32 +5087,54 @@ function renderContracts(){
     return `<th aria-sort="${ariaSort}" style="text-align:${align||'left'};cursor:pointer" onclick="_contractsSetSort('${key}')" title="Sort by ${esc(label)}">${esc(label)}${sortIcon(key)}</th>`;
   };
 
+  const TIER_PILL_COLOR = { exact:'#10b981', fuzzy:'#3b82f6', town_model:'#f59e0b', none:'#94a3b8' };
+  const TIER_PILL_LABEL = { exact:'exact', fuzzy:'fuzzy', town_model:'town+model', none:'none' };
+  const matchPill = r => {
+    const tier = r.contract_match_tier || 'none';
+    const color = TIER_PILL_COLOR[tier];
+    const tip = r.contract_source_name
+      ? `Matched to ${r.contract_source || '?'} row "${r.contract_source_name}" via ${TIER_PILL_LABEL[tier]} tier`
+      : `Match tier: ${TIER_PILL_LABEL[tier]}${r.contract_source ? ' · ' + r.contract_source : ''}`;
+    return `<span class="badge low" title="${esc(tip)}" style="background:${color}1a;color:${color};font-size:10px">${esc(TIER_PILL_LABEL[tier])}</span>`;
+  };
+
+  const PM_STATUS_COLOR = { critical:'#ef4444', high:'#f59e0b', medium:'#eab308', planned:'#3b82f6', low:'#94a3b8', unknown:'#94a3b8' };
+  const pmCell = r => {
+    if(r.pm_match_tier === 'none') return `<span style="color:var(--text-faint);font-size:11px">—</span>`;
+    const color = PM_STATUS_COLOR[r.pm_status_cls] || '#94a3b8';
+    const next = r.pm_next_raw || '—';
+    return `<div style="line-height:1.3"><span style="font-family:var(--mono);font-size:11px">${esc(next)}</span><br><span class="badge low" style="background:${color}1a;color:${color};font-size:9px">${esc(r.pm_status_label)}</span></div>`;
+  };
+
   const tableRows = pagedRows.length
     ? pagedRows.map(r => `
         <tr>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(r.code)}</td>
           <td style="font-weight:500">${esc(r.customer)}</td>
           <td style="font-size:11px;color:var(--text-dim);font-family:var(--mono)">${esc(r.model)}</td>
           <td>${_contractsTypePill(r.contract)}</td>
           <td style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._start))}</td>
           <td style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._end))}</td>
           <td style="text-align:right">${_contractsDayBadge(r._days)}</td>
-          <td><span class="badge low" style="background:${_CONTRACT_BUCKET_COLOR[r.status]}1a;color:${_CONTRACT_BUCKET_COLOR[r.status]}">${esc(r.statusLabel)}</span></td>
-          <td style="font-size:11px;color:var(--text-dim)">${esc(r.town)}${r.region ? ' · ' + esc(r.region) : ''}</td>
+          <td><span class="badge low" style="background:${(_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8')}1a;color:${_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8'}">${esc(r.statusLabel)}</span></td>
+          <td>${pmCell(r)}</td>
+          <td style="font-size:11px;color:var(--text-dim)">${esc(r.town || '')}${r.region ? ' · ' + esc(r.region) : ''}</td>
+          <td>${matchPill(r)}</td>
         </tr>`).join('')
-    : `<tr><td colspan="8"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
+    : `<tr><td colspan="11"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
 
   const pagination = sorted.length > CONTRACTS_PAGE_SIZE ? `
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px">
       <button type="button" class="btn btn-ghost" ${_contractsPage <= 1 ? 'disabled' : ''} onclick="_contractsSetPage(${_contractsPage - 1})" aria-label="Previous page">‹ Prev</button>
-      <span aria-live="polite" style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">Page ${_contractsPage} of ${pageCount} · ${sorted.length} contract${sorted.length===1?'':'s'}</span>
+      <span aria-live="polite" style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">Page ${_contractsPage} of ${pageCount} · ${sorted.length} asset${sorted.length===1?'':'s'}</span>
       <button type="button" class="btn btn-ghost" ${_contractsPage >= pageCount ? 'disabled' : ''} onclick="_contractsSetPage(${_contractsPage + 1})" aria-label="Next page">Next ›</button>
     </div>` : (sorted.length > 0
-      ? `<div style="text-align:center;margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--text-dim)">${sorted.length} contract${sorted.length===1?'':'s'}</div>`
+      ? `<div style="text-align:center;margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--text-dim)">${sorted.length} asset${sorted.length===1?'':'s'}</div>`
       : '');
 
   const tableSection = `
     <section aria-labelledby="contracts-table-title" style="margin-top:18px">
-      <h3 id="contracts-table-title" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">All Contracts</h3>
+      <h3 id="contracts-table-title" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">All Install-Base Assets · Contracts</h3>
       <div role="group" aria-label="Filter contracts by expiry bucket" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">
         ${filterButtons}
       </div>
@@ -5042,6 +5145,7 @@ function renderContracts(){
       <div style="overflow-x:auto">
         <table class="data-table">
           <thead><tr>
+            ${th('code','Code')}
             ${th('customer','Customer')}
             ${th('model','Asset / Model')}
             ${th('contract','Type')}
@@ -5049,7 +5153,9 @@ function renderContracts(){
             ${th('end','End')}
             ${th('days','Days', 'right')}
             ${th('status','Status')}
+            ${th('pm_status','PM Next / Status')}
             ${th('town','Town / Region')}
+            ${th('match','Match')}
           </tr></thead>
           <tbody>${tableRows}</tbody>
         </table>
@@ -5064,20 +5170,25 @@ function renderContracts(){
 }
 
 function exportContractsCSV(){
-  const allRows = _aggregateContracts();
+  const allRows = _aggregateContracts().rows;
   const filtered = _contractsApplyFilterSearch(allRows);
   const sorted = _contractsApplySort(filtered);
   if(sorted.length === 0) return;
-  const headers = ['customer','model','contract_type','start_date','end_date','days_to_expiry','status','town'];
+  const headers = ['asset_code','customer','model','contract_type','contract_start','contract_end','days_to_expiry','contract_status','pm_next','pm_status','town_region','match_confidence','contract_source'];
   const data = sorted.map(r => [
+    r.code || '',
     r.customer || '',
     r.model || '',
-    r.contract || '',
+    r.contract === '—' ? '' : (r.contract || ''),
     _contractsIsoDate(r._start),
     _contractsIsoDate(r._end),
     (r._days === null || r._days === undefined) ? '' : r._days,
     r.status || '',
+    r.pm_next_raw || '',
+    r.pm_match_tier === 'none' ? '' : (r.pm_status_label || ''),
     r.region ? `${r.town || ''} · ${r.region}` : (r.town || ''),
+    r.contract_match_tier || '',
+    r.contract_source || '',
   ]);
   _downloadCSV(`contracts-${_tsStamp()}.csv`, headers, data);
   try { logAudit('export_csv', {scope: 'contracts', rows: sorted.length}); } catch(_){}
@@ -5086,11 +5197,10 @@ function exportContractsCSV(){
 // #nb-contracts badge — counts urgent contracts (expired + d0_30).
 // Pure read; no Supabase calls, no state mutation.
 function _refreshContractsNavBadge(){
-  if(typeof PM_SCHEDULE === 'undefined' && typeof CMC_DATA === 'undefined') return;
-  const today = new Date(); today.setHours(0,0,0,0);
+  if(typeof CONFIG_ASSETS === 'undefined' && typeof PM_SCHEDULE === 'undefined' && typeof CMC_DATA === 'undefined') return;
   let expired = 0, d30 = 0;
   try {
-    for(const r of _aggregateContracts()){
+    for(const r of _aggregateContracts().rows){
       if(r.status === 'expired') expired++;
       else if(r.status === 'd0_30') d30++;
     }
@@ -5254,19 +5364,22 @@ function fmtDate(s){
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
 }
 
-// v1.2.0 2a — PM Schedule column sort.
+// v1.4.0 — PM Schedule column sort. Rows are IB-anchored {ib, pm, st, tier};
+// pm/st may be null for IB assets without a matching PM row, so accessors
+// fall back to ib fields and null-sort to the bottom for PM-only columns.
 const _PM_SORT_COLS = [
-  { key:'id',         label:'ID',        accessor: r => r.pm.id },
-  { key:'customer',   label:'CUSTOMER',  accessor: r => (r.pm.customer||'').toLowerCase() },
-  { key:'place',      label:'PLACE',     accessor: r => (r.pm.town||'').toLowerCase() },
-  { key:'model',      label:'MODEL',     accessor: r => (r.pm.model||'').toLowerCase() },
-  { key:'contract',   label:'CONTRACT',  accessor: r => (r.pm.contract||'').toLowerCase() },
-  { key:'freq',       label:'FREQ',      accessor: r => r.pm.freq ?? null },
-  { key:'last_pms',   label:'LAST PMS',  accessor: r => parseFlexDate(r.pm.lastPMS)?.getTime() ?? null, defaultDir:'desc' },
-  { key:'next_due',   label:'NEXT DUE',  accessor: r => parseFlexDate(r.pm.nextPMS)?.getTime() ?? null },
+  { key:'code',       label:'CODE',      accessor: r => r.ib?.code || '' },
+  { key:'customer',   label:'CUSTOMER',  accessor: r => (r.ib?.name || r.pm?.customer || '').toLowerCase() },
+  { key:'place',      label:'PLACE',     accessor: r => (r.ib?.town || r.pm?.town || '').toLowerCase() },
+  { key:'model',      label:'MODEL',     accessor: r => (r.ib?.model || r.pm?.model || '').toLowerCase() },
+  { key:'contract',   label:'CONTRACT',  accessor: r => (r.pm?.contract||'').toLowerCase() },
+  { key:'freq',       label:'FREQ',      accessor: r => r.pm?.freq ?? null },
+  { key:'last_pms',   label:'LAST PMS',  accessor: r => r.pm ? (parseFlexDate(r.pm.lastPMS)?.getTime() ?? null) : null, defaultDir:'desc' },
+  { key:'next_due',   label:'NEXT DUE',  accessor: r => r.pm ? (parseFlexDate(r.pm.nextPMS)?.getTime() ?? null) : null },
   { key:'window',     label:'WINDOW',    sortable:false },
   { key:'engineers',  label:'ENGINEERS', sortable:false },
-  { key:'status',     label:'STATUS',    accessor: r => r.st.priority },  // sort by urgency bucket
+  { key:'status',     label:'STATUS',    accessor: r => r.st ? r.st.priority : 99 },
+  { key:'match',      label:'MATCH',     accessor: r => ({exact:0,fuzzy:1,town_model:2,none:3}[r.tier] ?? 9) },
   { key:'action',     label:'ACTION',    sortable:false, thAttrs:'class="pm-action-col"' },
 ];
 let _pmSortInited = false;
@@ -5277,62 +5390,123 @@ function _initPmSort(){
 }
 
 function renderPM(){
+  // ── IB-anchored row construction (v1.4.0) ──────────────────
+  // One row per CONFIG_ASSETS entry. Each row pairs an IB asset with its
+  // best-tier PM match (or null if no PM row matches). Loose PM rows that
+  // match no IB asset at any tier are surfaced in a diagnostic, not the
+  // main table — keeping Install Base / Contracts / PM aligned on one
+  // canonical asset list.
+  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
+  const pmAll = (typeof PM_SCHEDULE !== 'undefined' && Array.isArray(PM_SCHEDULE)) ? PM_SCHEDULE.map(p => ({...p, _source:'pm'})) : [];
+  const pmPool = { all: pmAll, consumed: new Set() };
+
+  const allRows = ibAssets.map(ib => {
+    const m = (typeof _findPmForAsset === 'function') ? _findPmForAsset(ib, pmPool) : null;
+    const pm = m ? m.row : null;
+    return { ib, pm, st: pm ? pmStatus(pm) : null, tier: m ? m.tier : 'none' };
+  });
+
+  // Truly unmatched PM rows = leftover candidates that match no IB at any tier.
+  const isMatchableToAnyIb = pm => ibAssets.some(ib =>
+    _rowMatchesIb(ib, pm, 'exact') ||
+    _rowMatchesIb(ib, pm, 'fuzzy') ||
+    _rowMatchesIb(ib, pm, 'town_model')
+  );
+  const leftover = pmAll.filter((_, i) => !pmPool.consumed.has(i));
+  const unmatchedPm = leftover.filter(p => !isMatchableToAnyIb(p));
+
   // ── Overview stats ──────────────────────────────────────────
-  const statuses = PM_SCHEDULE.map(pm=>pmStatus(pm));
-  const overdueCount = statuses.filter(s=>s.code==='overdue').length;
-  const inWindowCount = statuses.filter(s=>s.code==='in-window').length;
-  const upcomingCount = statuses.filter(s=>s.code==='upcoming'||s.code==='scheduled').length;
-  const pendingCount = statuses.filter(s=>s.code==='installation'||s.code==='unscheduled').length;
+  // Status counts only consider matched rows (rows with a PM).
+  const matchedRows = allRows.filter(r => r.pm);
+  const statuses = matchedRows.map(r => r.st);
+  const overdueCount    = statuses.filter(s=>s.code==='overdue').length;
+  const inWindowCount   = statuses.filter(s=>s.code==='in-window').length;
+  const upcomingCount   = statuses.filter(s=>s.code==='upcoming'||s.code==='scheduled').length;
+  const pendingCount    = statuses.filter(s=>s.code==='installation'||s.code==='unscheduled').length;
   const notCoveredCount = statuses.filter(s=>s.code==='not-covered').length;
+  const noPmCount       = allRows.length - matchedRows.length;
 
   document.getElementById('pm-overview-stats').innerHTML = `
     <div class="kpi-card red" style="cursor:pointer" onclick="pmFilterStatus='overdue';renderPM()"><div class="kpi-label">OVERDUE</div><div class="kpi-value red">${overdueCount}</div><div class="kpi-delta down">Immediate action</div></div>
     <div class="kpi-card amber" style="cursor:pointer" onclick="pmFilterStatus='in-window';renderPM()"><div class="kpi-label">IN PM WINDOW</div><div class="kpi-value amber">${inWindowCount}</div><div class="kpi-delta warn">±15 days of due</div></div>
     <div class="kpi-card blue" style="cursor:pointer" onclick="pmFilterStatus='upcoming';renderPM()"><div class="kpi-label">UPCOMING</div><div class="kpi-value blue">${upcomingCount}</div><div class="kpi-delta">Scheduled ahead</div></div>
-    <div class="kpi-card purple"><div class="kpi-label">PENDING / N/A</div><div class="kpi-value purple">${pendingCount + notCoveredCount}</div><div class="kpi-delta">${pendingCount} pending, ${notCoveredCount} not covered</div></div>
-    <div class="kpi-card cyan"><div class="kpi-label">TOTAL MACHINES</div><div class="kpi-value cyan">${PM_SCHEDULE.length}</div><div class="kpi-delta">${PM_SCHEDULE.filter(p=>p.freq>0).length} with PM schedule</div></div>
+    <div class="kpi-card purple"><div class="kpi-label">PENDING / NO PM</div><div class="kpi-value purple">${pendingCount + notCoveredCount + noPmCount}</div><div class="kpi-delta">${pendingCount} pending · ${notCoveredCount} not covered · ${noPmCount} no PM row</div></div>
+    <div class="kpi-card cyan"><div class="kpi-label">TOTAL MACHINES</div><div class="kpi-value cyan">${ibAssets.length}</div><div class="kpi-delta">${matchedRows.filter(r=>(r.pm.freq||0)>0).length} with PM schedule · ${noPmCount} unmatched</div></div>
   `;
 
   // ── PM table ───────────────────────────────────────────────
-  let rows = PM_SCHEDULE.map(pm => ({pm, st: pmStatus(pm)}));
+  let rows = allRows;
   if(pmFilterStatus !== 'all'){
     rows = rows.filter(r => {
+      if(!r.pm || !r.st) return false; // rows without PM cannot be filtered by PM status
       if(pmFilterStatus==='overdue') return r.st.code==='overdue';
       if(pmFilterStatus==='in-window') return r.st.code==='in-window';
       if(pmFilterStatus==='upcoming') return r.st.code==='upcoming'||r.st.code==='scheduled';
       return true;
     });
   }
-  // v1.2.0 2a — sortable headers. Default is by next-due ascending so the
-  // "what's due next" question reads off the top. Users can click any column
-  // to override; sort survives filter clicks via _sortState.
+  // v1.2.0 2a / v1.4.0 — sortable headers. Default is by next-due ascending so
+  // the "what's due next" question reads off the top. IB assets without a PM
+  // row sort to the bottom on PM-only columns thanks to null-sort contract.
   _initPmSort();
   const pmTheadRow = document.getElementById('pm-thead-row');
   if(pmTheadRow) pmTheadRow.innerHTML = renderSortableHeaders('pm');
   rows = applySort('pm', rows);
 
-  document.getElementById('pm-count-label').textContent = PM_SCHEDULE.length;
-  document.getElementById('pm-body').innerHTML = rows.map(({pm, st}) => {
+  document.getElementById('pm-count-label').textContent = ibAssets.length;
+
+  const PM_TIER_PILL_COLOR = { exact:'#10b981', fuzzy:'#3b82f6', town_model:'#f59e0b', none:'#94a3b8' };
+  const PM_TIER_PILL_LABEL = { exact:'exact', fuzzy:'fuzzy', town_model:'town+model', none:'none' };
+
+  document.getElementById('pm-body').innerHTML = rows.map(({ib, pm, st, tier}) => {
+    const cust = ib?.name || pm?.customer || '—';
+    const town = ib?.town || pm?.town || '—';
+    const model = ib?.model || pm?.model || '—';
+    const region = pm?.region || ib?.state || '';
+    const tierColor = PM_TIER_PILL_COLOR[tier] || '#94a3b8';
+    const tierTip   = pm && customerKey(pm.customer || '') !== customerKey(ib?.name || '')
+      ? `Matched PM "${pm.customer}" via ${PM_TIER_PILL_LABEL[tier]} tier`
+      : `Match tier: ${PM_TIER_PILL_LABEL[tier]}`;
+    const matchCell = `<span class="badge low" title="${esc(tierTip)}" style="background:${tierColor}1a;color:${tierColor};font-size:10px">${esc(PM_TIER_PILL_LABEL[tier])}</span>`;
+
+    if(!pm){
+      // IB asset with no PM row — read-only placeholder, no actions.
+      return `<tr style="opacity:.7">
+        <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(ib.code)}</td>
+        <td style="font-weight:500;max-width:180px">${esc(cust)}</td>
+        <td style="font-size:11px;color:var(--text-dim)">${esc(town)}</td>
+        <td style="font-size:11px;color:var(--text-dim)">${esc(model)}</td>
+        <td><span class="badge low">—</span></td>
+        <td style="font-family:var(--mono);text-align:center">—</td>
+        <td style="font-family:var(--mono);font-size:10px">—</td>
+        <td style="font-family:var(--mono);font-size:10px">—</td>
+        <td style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">—</td>
+        <td style="font-size:10px;color:var(--text-faint)">—</td>
+        <td><span class="badge unknown">NO PM ROW</span></td>
+        <td>${matchCell}</td>
+        <td class="pm-action-col"><span style="color:var(--text-faint);font-size:10px">—</span></td>
+      </tr>`;
+    }
+
     const engineers = getEngineersForRegion(pm.region);
     const engNames = engineers.length ? engineers.map(e=>esc(e.name.split(' ')[0])).join(', ') : '<span style="color:var(--red)">Unassigned</span>';
     const dueDate = pm.nextPMS ? parseFlexDate(pm.nextPMS) : null;
     let windowStr = '—';
     if(dueDate){
       const wStart = new Date(dueDate); wStart.setDate(wStart.getDate()-PM_WINDOW_DAYS);
-      const wEnd = new Date(dueDate); wEnd.setDate(wEnd.getDate()+PM_WINDOW_DAYS);
+      const wEnd   = new Date(dueDate); wEnd.setDate(wEnd.getDate()+PM_WINDOW_DAYS);
       windowStr = `${wStart.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} – ${wEnd.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}`;
     }
-    // Gmail mailto link
     const emailAction = (st.code==='overdue'||st.code==='in-window') && engineers.length
       ? `<button class="btn btn-primary pm-manage" style="font-size:9px;padding:3px 8px" onclick="composePMEmail('${pm.id}')"><i data-lucide="mail"></i>Remind</button>`
       : (st.code==='installation' || st.code==='not-covered')
         ? `<span style="color:var(--text-faint);font-size:10px">N/A</span>`
         : `<span style="color:var(--text-faint);font-size:10px">Not yet</span>`;
     return `<tr>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(pm.id)}</td>
-      <td style="font-weight:500;max-width:180px">${esc(pm.customer)}</td>
-      <td style="font-size:11px;color:var(--text-dim)">${esc(pm.town)}</td>
-      <td style="font-size:11px;color:var(--text-dim)">${esc(pm.model)}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(ib?.code || pm.id)}</td>
+      <td style="font-weight:500;max-width:180px">${esc(cust)}</td>
+      <td style="font-size:11px;color:var(--text-dim)">${esc(town)}</td>
+      <td style="font-size:11px;color:var(--text-dim)">${esc(model)}</td>
       <td><span class="badge ${pm.contract.toLowerCase()==='cmc'?'cmc':pm.contract.toLowerCase()==='warranty'?'warranty':'low'}">${esc(pm.contract)}</span></td>
       <td style="font-family:var(--mono);text-align:center">${pm.freq||'—'}</td>
       <td style="font-family:var(--mono);font-size:10px">${fmtDate(pm.lastPMS)}</td>
@@ -5340,9 +5514,34 @@ function renderPM(){
       <td style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">${windowStr}</td>
       <td style="font-size:10px">${engNames}</td>
       <td><span class="badge ${st.cls}">${st.label}</span>${st.daysText?`<div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:2px">${st.daysText}</div>`:''}</td>
+      <td>${matchCell}</td>
       <td class="pm-action-col">${emailAction}</td>
     </tr>`;
   }).join('');
+
+  // ── PM Diagnostics (v1.4.0) ────────────────────────────────
+  // Exposes IB-anchored mismatches: assets with no PM row, and PM rows that
+  // don't fit any IB asset at any tier. Keeps the main table clean while
+  // making the gap visible.
+  const pmDiagEl = document.getElementById('pm-diagnostics');
+  if(pmDiagEl){
+    const noPmSample = allRows.filter(r => !r.pm).slice(0,3).map(r => `${r.ib.name} (${r.ib.code})`).join(' · ');
+    const unmSample  = unmatchedPm.slice(0,3).map(r => `${r.customer || '—'}${r.town ? ' (' + r.town + ')' : ''}`).join(' · ');
+    pmDiagEl.innerHTML = `
+      <h3 style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Data Diagnostics</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+        <div class="kpi-card" style="padding:14px 16px"${noPmSample ? ` title="${esc(noPmSample)}"` : ''}>
+          <div class="kpi-label">IB Assets · No PM Row</div>
+          <div class="kpi-value" style="font-size:24px">${noPmCount}</div>
+          <div class="kpi-foot" style="font-size:11px;color:var(--text-dim)">${noPmCount ? `${noPmCount} of ${allRows.length} install-base assets${noPmSample ? ' · ' + esc(noPmSample) : ''}` : 'All install-base assets have a PM row'}</div>
+        </div>
+        <div class="kpi-card" style="padding:14px 16px"${unmSample ? ` title="${esc(unmSample)}"` : ''}>
+          <div class="kpi-label">Unmatched PM Rows</div>
+          <div class="kpi-value" style="font-size:24px">${unmatchedPm.length}</div>
+          <div class="kpi-foot" style="font-size:11px;color:var(--text-dim)">${unmatchedPm.length ? `PM rows not matched to any IB asset${unmSample ? ' · ' + esc(unmSample) : ''}` : 'All PM rows matched'}</div>
+        </div>
+      </div>`;
+  }
 
   // ── PM Timeline ────────────────────────────────────────────
   renderPMTimeline();
