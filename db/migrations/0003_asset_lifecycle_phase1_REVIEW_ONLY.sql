@@ -117,37 +117,19 @@
 -- approved). Then PROD.
 -- ═════════════════════════════════════════════════════════════════════
 
--- ── 0. Pre-flight: ensure config_assets.code is uniquely indexed ────
--- The lifecycle FK requires a UNIQUE constraint on the parent column.
--- If a PRIMARY KEY or UNIQUE constraint on `code` already exists, this
--- block is a no-op.
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_constraint c
-    join pg_class t on t.oid = c.conrelid
-    where t.relname = 'config_assets'
-      and c.contype in ('p','u')
-      and (
-        select array_agg(a.attname order by k.ord)
-        from unnest(c.conkey) with ordinality k(attnum, ord)
-        join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum
-      ) = array['code']::name[]
-  ) then
-    -- Defensive: only add a unique index, NOT a constraint, so we don't
-    -- collide with any future PRIMARY KEY decision.
-    if not exists (
-      select 1 from pg_indexes
-      where schemaname = 'public'
-        and tablename  = 'config_assets'
-        and indexname  = 'config_assets_code_uidx'
-    ) then
-      create unique index config_assets_code_uidx
-        on public.config_assets(code);
-    end if;
-  end if;
-end $$;
+-- ── 0. Pre-flight (NOT NEEDED — staging inspection confirmed) ───────
+-- The 2026-05-09 staging inspection (§3.1 in phase1_review.md)
+-- confirmed that config_assets.code is already a PRIMARY KEY
+-- (constraint `config_assets_pkey`, index `config_assets_pkey`). The
+-- existing FK `config_assets_alias_of_fkey` already references
+-- config_assets(code), proving the uniqueness is in place.
+--
+-- Therefore the defensive unique-index block (kept for environments
+-- where the constraint might not exist) is REMOVED from this version.
+-- The asset_lifecycle FK in §2 below references config_assets(code)
+-- and will resolve against the existing PRIMARY KEY.
+--
+-- (No SQL in this section.)
 
 -- ═════════════════════════════════════════════════════════════════════
 -- §1a. user_roles table (structure only — RLS in §1c)
@@ -430,15 +412,24 @@ end $$;
 -- ── 1. Extend config_assets ─────────────────────────────────────────
 -- Adds lifecycle status + audit fields. All nullable except `status`
 -- which defaults to 'active' so existing rows are unaffected.
+--
+-- 2026-05-09 staging inspection note: config_assets ALREADY has
+-- `created_at` and `updated_at` columns from the XLSX-era schema, so
+-- the two `add column if not exists` lines for those columns are
+-- intentional no-ops on staging/prod. They are kept here for
+-- robustness (in case a fresh environment runs this migration without
+-- the legacy columns). The new audit fields actually added by 0003
+-- are: status, de_installed_at, de_installed_by, created_by,
+-- updated_by, note.
 alter table public.config_assets
   add column if not exists status            text         not null default 'active'
     check (status in ('active','de_installed')),
   add column if not exists de_installed_at   timestamptz,
   add column if not exists de_installed_by   uuid,
   add column if not exists created_by        uuid,
-  add column if not exists created_at        timestamptz  not null default now(),
+  add column if not exists created_at        timestamptz  not null default now(),  -- pre-existing on staging
   add column if not exists updated_by        uuid,
-  add column if not exists updated_at        timestamptz  not null default now(),
+  add column if not exists updated_at        timestamptz  not null default now(),  -- pre-existing on staging
   add column if not exists note              text;
 
 comment on column public.config_assets.status is

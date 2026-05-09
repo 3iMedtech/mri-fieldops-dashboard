@@ -86,16 +86,20 @@ drop table if exists public.user_roles cascade;
 
 -- ── 5. config_assets columns (reverse of 0003 §1) ───────────────────
 -- LEFT IN PLACE BY DEFAULT. These columns are nullable / defaulted and
--- cause no harm. To fully remove them, uncomment the block below.
+-- cause no harm. NOTE: per 2026-05-09 staging inspection, config_assets
+-- already has its own `created_at` and `updated_at` columns (XLSX-era).
+-- The migration's `add column if not exists` is a no-op for those two,
+-- so the rollback's column drop list below would also be a no-op for
+-- pre-existing columns. Drop only the columns 0003 actually added:
+-- status, de_installed_at, de_installed_by, created_by, updated_by,
+-- note. DO NOT drop created_at / updated_at — they pre-date 0003.
 -- BEFORE UNCOMMENTING: confirm that no app code, no view, and no other
 -- migration references status / de_installed_at / created_by / etc.
 
 -- alter table public.config_assets
 --   drop column if exists note,
 --   drop column if exists updated_by,
---   drop column if exists updated_at,
 --   drop column if exists created_by,
---   drop column if exists created_at,
 --   drop column if exists de_installed_by,
 --   drop column if exists de_installed_at,
 --   drop column if exists status;
@@ -103,9 +107,9 @@ drop table if exists public.user_roles cascade;
 -- drop index if exists public.config_assets_active_idx;
 
 -- ── 6. Defensive unique index on config_assets.code ─────────────────
--- 0003 §0 only created this index if no PK/UNIQUE existed on `code`.
--- Drop only if it was created by 0003 (recognizable by the
--- 'config_assets_code_uidx' name).
-drop index if exists public.config_assets_code_uidx;
+-- Not needed. 2026-05-09 staging inspection confirmed config_assets.code
+-- is already PRIMARY KEY (constraint config_assets_pkey). The 0003 §0
+-- block was removed in the inspection-incorporation commit, so this
+-- rollback section is now a no-op. Kept here as a header for symmetry.
 
 -- ── End of rollback ─────────────────────────────────────────────────
