@@ -226,11 +226,35 @@ as $$
   );
 $$;
 
+-- Boolean: returns true if another active admin row exists whose
+-- user_id <> target_user_id. Required to break RLS recursion inside
+-- the v141_user_roles_write_admin WITH CHECK clause: a direct EXISTS
+-- subquery against user_roles inside a policy on user_roles is
+-- detected as recursive at runtime by PostgreSQL even when the helper
+-- functions in the same policy are security definer. Wrapping the
+-- subquery in its own security-definer function bypasses RLS during
+-- evaluation and breaks the cycle.
+create or replace function public._other_active_admin_exists(target_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.user_roles
+     where role    = 'admin'
+       and active  = true
+       and user_id <> target_user_id
+  );
+$$;
+
 -- Grant execute to authenticated so PostgREST can call them as the
 -- caller's session.
 grant execute on function public.app_user_role() to authenticated;
 grant execute on function public.app_can_write() to authenticated;
 grant execute on function public.app_is_admin() to authenticated;
+grant execute on function public._other_active_admin_exists(uuid) to authenticated;
 
 -- Lock function ownership / discourage rewrite without review.
 comment on function public.app_user_role() is
@@ -244,6 +268,11 @@ comment on function public.app_can_write() is
 comment on function public.app_is_admin() is
   'Boolean: caller is admin. Used by user_roles write policies and '
   'admin-only routes.';
+comment on function public._other_active_admin_exists(uuid) is
+  'Returns true if another active admin row exists with user_id <> '
+  'target_user_id. SECURITY DEFINER + locked search_path; required '
+  'to break RLS recursion in the v141_user_roles_write_admin WITH '
+  'CHECK clause. Do not modify without security review.';
 
 
 -- ═════════════════════════════════════════════════════════════════════
@@ -281,6 +310,14 @@ create policy "v141_user_roles_select_admin"
 -- It does NOT prevent NEW admin rows from being created (that's net-positive).
 -- DELETE is handled by the trigger below because Postgres does not
 -- evaluate WITH CHECK on DELETE.
+--
+-- IMPORTANT: the second OR branch must call public._other_active_admin_exists()
+-- (security definer helper) instead of an inline EXISTS subquery against
+-- public.user_roles. PostgreSQL's runtime RLS recursion detector treats a
+-- direct subquery against the policy's own table as recursive even when
+-- security-definer helpers also appear in the policy expression. Wrapping
+-- the subquery in its own security definer function bypasses RLS during
+-- evaluation and breaks the cycle. See migration §1b for the helper.
 create policy "v141_user_roles_write_admin"
   on public.user_roles
   for all
@@ -292,12 +329,7 @@ create policy "v141_user_roles_write_admin"
       -- Allow if the resulting row is still admin+active...
       (role = 'admin' and active = true)
       -- ...OR if at least one OTHER active admin will exist after this op.
-      or exists (
-        select 1 from public.user_roles ur
-         where ur.role = 'admin'
-           and ur.active = true
-           and ur.user_id <> user_roles.user_id
-      )
+      or public._other_active_admin_exists(user_roles.user_id)
     )
   );
 

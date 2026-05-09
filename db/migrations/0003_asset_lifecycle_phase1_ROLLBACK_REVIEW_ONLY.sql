@@ -52,6 +52,7 @@ drop function if exists public._user_roles_block_last_admin_delete();
 -- Drop the role helper functions (reverse of 0003 §1b).
 -- These are referenced by RLS policies on asset_lifecycle and
 -- user_roles; those policies are dropped above so this is safe.
+drop function if exists public._other_active_admin_exists(uuid);
 drop function if exists public.app_is_admin();
 drop function if exists public.app_can_write();
 drop function if exists public.app_user_role();
