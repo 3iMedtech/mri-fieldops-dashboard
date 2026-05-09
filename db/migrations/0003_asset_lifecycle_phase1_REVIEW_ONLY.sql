@@ -618,7 +618,8 @@ drop policy if exists "v141_lifecycle_insert_admin_manager"     on public.asset_
 drop policy if exists "v141_lifecycle_update_admin_manager"     on public.asset_lifecycle;
 drop policy if exists "v141_lifecycle_no_delete"                on public.asset_lifecycle;
 drop policy if exists "v141_history_select_authenticated"       on public.asset_lifecycle_history;
-drop policy if exists "v141_history_insert_authenticated"       on public.asset_lifecycle_history;
+drop policy if exists "v141_history_insert_authenticated"       on public.asset_lifecycle_history;  -- legacy name from earlier draft
+drop policy if exists "v141_history_insert_app_can_write"       on public.asset_lifecycle_history;
 drop policy if exists "v141_history_no_update"                  on public.asset_lifecycle_history;
 drop policy if exists "v141_history_no_delete"                  on public.asset_lifecycle_history;
 
@@ -658,13 +659,14 @@ create policy "v141_history_select_authenticated"
   to authenticated
   using (true);
 
--- INSERT — any authenticated user, because history rows are written
--- alongside the parent action (which is itself gated). The parent
--- table policy already restricts who can mutate; history follows.
-create policy "v141_history_insert_authenticated"
+-- INSERT — gated by app_can_write(). History rows must accompany real
+-- lifecycle/asset mutations; permitting any authenticated user would
+-- let Engineer/Viewer pollute the audit trail. service_role bypasses
+-- RLS, so backfill scripts and system events still work.
+create policy "v141_history_insert_app_can_write"
   on public.asset_lifecycle_history for insert
   to authenticated
-  with check (true);
+  with check ( public.app_can_write() );
 
 -- UPDATE — denied. History is immutable.
 create policy "v141_history_no_update"

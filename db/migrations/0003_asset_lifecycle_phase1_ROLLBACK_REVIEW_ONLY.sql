@@ -30,7 +30,8 @@ drop policy if exists "v141_lifecycle_insert_admin_manager" on public.asset_life
 drop policy if exists "v141_lifecycle_update_admin_manager" on public.asset_lifecycle;
 drop policy if exists "v141_lifecycle_no_delete"            on public.asset_lifecycle;
 drop policy if exists "v141_history_select_authenticated"   on public.asset_lifecycle_history;
-drop policy if exists "v141_history_insert_authenticated"   on public.asset_lifecycle_history;
+drop policy if exists "v141_history_insert_authenticated"   on public.asset_lifecycle_history;  -- legacy name (drafts pre-strict-review)
+drop policy if exists "v141_history_insert_app_can_write"   on public.asset_lifecycle_history;
 drop policy if exists "v141_history_no_update"              on public.asset_lifecycle_history;
 drop policy if exists "v141_history_no_delete"              on public.asset_lifecycle_history;
 
