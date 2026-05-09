@@ -58,6 +58,29 @@
 -- investigate before proceeding.
 -- ═════════════════════════════════════════════════════════════════════
 
+-- ── Atomicity guard ─────────────────────────────────────────────────
+-- BEGIN / COMMIT wrap the entire migration so all four sections run
+-- in a single transaction REGARDLESS of client transaction handling.
+--
+-- Why explicit BEGIN/COMMIT:
+--   * Supabase Studio's SQL Editor uses simple-Query protocol, which
+--     most likely treats a multi-statement paste as one implicit
+--     transaction — but that is implementation behavior we don't want
+--     to depend on.
+--   * Temp tables created with `on commit drop` are dropped at the
+--     END of the current transaction. Without explicit BEGIN/COMMIT,
+--     in auto-commit mode each statement would commit separately and
+--     §1's temp table would vanish before §2 could reference it.
+--   * The verification block in §4 raises EXCEPTION on invariant
+--     failure. For that exception to roll back §3's INSERT, §3 and
+--     §4 must be in the same transaction.
+--
+-- This BEGIN/COMMIT pair makes the all-or-nothing semantics explicit
+-- and defensive: if §4 raises, §3's INSERT is rolled back; if §1-§4
+-- succeed, the COMMIT drops the temp tables and persists the
+-- backfilled rows.
+begin;
+
 -- ── §1. Stage canonical V2 row data into a temp table ───────────────
 -- Building a temp table once gives us:
 --   (a) one place to read V2 data from for both the INSERT and the
@@ -202,5 +225,7 @@ end $$;
 -- Note: temp tables _v141_phase2_v2 and _v141_phase2_state were
 -- created with `on commit drop` so they go away when this statement
 -- transaction commits. No manual cleanup needed.
+
+commit;
 
 -- ── End of 0005 ─────────────────────────────────────────────────────
