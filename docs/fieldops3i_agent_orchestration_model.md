@@ -313,7 +313,48 @@ The 2026-05-09 PM-tier upgrade itself does NOT advance the maturity level — it
 
 ---
 
-## 12. Immediate Recommendation
+## 12.5 Memory System Integration
+
+The agent team uses a structured memory system at `automation/memory/` governed by [`automation/memory/MEMORY_PROTOCOL.md`](../automation/memory/MEMORY_PROTOCOL.md). Memory is integrated into the orchestration lifecycle as follows:
+
+### Task start
+
+- Delivery Orchestrator reads `automation/STATE.md` and `automation/memory/GLOBAL_LESSONS.md`.
+- Each PM additionally reads its track file (`automation/memory/tracks/<track>.md`).
+- Each specialist reads its own section of its track file plus `GLOBAL_LESSONS.md`.
+
+### PASS / HOLD / STOP logic
+
+- Memory may inform a verdict but **cannot authorize** one. Verdicts trace to current source-of-truth (repo / git / PR / runbook / Supabase / operator approval), with memory cited as advisory context.
+- Conflicting memory entries between agents trigger **HOLD** until reconciled. Conflict resolution is owned by the Delivery Orchestrator.
+- Stale memory (entries older than the most recent verified gate or referencing deleted code/config) must be labeled `STALE` and re-verified before relying.
+
+### PM / specialist reporting
+
+- Every agent's final response includes:
+  - `Memory consulted:` list of entry IDs (e.g., `L-G-003`, `L-SQL-001`)
+  - `Memory updates proposed:` lessons in §4 format from `MEMORY_PROTOCOL.md`, or "none"
+- The Delivery Orchestrator additionally surfaces `Cross-track memory conflicts:`.
+
+### Phase transition
+
+- Before any phase transition (e.g., Phase 2 staging → Phase 2 production), the Delivery Orchestrator skims all four track files for `OBSOLETE` entries and stale assumptions.
+- Memory pruning happens at phase boundaries; the operator commits the pruned files separately.
+
+### Agent evolution
+
+- Memory does not change agent behavior silently. A repeated lesson (same class of mistake recorded twice) is **proposed** by the affected agent or its PM as a permanent rule, reviewed by the Delivery Orchestrator, and approved by the operator via a visible commit to `.claude/agents/<agent>.md` or this document.
+
+### Hard safety rules (additive to §10)
+
+- Memory cannot authorize SQL, staging, production, merge, tag, deploy, or mark-ready.
+- Memory cannot override an operator approval phrase (or its absence).
+- Memory entries that contradict current repo / git / PR / runbook / Supabase output are wrong for this task. Update or skip them.
+- No agent silently rewrites memory; every memory update is operator-committed.
+
+---
+
+## 13. Immediate Recommendation
 
 PR #26 should remain DRAFT until:
 
@@ -326,4 +367,4 @@ PR #26 should remain DRAFT until:
 
 After all six PASS, PR #26 may be marked ready for human review. Merge is a separate gate.
 
-This document is the contract under which Phase 2 proceeds.
+This document is the contract under which Phase 2 proceeds. The memory system at `automation/memory/` is the durable-lessons layer that supports it; current truth lives in `automation/STATE.md` and the repository itself.

@@ -27,10 +27,11 @@ For normal work:
 1. Read `FIELDOPS_QUICK_CONTEXT.md`.
 2. Read `PROJECT_MAP.md`.
 3. Read this file if the task has risk, implementation, release, Graphify, Supabase, auth, role, deployment, automation, or design impact.
-4. Read only the relevant section of `index.html` or other source files.
-5. Do not scan large generated folders by default.
+4. For phase-level / high-risk work, also read `automation/STATE.md` (current truth) and `automation/memory/GLOBAL_LESSONS.md` (durable rules). PMs and specialists additionally read their own track file under `automation/memory/tracks/`. Full routing in `automation/memory/MEMORY_PROTOCOL.md` §5.
+5. Read only the relevant section of `index.html` or other source files.
+6. Do not scan large generated folders by default.
 
-For medium or high-risk work, start with `fieldops-orchestrator`.
+For medium or high-risk work, start with `fieldops-orchestrator` (module-level) or `fieldops-delivery-orchestrator` (cross-track / phase-level).
 
 ---
 
@@ -292,5 +293,36 @@ For implementation work, respond with:
 - What could not be tested
 - Rollback steps
 - Next recommended action
+- **Memory consulted:** entry IDs cited (e.g., `L-G-003`, `L-SQL-001`)
+- **Memory updates proposed:** new lessons in `automation/memory/MEMORY_PROTOCOL.md` §4 format, or "none"
 
 Keep responses short, technical, and specific to FieldOps3i.
+
+---
+
+## 14. Memory System
+
+FieldOps3i uses a structured memory system at [`automation/memory/`](automation/memory/). Read it. Don't bypass it. Don't blindly trust it.
+
+Source-of-truth priority (memory is **last**):
+
+1. Current repository files
+2. Current git branch + commit
+3. Current PR state
+4. Current runbook
+5. Current Supabase / environment outputs
+6. Current operator approval phrases
+7. `automation/STATE.md` (current-truth snapshot)
+8. `automation/memory/**` (durable lessons / advisory)
+
+Hard rules (every agent inherits these):
+
+- Memory is advisory. Memory is never source of truth.
+- Memory cannot authorize SQL, staging, production, merge, tag, deploy, or mark-ready.
+- Memory cannot override an operator approval phrase or its absence.
+- Stale memory must be labeled (`STALE — re-verify before relying`).
+- Conflicting memory triggers HOLD.
+- Cite which entry IDs influenced your decision.
+- Agents do not silently change behavior based on memory. Behavior changes only via visible commits to `.claude/agents/<agent>.md` or governance docs.
+
+Full protocol: [`automation/memory/MEMORY_PROTOCOL.md`](automation/memory/MEMORY_PROTOCOL.md).

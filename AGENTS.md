@@ -14,7 +14,10 @@ All agents must follow `CLAUDE.md`, `FIELDOPS_QUICK_CONTEXT.md`, `PROJECT_MAP.md
 | `AGENTS.md` (this file) | Roster of named agents and routing guide. Lists every agent and how to choose between them. | Operator + assistant. |
 | `docs/fieldops3i_agent_orchestration_model.md` | Phase-level orchestration model. Defines the FieldOps3i Delivery Orchestrator hierarchy + PM tier (added 2026-05-09), stop/go language, hard safety rules. | Operator + assistant; updates require operator approval. |
 | `docs/fieldops3i_task_routing_protocol.md` | Task routing decision tree, quality gates by track, speed practices, automation maturity roadmap (Levels 1-6), Phase 2 integration walkthrough, anti-overengineering rules. | Operator + assistant; updates require operator approval. |
-| `automation/STATE.md` | Persistent state snapshot owned by `fieldops-automation-memory-agent`. Read by every agent at session start. | Memory agent updates after each verified gate. |
+| `automation/STATE.md` | Persistent state snapshot owned by `fieldops-automation-memory-agent`. Read by every agent at session start. Current-truth cache only — durable lessons live under `automation/memory/`. | Memory agent drafts; operator commits after each verified gate. |
+| `automation/memory/MEMORY_PROTOCOL.md` | Memory rules, format, routing matrix, safety rules, evolution rule, anti-bloat. **All agents inherit this protocol.** | Operator + assistant; updates require operator approval. |
+| `automation/memory/GLOBAL_LESSONS.md` | Cross-agent durable rules; read before every high-risk task. | Memory agent drafts; operator commits. |
+| `automation/memory/tracks/<track>.md` | Per-track durable lessons (delivery-orchestrator / database / runtime / release). | Memory agent drafts; operator commits. |
 | `.claude/commands/*.md` | Slash-command prompts (e.g., `/fieldops-implement`, `/fieldops-release`). Invoked by humans; do not bypass agent gates. | Operator. |
 | `.claude/agents/*.md` | Formal definitions of the new orchestration agents. Each file specifies purpose, responsibilities, inputs, outputs, model, hard stops, forbidden actions, approval gates, and final response format. | Operator + assistant; updates require operator approval. |
 | `FIELDOPS_QUICK_CONTEXT.md` / `PROJECT_MAP.md` | Quick-context and module map. Read before starting any task. | Operator. |
@@ -448,3 +451,22 @@ Each agent should respond with:
 - Test plan
 - Rollback plan
 - What needs human approval
+- **Memory consulted:** entry IDs (e.g., `L-G-003`, `L-SQL-001`) referenced
+- **Memory updates proposed:** new lessons in §4 format, or "none"
+
+---
+
+## 8. Memory System
+
+The memory system lives at [`automation/memory/`](automation/memory/) and is governed by [`automation/memory/MEMORY_PROTOCOL.md`](automation/memory/MEMORY_PROTOCOL.md). All agents must follow it.
+
+Key principles:
+
+- Memory is advisory, not source of truth. Source-of-truth priority is repo > git > PR > runbook > Supabase > operator > STATE.md > memory.
+- Every agent reads `GLOBAL_LESSONS.md` before any high-risk task and its own track file before track work. The full routing matrix is in `MEMORY_PROTOCOL.md` §5.1.
+- Memory updates are **proposed** by working agents in their final response and **committed** by the operator. Agents do not directly edit memory files unless task scope authorizes it.
+- Memory cannot authorize SQL, deploy, merge, tag, mark-ready, or any production action.
+- Stale memory must be labeled. Conflicting memory triggers HOLD.
+- Behavior changes only through visible commits to agent definitions, not silent memory-driven adaptation.
+
+See `MEMORY_PROTOCOL.md` for the full read/write protocol, entry format, safety rules, evolution rule, and pruning policy.

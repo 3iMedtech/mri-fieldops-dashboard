@@ -486,8 +486,61 @@ The orchestration model has 14 governance docs and 12+ agents. That is at the up
 
 ---
 
-## 9. Summary
+## 9. Memory Protocol Integration
 
-The hierarchy in §1 is the structural change. The PM layer reduces orchestrator load on multi-specialist tasks; specialists are unchanged. The QA test-automation agent closes the biggest verification gap. The state persistence file (`automation/STATE.md`) closes the memory gap. The roadmap in §6 honestly positions FieldOps3i at Level 2 with a credible path to Level 3 within 4-8 weeks.
+Beyond `automation/STATE.md` (current-truth snapshot), the team uses a durable lessons layer at [`automation/memory/`](../automation/memory/) governed by [`automation/memory/MEMORY_PROTOCOL.md`](../automation/memory/MEMORY_PROTOCOL.md). Memory is integrated into routing as follows:
 
-The agents and process exist to **deliver software faster and safer**. When a gate or agent slows you down without commensurate risk reduction, retire it.
+### 9.1 Task start protocol (additive to §3.1)
+
+| Agent | Reads at task start |
+|---|---|
+| Delivery Orchestrator | `automation/STATE.md` + `memory/GLOBAL_LESSONS.md` + skim all four track files |
+| Database PM | STATE + GLOBAL + `tracks/database-track.md` |
+| Runtime PM | STATE + GLOBAL + `tracks/runtime-track.md` |
+| Release PM | STATE + GLOBAL + `tracks/release-track.md` + `tracks/database-track.md` |
+| Specialist | own section of its track file + GLOBAL |
+| QA test automation | `tracks/runtime-track.md` + `tracks/release-track.md` (regression) + GLOBAL |
+| Automation memory | STATE + own section in `tracks/delivery-orchestrator.md` + GLOBAL |
+| Legacy Tier 3 | matching track file + GLOBAL |
+| Tier 4 product-design | none (advisory) |
+
+### 9.2 Task close protocol
+
+Every agent's final response adds:
+
+- `Memory consulted:` list of entry IDs cited (e.g., `L-G-003`, `L-SQL-001`)
+- `Memory updates proposed:` lessons in `MEMORY_PROTOCOL.md` §4 format, or "none"
+
+The Delivery Orchestrator additionally surfaces `Cross-track memory conflicts:` (or "none").
+
+### 9.3 PASS / HOLD / STOP integration
+
+- Memory **informs** verdicts; memory **cannot authorize** verdicts. Authorization traces to current source-of-truth.
+- A memory entry that contradicts the current repo / git / PR / runbook / Supabase output is wrong for this task. Update or skip.
+- Conflicting memory entries between agents trigger HOLD until the Delivery Orchestrator reconciles.
+
+### 9.4 Phase transition + pruning
+
+- Before any phase transition, the Delivery Orchestrator skims track files for `OBSOLETE` and `STALE` entries.
+- Operator commits pruned/updated memory in a separate documentation PR.
+- Memory entry caps: `GLOBAL_LESSONS.md` ~20; each track file ~30. Above caps → promote / split / prune.
+
+### 9.5 Hard safety rules (additive to orchestration model §10)
+
+- Memory cannot authorize SQL, staging, production, merge, tag, deploy, mark-ready.
+- Memory cannot override operator approval phrases (or their absence).
+- Stale memory must be labeled.
+- Conflicting memory triggers HOLD.
+- No agent silently rewrites memory; updates are operator-committed.
+
+### 9.6 Anti-bloat rule (additive to §8)
+
+The memory system follows the same anti-overengineering bar as the rest of the operating system. If maintenance feels burdensome, you've added too many entries. Skip memory updates for routine successes, cosmetic fixes, and lessons already captured.
+
+---
+
+## 10. Summary
+
+The hierarchy in §1 is the structural change. The PM layer reduces orchestrator load on multi-specialist tasks; specialists are unchanged. The QA test-automation agent closes the biggest verification gap. The state persistence file (`automation/STATE.md`) closes the current-truth memory gap. The lessons layer at `automation/memory/` closes the durable-learning gap. The roadmap in §6 honestly positions FieldOps3i at Level 2 with a credible path to Level 3 within 4-8 weeks.
+
+The agents and process exist to **deliver software faster and safer**. When a gate or agent slows you down without commensurate risk reduction, retire it. The memory system follows the same rule.

@@ -19,7 +19,10 @@ Use this file to locate the right area before editing. Do not rewrite broad sect
 - `ROLLBACK.md`: rollback process (tag-based default; force-push only with operator phrase).
 - `DEPLOYMENT.md`: deployment guide.
 - `automation/FIELDOPS_AUTOMATION_ROADMAP.md`: automation roadmap and boundaries (legacy 4-phase document).
-- `automation/STATE.md`: persistent state snapshot — read by every agent at session start (added 2026-05-09).
+- `automation/STATE.md`: persistent state snapshot (current truth) — read by every agent at session start (added 2026-05-09).
+- `automation/memory/MEMORY_PROTOCOL.md`: rules, format, routing matrix, safety, evolution, anti-bloat for the memory layer (added 2026-05-10).
+- `automation/memory/GLOBAL_LESSONS.md`: cross-agent durable rules; read before every high-risk task.
+- `automation/memory/tracks/<track>.md`: per-track durable lessons (delivery-orchestrator / database / runtime / release).
 - `docs/fieldops3i_agent_orchestration_model.md`: Tier 0–4 agent hierarchy + safety rules.
 - `docs/fieldops3i_task_routing_protocol.md`: task routing tree, quality gates, automation maturity (Levels 1-6), Phase 2 walkthrough, anti-overengineering rules.
 - `docs/GRAPHIFY_USAGE.md`: Graphify status and usage rules.
