@@ -2613,8 +2613,16 @@ async function applyUploadedData(){
     // uploads don't accumulate in the DB and leak back into the UI
     // after logout/login.
 
-    // 1. Replace config assets
+    // 1. Upsert config assets (Phase 2 B4: safe upsert by code).
+    // Lifecycle / app-managed fields (status, de_installed_at,
+    // de_installed_by, de_install_reason, created_at, updated_at, note) are
+    // intentionally excluded from the XLSX-owned column list, so a re-upload
+    // of the sheet never overwrites a Manager's lifecycle action. Rows in DB
+    // but not in XLSX are LEFT IN PLACE — de-installation goes through the
+    // lifecycle workflow, not XLSX omission.
     if(r.config && r.config.length > 0){
+      const xlsxOwnedConfigCols = ['code','ast_id','name','tesla','model','town',
+        'state','channel','gradient','sw','compressor','coldhead','alias_of'];
       const configRows = r.config.map(a => ({
         code: a.code, ast_id: a.ast_id || null, name: a.name,
         tesla: a.tesla || null, model: a.model || null,
@@ -2627,14 +2635,16 @@ async function applyUploadedData(){
       // Dedupe by primary key 'code' — PG ON CONFLICT can't handle duplicate keys
       const cfgSeen = new Map();
       configRows.forEach(row => { if(row.code) cfgSeen.set(row.code, row); });
-      const deduped = Array.from(cfgSeen.values());
-      showLoading('Replacing install base…');
-      // Wipe first so assets that were removed upstream don't linger.
-      // `neq('code', '__sentinel__')` matches every row (no asset has
-      // that literal code).
-      const delAssets = await _sb.from('config_assets').delete().neq('code', '__sentinel__');
-      if(delAssets.error) throw delAssets.error;
-      const { error } = await _sb.from('config_assets').insert(deduped);
+      // Project to the explicit whitelist so the payload never carries fields
+      // outside xlsxOwnedConfigCols even if the parser adds new keys later.
+      const deduped = Array.from(cfgSeen.values()).map(row => {
+        const out = {};
+        for(const k of xlsxOwnedConfigCols) out[k] = row[k] ?? null;
+        return out;
+      });
+      showLoading('Updating install base…');
+      const { error } = await _sb.from('config_assets')
+        .upsert(deduped, { onConflict: 'code' });
       if(error) throw error;
     }
 
