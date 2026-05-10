@@ -5709,12 +5709,9 @@ Service desk`);
   window.open(mailtoUrl, '_blank');
 }
 
-// PM-management access check — admin OR manager (interim email allowlist until
-// the `manager` role tier ships).
+// PM-management access check — admin OR manager.
 function canManagePM(){
-  if(_userRole === 'admin' || _userRole === 'manager') return true;
-  const email = (_currentUser?.email || '').toLowerCase();
-  return email === 'manager@3imedtech.com';
+  return _userRole === 'admin' || _userRole === 'manager';
 }
 
 // Holds the PM id while the completion modal is open.
@@ -8068,7 +8065,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let _sb = null;            // Supabase client
 let _currentUser = null;   // logged-in user
-let _userRole = 'viewer';  // 'admin' | 'viewer'
+let _userRole = 'viewer';  // 'admin' | 'manager' | 'viewer'
 
 // ───────────────────────────────────────────────────────────────
 // PROFILE DISPLAY — per-email name, title, and avatar initials
@@ -8121,9 +8118,7 @@ async function applyRoleRestrictions(){
   // Superadmin gate — specifically abhijit.s@, not all admins
   const email = (_currentUser?.email || '').toLowerCase();
   document.body.classList.toggle('superadmin-mode', email === SUPERADMIN_EMAIL);
-  // Manager gate — prefers the `manager` role in app_metadata; keeps the email
-  // allowlist as a safety fallback so nothing breaks if the role isn't set yet.
-  const isManager = _userRole === 'manager' || email === 'manager@3imedtech.com';
+  const isManager = _userRole === 'manager';
   document.body.classList.toggle('manager-mode', isManager);
   const badge = document.getElementById('user-role-badge');
   if(badge){
