@@ -12,16 +12,16 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 ## Last verified
 
-- **Snapshot timestamp:** 2026-05-09 (Round 2 specialist review at `e0da6a2`)
-- **Snapshot author:** Claude (acting as Delivery Orchestrator at that time)
+- **Snapshot timestamp:** 2026-05-10 (Phase 2 staging SQL apply complete at `e18f8d8`)
+- **Snapshot author:** Claude (acting as Delivery Orchestrator + Database PM)
 
 ---
 
 ## Branch + commit
 
 - **Branch:** `feat/v1.4.1-phase2-review`
-- **Latest commit:** `e0da6a2` — `docs(v1.4.1): apply phase2 round-2 specialist-review medium fixes (M4, M5)`
-- **Commits ahead of `main`:** 5 (`87c026c`, `9f24b70`, `20fab53`, `5bebc1d`, `e0da6a2`)
+- **Latest commit:** `e18f8d8` — `Add FieldOps3i agent memory system`
+- **Commits ahead of `main`:** 8 (`87c026c`, `9f24b70`, `20fab53`, `5bebc1d`, `e0da6a2`, `2f4ca23`, `c3674f2`, `e18f8d8`)
 - **Working tree:** clean (as of last verified snapshot)
 
 ---
@@ -30,7 +30,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 | # | Title | State | Draft | Head branch | Latest commit | Owner verdict |
 |---|---|---|---|---|---|---|
-| 26 | Draft: v1.4.1 Phase 2 review package | OPEN | YES | `feat/v1.4.1-phase2-review` | `e0da6a2` | Round 2 review PASSED with M4+M5 fixes; pre-flight PASSED; staging apply paused for operating-system upgrade |
+| 26 | Draft: v1.4.1 Phase 2 review package | OPEN | YES | `feat/v1.4.1-phase2-review` | `e18f8d8` | Phase 2 staging SQL apply COMPLETE (0004 + 0005 verified 2026-05-10); runtime track (§5) gated; PR remains DRAFT pending runtime + role-tests + production runbook |
 | 25 | Draft: v1.4.1 Phase 1 production-apply runbook (review-only) | OPEN | YES | (Phase 1 production runbook branch) | (held) | Held until Phase 2 staging passes |
 
 ---
@@ -48,16 +48,16 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 - **Project:** `fieldops-staging`
 - **URL ref:** `qupkpprptopyejbnslev`
 - **Org:** Abhijit Sen (FREE)
-- **Last verified:** 2026-05-09 (Phase 2 staging pre-flight)
+- **Last verified:** 2026-05-10 (Phase 2 staging SQL apply complete; both 0004 + 0005 verified)
 - **Migrations applied:**
   - 0001 (pm_completions_engineer_ids)
   - 0002 (lock_audit_log_writes)
   - 0003 (asset_lifecycle_phase1) — Phase 1 baseline
-  - 0004 (additive write policies) — **NOT APPLIED** (Phase 2; pending operator approval)
-  - 0005 (install base master backfill) — **NOT APPLIED** (Phase 2; pending operator approval)
+  - 0004 (additive write policies) — **APPLIED 2026-05-10**; 6 new `v141_*_app_can_write` policies on `config_assets`/`pm_schedule`/`cmc_contracts` (verified runbook §3.3)
+  - 0005 (install base master backfill) — **APPLIED 2026-05-10 09:36:55 UTC**; 1 row inserted (`AN025`); marker set = pre-state missing set per `L-REC-001` (verified runbook §4.3)
 
 - **Row counts (last verified):**
-  - `config_assets`: 24
+  - `config_assets`: 25 (was 24; +1 from 0005 backfill of `AN025` at 2026-05-10 09:36:55 UTC)
   - `pm_schedule`: 22
   - `cmc_contracts`: 13
   - `audit_log`: ≥ 1489
@@ -73,9 +73,10 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
   - `_user_roles_block_last_admin_delete()` — trigger function ✓
 
 - **v141_* policies on lifecycle tables:** 11
-- **Legacy admin_* policies on 4 legacy tables:** 16
+- **v141_*_app_can_write policies on legacy tables (config_assets, pm_schedule, cmc_contracts):** 6 (3 INSERT + 3 UPDATE; added by 0004 on 2026-05-10)
+- **Legacy admin_* policies on 4 legacy tables:** 16 (unchanged; 0004 is strictly additive)
 - **V2 fingerprint:** `965ffcec48aa3ddfbfb7b975bc48dca9` (md5 of AN001..AN025 in sorted order)
-- **V2 missing code on staging:** `AN025` (will be inserted by 0005)
+- **V2 missing code on staging:** none (was `AN025`; inserted by 0005 at 2026-05-10 09:36:55 UTC)
 
 - **GRANT vs RLS for `authenticated` role on (config_assets, pm_schedule, cmc_contracts):** INSERT=true, UPDATE=true, DELETE=variable (not required for Phase 2)
 
@@ -105,7 +106,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 | Gate | Phrase needed | Owner |
 |---|---|---|
-| Phase 2 staging apply | `approved, apply phase 2 to staging` | **ISSUED but paused for operating-system upgrade** — to be re-issued or operator may proceed with current phrase |
+| Phase 2 staging SQL apply | `approved, apply phase 2 to staging` | **CONSUMED — both 0004 + 0005 applied + verified 2026-05-10** |
 | Phase 2 runtime to staging branch | `approved, apply <runtime change> to feat/v1.4.1-phase2-impl` | not yet issued |
 | Phase 2 production SQL apply | `approved, apply phase 2 to production` | not yet issued (gated on staging success) |
 | Phase 2 production runtime deploy | `approved, deploy <version> to production` | not yet issued |
@@ -145,6 +146,10 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 - **2026-05-09:** PR #26 advanced through Round 1 + Round 2 specialist review. M1, M2, M3, M4, M5 medium fixes applied across `db/migrations/0005_*.sql`, `docs/v1.4.1_phase2_review.md`, `docs/v1.4.1_phase2_staging_apply_runbook.md`. PR remains DRAFT. No SQL run.
 - **2026-05-09:** Phase 2 staging pre-flight queries delivered to operator. Pre-flight PASSED. Operator issued `approved, apply phase 2 to staging` then immediately paused execution to upgrade the operating system.
 - **2026-05-09:** Round 2 audit identified GOOD-BUT-HEAVY status (4.8/10 automation maturity). Recommended adding PM tier + QA test automation agent + state persistence + tag-based rollback.
+- **2026-05-10:** OS upgrade landed at `2f4ca23`. Protected scope (`db/migrations/`, staging runbook, `index.html`, VERSION, CHANGELOG, releases/) unchanged across `e0da6a2..2f4ca23` per consistency audit — prior specialist PASS still binding.
+- **2026-05-10:** F8 (STATE.md ownership wording) + F9 (legacy slash-command preamble) documentation defects closed at `c3674f2`.
+- **2026-05-10:** Memory system landed at `e18f8d8` (12 files: 6 new under `automation/memory/` + 6 governance edits). System is STRUCTURED per `MEMORY_PROTOCOL.md` §13. Memory remains advisory; cannot authorize action.
+- **2026-05-10:** Phase 2 staging SQL apply complete. 0004 applied + verified (Stop Points #3, #4 advanced); 0005 applied + verified (Stop Points #5, #6 advanced). Marker reconciliation PASS per `L-REC-001` (Query 3 = 0 rows). Phase 2 runtime track (Track B / `index.html` patches per runbook §5) gated; not started.
 
 ---
 

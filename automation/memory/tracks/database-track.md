@@ -50,6 +50,20 @@
 - **Action added:** Database PM hard stop already lists this; this entry codifies the diff command.
 - **Linked files:** `.claude/agents/fieldops-database-pm.md`, `automation/STATE.md`.
 
+### L-DBPM-004 — Supabase SQL Editor suppresses NOTICE / intermediate output for committed transactions
+
+- **Date:** 2026-05-10
+- **Commit / PR:** PR #26 / Phase 2 staging apply (0005)
+- **Agent:** Database PM
+- **Event:** 0005 apply showed only `Success. No rows returned.` in the SQL Editor Results panel. Runbook §4.2 lists `BEGIN / CREATE TABLE / INSERT / NOTICE / DO / COMMIT` lines that did not appear visibly.
+- **Mistake or discovery:** Supabase SQL Editor displays the result of the **last** statement (`COMMIT` → "Success. No rows returned.") and suppresses intermediate `NOTICE` / `CREATE TABLE` / `INSERT` status lines for transactions. They route to Postgres logs, not the Results panel.
+- **Root cause:** SQL Editor display behavior; not a migration defect.
+- **Prevention rule:** for any transaction-wrapped migration, do not interpret missing intermediate output as failure. The migration's internal invariants raise `ERROR` on failure — absence of `ERROR` plus a successful `COMMIT` headline confirms transaction success. Verify outcome via independent `SELECT`s on the database state.
+- **Applies to:** every BEGIN/COMMIT-wrapped migration applied via Supabase SQL Editor. Category: Supabase environment traps; runbook traps.
+- **Staleness risk:** until Supabase SQL Editor adds NOTICE display, or until the team uses a CLI-based apply path with verbose logging.
+- **Action added:** runbook §4.2 to add a note: "If SQL Editor only shows 'Success. No rows returned.', that is the headline of `COMMIT` — verify via §4.3 SELECTs." Database PM reporting includes the headline-vs-Results-panel disambiguation.
+- **Linked files:** `docs/v1.4.1_phase2_staging_apply_runbook.md` §4.2, `db/migrations/0005_v141_phase2_install_base_master_backfill_REVIEW_ONLY.sql`, `automation/memory/tracks/database-track.md`.
+
 ---
 
 ## fieldops-sql-rls-safety-agent
