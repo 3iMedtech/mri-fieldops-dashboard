@@ -8093,11 +8093,28 @@ function getProfileDisplay(email){
   };
 }
 
-function applyRoleRestrictions(){
+// Phase 2 (B1): role is resolved from public.user_roles via SECURITY DEFINER
+// RPC `app_user_role`. Falls back to the JWT app_metadata.role path if the
+// RPC errors. Default is 'viewer' — never silently grants admin.
+async function applyRoleRestrictions(){
   const metaRole = _currentUser?.app_metadata?.role;
-  _userRole = metaRole === 'admin' ? 'admin'
-            : metaRole === 'manager' ? 'manager'
-            : 'viewer';
+  const jwtRole = metaRole === 'admin' ? 'admin'
+                : metaRole === 'manager' ? 'manager'
+                : 'viewer';
+  let resolvedRole = 'viewer';
+  try {
+    const { data, error } = await _sb.rpc('app_user_role');
+    if(!error && (data === 'admin' || data === 'manager' || data === 'viewer')){
+      resolvedRole = data;
+    } else {
+      if(error) console.warn('app_user_role RPC failed; falling back to JWT', error);
+      resolvedRole = jwtRole;
+    }
+  } catch(e){
+    console.warn('app_user_role RPC threw; falling back to JWT', e);
+    resolvedRole = jwtRole;
+  }
+  _userRole = resolvedRole;
   // Manager is viewer-mode + manager-mode — sits above engineer but below admin.
   const isViewer = _userRole !== 'admin';
   document.body.classList.toggle('viewer-mode', isViewer);
@@ -8663,7 +8680,7 @@ async function bootApp(){
     // Show logged-in user in topbar
     const ue = document.getElementById('user-email');
     if(ue && _currentUser) ue.textContent = _currentUser.email || '';
-    applyRoleRestrictions();
+    await applyRoleRestrictions();
     await doFirstPaint();
     // v1.1.0 1c: respect a deep-link hash on first paint so a bookmarked
     // /#/pm or /#/tickets?status=open lands the user on that view.
