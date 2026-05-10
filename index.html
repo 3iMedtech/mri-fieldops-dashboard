@@ -1052,7 +1052,10 @@ button,input,select,textarea{font-family:inherit;}
   <div class="panel">
     <div class="panel-head">
       <h2 class="panel-title"><i data-lucide="building-2"></i>Install Base — <span id="install-base-count">—</span> Systems</h2>
-      <input class="search-box" placeholder="Search customer, town, model…" aria-label="Search install base" oninput="filterAssets(this.value)">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary mgr-plus" id="ib-add-asset-btn" type="button" style="font-size:11px;padding:6px 12px" onclick="openAddAssetModal()" title="Add a new asset to the install base"><i data-lucide="plus"></i>Add Asset</button>
+        <input class="search-box" placeholder="Search customer, town, model…" aria-label="Search install base" oninput="filterAssets(this.value)">
+      </div>
     </div>
     <div style="overflow-x:auto">
       <table class="data-table">
@@ -1296,6 +1299,85 @@ button,input,select,textarea{font-family:inherit;}
       <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('upload-modal')"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body" id="upload-modal-body"></div>
+  </div>
+</div>
+
+<!-- ADD ASSET MODAL (Phase 2 Track B B5.1) -->
+<div class="modal-overlay" id="add-asset-modal" role="dialog" aria-modal="true" aria-labelledby="add-asset-title" aria-hidden="true">
+  <div class="modal" style="max-width:680px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:3px">INSTALL BASE</div>
+        <div id="add-asset-title" style="font-family:var(--display);font-weight:700;font-size:15px">Add Asset</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Code format: <span style="font-family:var(--mono)">AN</span> followed by 3 digits (e.g. <span style="font-family:var(--mono)">AN026</span>). Code is immutable after creation.</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('add-asset-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="add-asset-error" role="alert" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="aa-code" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Code *</label>
+          <input id="aa-code" type="text" maxlength="5" placeholder="AN026" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px;text-transform:uppercase">
+        </div>
+        <div>
+          <label for="aa-ast-id" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">AST ID</label>
+          <input id="aa-ast-id" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label for="aa-name" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Customer / Site Name *</label>
+        <input id="aa-name" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="aa-tesla" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Tesla</label>
+          <input id="aa-tesla" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-model" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Model</label>
+          <input id="aa-model" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-town" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Town</label>
+          <input id="aa-town" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-state" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">State</label>
+          <input id="aa-state" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="aa-channel" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Channel</label>
+          <input id="aa-channel" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-gradient" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Gradient</label>
+          <input id="aa-gradient" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-sw" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">SW</label>
+          <input id="aa-sw" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-compressor" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Compressor</label>
+          <input id="aa-compressor" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-coldhead" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Coldhead</label>
+          <input id="aa-coldhead" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label for="aa-note" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Note</label>
+        <textarea id="aa-note" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);resize:vertical;font-family:inherit;font-size:12px;line-height:1.5"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" type="button" onclick="closeModal('add-asset-modal')" style="font-size:12px;padding:8px 16px">Cancel</button>
+        <button class="btn btn-primary" id="aa-submit-btn" type="button" onclick="submitAddAsset()" style="font-size:12px;padding:8px 18px"><i data-lucide="plus"></i>Create Asset</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -5748,6 +5830,109 @@ Service desk`);
 // PM-management access check — admin OR manager.
 function canManagePM(){
   return _userRole === 'admin' || _userRole === 'manager';
+}
+
+// ── Phase 2 Track B: Install Base lifecycle UI ─────────────────────────
+// Add Asset workflow. Edit / De-install / History viewer / Renew arrive
+// in subsequent stop points. canManagePM() above is the gate.
+
+// Strict code format: AN followed by exactly 3 digits (e.g. AN026). New
+// asset codes must conform; existing codes stay immutable on edit (B5.2).
+const ASSET_CODE_RE = /^AN\d{3}$/;
+
+function _aaShowError(msg){
+  const el = document.getElementById('add-asset-error');
+  if(el){ el.textContent = msg; el.style.display = 'block'; }
+}
+
+function _aaClearForm(){
+  ['aa-code','aa-ast-id','aa-name','aa-tesla','aa-model','aa-town','aa-state',
+   'aa-channel','aa-gradient','aa-sw','aa-compressor','aa-coldhead','aa-note']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const errBox = document.getElementById('add-asset-error');
+  if(errBox){ errBox.textContent = ''; errBox.style.display = 'none'; }
+}
+
+function openAddAssetModal(){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  _aaClearForm();
+  openModal('add-asset-modal');
+}
+
+async function submitAddAsset(){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  const v = id => {
+    const el = document.getElementById(id);
+    const s = el ? (el.value || '').trim() : '';
+    return s.length ? s : null;
+  };
+  const code = ((document.getElementById('aa-code')?.value) || '').trim().toUpperCase();
+  const name = ((document.getElementById('aa-name')?.value) || '').trim();
+  if(!ASSET_CODE_RE.test(code)){
+    _aaShowError('Code must match AN followed by exactly 3 digits (e.g. AN026).');
+    return;
+  }
+  if(!name){
+    _aaShowError('Customer / Site Name is required.');
+    return;
+  }
+  if((CONFIG_ASSETS || []).some(a => (a.code || '').toUpperCase() === code)){
+    _aaShowError(`Asset code ${code} already exists in the install base.`);
+    return;
+  }
+  const submitBtn = document.getElementById('aa-submit-btn');
+  if(submitBtn) submitBtn.disabled = true;
+  try {
+    const note = v('aa-note');
+    const row = {
+      code,
+      ast_id: v('aa-ast-id'),
+      name,
+      tesla: v('aa-tesla'),
+      model: v('aa-model'),
+      town: v('aa-town'),
+      state: v('aa-state'),
+      channel: v('aa-channel'),
+      gradient: v('aa-gradient'),
+      sw: v('aa-sw'),
+      compressor: v('aa-compressor'),
+      coldhead: v('aa-coldhead'),
+      status: 'active',
+      created_by: _currentUser ? _currentUser.id : null,
+      note,
+    };
+    suppressRealtimeReload(3000);
+    // Use insert (NOT upsert) — duplicate-code attempts fail at the DB
+    // layer with a unique-violation, surfacing the error to the user.
+    const { data: inserted, error } = await _sb
+      .from('config_assets').insert(row).select().single();
+    if(error){
+      _aaShowError(`Insert failed: ${error.message || error}`);
+      return;
+    }
+    // Append-only lifecycle history. Best-effort: on history insert
+    // failure the asset row is already created; surface a console warning
+    // rather than block the user-facing success.
+    const { error: histErr } = await _sb.from('asset_lifecycle_history').insert({
+      asset_code: code,
+      lifecycle_id: null,
+      event: 'created',
+      before_state: null,
+      after_state: inserted,
+      actor: _currentUser ? _currentUser.id : null,
+      actor_email: _currentUser ? _currentUser.email : null,
+      source: 'app:install_base_form',
+      note,
+    });
+    if(histErr) console.warn('asset_lifecycle_history insert failed:', histErr);
+    closeModal('add-asset-modal');
+    await loadAllFromDB({ silent: true });
+    if(typeof renderAll === 'function') renderAll();
+  } catch(e){
+    _aaShowError(`Insert error: ${(e && e.message) || e}`);
+  } finally {
+    if(submitBtn) submitBtn.disabled = false;
+  }
 }
 
 // Holds the PM id while the completion modal is open.
