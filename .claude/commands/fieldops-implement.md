@@ -1,6 +1,8 @@
 Recommended model: Claude Sonnet
 Mode: Normal
 
+For phase-level or cross-track work, invoke `fieldops-delivery-orchestrator` first. This command is for module-level or scoped work only and does not bypass Delivery Orchestrator, PM-layer, approval-phrase, SQL, staging, production, merge, tag, deploy, or release gates.
+
 Use agents:
 - fieldops-orchestrator
 - specialist agent based on affected module

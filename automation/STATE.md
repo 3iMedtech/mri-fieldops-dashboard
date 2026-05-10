@@ -1,7 +1,7 @@
 # FieldOps3i — Persistent State Snapshot
 
 **Owner:** `fieldops-automation-memory-agent`
-**Updated by:** the memory agent after every verified gate, every PR open/merge, every SQL apply, every deploy.
+**Updated by:** operator-approved commit, with content drafted by `fieldops-automation-memory-agent` at verified gates. The agent does not directly commit state changes.
 **Read by:** every agent at session start (especially the Delivery Orchestrator and the three PMs).
 **Authority:** advisory snapshot. The repository + Supabase are the truth; this file is the cache.
 
