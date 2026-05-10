@@ -2648,19 +2648,26 @@ async function applyUploadedData(){
       if(error) throw error;
     }
 
-    // 2. Replace CMC contracts
+    // 2. CMC contracts — Admin-only until a future SQL migration adds a
+    // UNIQUE/PK constraint suitable for ON CONFLICT (deferred to v1.4.2).
+    // The section-level admin guard prevents Manager triggering delete+insert
+    // even if the function-level admin gate above is later relaxed.
     if(r.cmc && r.cmc.length > 0){
-      // CMC uses an auto-uuid pk, so we delete and reinsert for this upload
-      showLoading('Replacing CMC contracts…');
-      await _sb.from('cmc_contracts').delete().neq('sn', -99999);
-      const cmcRows = r.cmc.map(c => ({
-        sn: c.sn, customer: c.customer, town: c.town || null,
-        model: c.model || null, contract: c.contract || null,
-        start_date: displayToDbDate(c.start),
-        end_date: displayToDbDate(c.end),
-      }));
-      const { error } = await _sb.from('cmc_contracts').insert(cmcRows);
-      if(error) throw error;
+      if(_userRole === 'admin'){
+        // CMC uses an auto-uuid pk, so we delete and reinsert for this upload
+        showLoading('Replacing CMC contracts…');
+        await _sb.from('cmc_contracts').delete().neq('sn', -99999);
+        const cmcRows = r.cmc.map(c => ({
+          sn: c.sn, customer: c.customer, town: c.town || null,
+          model: c.model || null, contract: c.contract || null,
+          start_date: displayToDbDate(c.start),
+          end_date: displayToDbDate(c.end),
+        }));
+        const { error } = await _sb.from('cmc_contracts').insert(cmcRows);
+        if(error) throw error;
+      } else {
+        console.warn('cmc_contracts upload skipped: admin-only in v1.4.1 (no UNIQUE on sn); user role:', _userRole);
+      }
     }
 
     // 3. Replace tickets — wipe old rows so tickets removed upstream
