@@ -8837,6 +8837,8 @@ function detachRealtime(){
     // blocking subscription renewals, which looks like a random disconnect.
     if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && session.access_token){
       try { _sb.realtime.setAuth(session.access_token); } catch(_){}
+      // Re-resolve role so Admin promotes/demotes propagate on next token refresh.
+      void applyRoleRestrictions();
     }
   });
 
