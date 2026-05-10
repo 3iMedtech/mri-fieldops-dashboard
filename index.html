@@ -1498,6 +1498,23 @@ button,input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+<!-- HISTORY MODAL (Phase 2 Track B B5.4) -->
+<div class="modal-overlay" id="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-modal-title" aria-hidden="true">
+  <div class="modal" style="max-width:760px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:3px">LIFECYCLE HISTORY</div>
+        <div id="history-modal-title" style="font-family:var(--display);font-weight:700;font-size:15px">Asset History</div>
+        <div id="history-modal-context" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('history-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="history-modal-body" style="max-height:60vh;overflow-y:auto">
+      <div style="text-align:center;color:var(--text-dim);font-size:12px;padding:30px 0">Loading…</div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
@@ -6274,6 +6291,101 @@ async function submitDeInstallAsset(){
   }
 }
 
+// ── History viewer (Phase 2 B5.4) ─────────────────────────────────────
+// Read-only modal showing asset_lifecycle_history rows for the selected
+// asset. Open to ALL authenticated roles — no canManagePM gate. The
+// v141_history_select_authenticated policy (Phase 1 / 0003) permits any
+// authenticated session to read; no write paths exist in this code.
+
+const _HIST_EVENT_STYLE = {
+  created:      { bg: 'rgba(16,185,129,.15)',  fg: '#6ee7b7' },
+  updated:      { bg: 'rgba(59,130,246,.15)',  fg: '#93c5fd' },
+  renewed:      { bg: 'rgba(245,158,11,.15)',  fg: '#fcd34d' },
+  de_installed: { bg: 'rgba(239,68,68,.15)',   fg: '#fca5a5' },
+  reactivated:  { bg: 'rgba(16,185,129,.15)',  fg: '#6ee7b7' },
+  cancelled:    { bg: 'rgba(148,163,184,.15)', fg: '#cbd5e1' },
+  backfill:     { bg: 'rgba(148,163,184,.15)', fg: '#cbd5e1' },
+};
+
+function _hvFormatTimestamp(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  if(isNaN(d)) return String(ts);
+  // Compact UTC display: "2026-05-10 09:36:55 UTC".
+  const iso = d.toISOString();
+  return iso.slice(0, 10) + ' ' + iso.slice(11, 19) + ' UTC';
+}
+
+function _hvRenderEntry(row){
+  const style = _HIST_EVENT_STYLE[row.event] || _HIST_EVENT_STYLE.backfill;
+  const beforeJson = JSON.stringify(row.before_state ?? null, null, 2);
+  const afterJson  = JSON.stringify(row.after_state ?? null, null, 2);
+  const noteHtml = row.note
+    ? `<div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.5">${esc(row.note)}</div>`
+    : '';
+  const actorBits = [];
+  if(row.actor_email) actorBits.push(esc(row.actor_email));
+  if(row.source) actorBits.push(esc(row.source));
+  const actorLine = actorBits.length ? actorBits.join(' · ') : '—';
+  return `<div style="border-left:3px solid ${style.fg};padding:10px 12px;margin-bottom:10px;background:var(--surface2);border-radius:6px">
+    <div style="display:flex;align-items:center;gap:10px;font-size:11px;flex-wrap:wrap">
+      <span style="background:${style.bg};color:${style.fg};padding:2px 8px;border-radius:4px;font-family:var(--mono);font-weight:600;font-size:10px">${esc(row.event || '—')}</span>
+      <span style="color:var(--text-dim);font-family:var(--mono);font-size:11px">${esc(_hvFormatTimestamp(row.occurred_at))}</span>
+      <span style="margin-left:auto;color:var(--text-faint);font-size:10px;font-family:var(--mono)">${actorLine}</span>
+    </div>
+    ${noteHtml}
+    <details style="margin-top:8px;font-size:11px">
+      <summary style="cursor:pointer;color:var(--text-dim);user-select:none">Before / after</summary>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div>
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Before</div>
+          <pre style="background:var(--surface);padding:8px 10px;border-radius:4px;font-family:var(--mono);font-size:10px;color:var(--text-dim);overflow:auto;margin:0;white-space:pre-wrap;max-height:240px">${esc(beforeJson)}</pre>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">After</div>
+          <pre style="background:var(--surface);padding:8px 10px;border-radius:4px;font-family:var(--mono);font-size:10px;color:var(--text-dim);overflow:auto;margin:0;white-space:pre-wrap;max-height:240px">${esc(afterJson)}</pre>
+        </div>
+      </div>
+    </details>
+  </div>`;
+}
+
+async function openHistoryModal(code){
+  const targetCode = ((code || '') + '').toUpperCase();
+  if(!targetCode){ alert('No asset code provided.'); return; }
+  const ctx = document.getElementById('history-modal-context');
+  if(ctx) ctx.textContent = targetCode;
+  const body = document.getElementById('history-modal-body');
+  if(body) body.innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:12px;padding:30px 0">Loading…</div>';
+  openModal('history-modal');
+  try {
+    const { data, error } = await _sb
+      .from('asset_lifecycle_history')
+      .select('*')
+      .eq('asset_code', targetCode)
+      .order('occurred_at', { ascending: false });
+    if(error) throw error;
+    const rows = data || [];
+    if(!body) return;
+    if(rows.length === 0){
+      body.innerHTML = `<div style="text-align:center;color:var(--text-dim);font-size:12px;padding:30px 0">
+        <div style="font-size:14px;color:var(--text-dim);margin-bottom:6px">No lifecycle history recorded for ${esc(targetCode)} yet.</div>
+        <div style="font-size:11px;color:var(--text-faint)">Events appear here when an asset is created, updated, de-installed, or renewed via the install base UI.</div>
+      </div>`;
+    } else {
+      body.innerHTML = `<div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">${rows.length} event${rows.length === 1 ? '' : 's'} · most recent first</div>` + rows.map(_hvRenderEntry).join('');
+    }
+    if(window.refreshIcons) window.refreshIcons();
+  } catch(e){
+    if(body){
+      body.innerHTML = `<div role="alert" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:10px 12px;font-size:12px;color:#fca5a5">
+        <strong>Failed to load history.</strong>
+        <div style="margin-top:6px;font-family:var(--mono);font-size:11px">${esc((e && e.message) || String(e))}</div>
+      </div>`;
+    }
+  }
+}
+
 // Holds the PM id while the completion modal is open.
 let _pmCompletePendingId = null;
 
@@ -6487,6 +6599,7 @@ const _ASSETS_SORT_COLS = [
   { key:'cmc_end',    label:'CMC END',    accessor: a => parseFlexDate(findCmcForAsset(a)?.end)?.getTime() ?? null },
   { key:'total_calls',label:'TOTAL CALLS',accessor: a => RAW_TICKETS.filter(t => t.asset_code === a.code).length, defaultDir:'desc' },
   { key:'open_calls', label:'OPEN CALLS', accessor: a => RAW_TICKETS.filter(t => t.asset_code === a.code && isOpen(t)).length, defaultDir:'desc' },
+  { key:'history',    label:'',           sortable: false, thAttrs: 'style="width:50px"' },
   { key:'actions',    label:'',           sortable: false, thAttrs: 'class="mgr-plus" style="width:60px"' },
 ];
 let _assetsSortInited = false;
@@ -6536,6 +6649,7 @@ function renderAssets(search=''){
       <td style="font-family:var(--mono);font-size:10px">${cmc?esc(cmc.end):'—'}</td>
       <td style="font-family:var(--mono);text-align:center;color:var(--brand)">${assetTickets.length}</td>
       <td style="font-family:var(--mono);text-align:center;color:${openAssetTickets.length>0?'var(--red)':'var(--green)'}">${openAssetTickets.length}</td>
+      <td style="text-align:center;white-space:nowrap"><button class="btn btn-ghost" type="button" onclick="openHistoryModal('${esc(a.code)}')" title="History for ${esc(a.code)}" style="font-size:10px;padding:3px 8px;color:var(--text-dim)"><i data-lucide="history"></i></button></td>
       <td class="mgr-plus" style="text-align:right;white-space:nowrap">
         <button class="btn btn-ghost" type="button" onclick="openEditAssetModal('${esc(a.code)}')" title="Edit ${esc(a.code)}" style="font-size:10px;padding:3px 8px"><i data-lucide="edit-2"></i></button>
         <button class="btn btn-ghost" type="button" onclick="openDeInstallAssetModal('${esc(a.code)}')" title="De-install ${esc(a.code)}" style="font-size:10px;padding:3px 8px;color:var(--red);margin-left:4px"><i data-lucide="archive"></i></button>
@@ -6546,7 +6660,7 @@ function renderAssets(search=''){
   // v1.2.0 2e — empty state when search matches nothing.
   if(rows.length === 0){
     document.getElementById('asset-body').innerHTML = _emptyStateHtml({
-      icon:'search-x', headline:'No assets match your search', colspan:17,
+      icon:'search-x', headline:'No assets match your search', colspan:18,
       secondary: search
         ? `Nothing found for "${search}". Check spelling or clear the search.`
         : 'No assets are configured.',
@@ -6558,7 +6672,7 @@ function renderAssets(search=''){
   if(unmatchedTickets.length>0){
     const tbody=document.getElementById('asset-body');
     tbody.innerHTML+=`<tr class="admin-only" style="background:rgba(245,158,11,.06)">
-      <td colspan="17" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
+      <td colspan="18" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
         ⚠ ${unmatchedTickets.length} ticket${unmatchedTickets.length>1?'s':''} could not be matched to a known asset — review Flags &amp; Ambiguities
       </td>
     </tr>`;
