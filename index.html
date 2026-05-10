@@ -1460,6 +1460,44 @@ button,input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+<!-- DE-INSTALL ASSET MODAL (Phase 2 Track B B5.3) -->
+<div class="modal-overlay" id="deinstall-asset-modal" role="dialog" aria-modal="true" aria-labelledby="deinstall-asset-title" aria-hidden="true">
+  <div class="modal" style="max-width:560px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--red);margin-bottom:3px">DE-INSTALL ASSET</div>
+        <div id="deinstall-asset-title" style="font-family:var(--display);font-weight:700;font-size:15px">De-install Asset</div>
+        <div id="deinstall-asset-context" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('deinstall-asset-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:10px 12px;font-size:11px;color:#fca5a5;margin-bottom:14px;line-height:1.5">
+        <strong>This sets the asset status to <span style="font-family:var(--mono)">de_installed</span>.</strong>
+        The row remains in the database with full lifecycle history, but is no longer treated as active. Reversal from the UI is not supported in v1.4.1; reactivation requires a manual SQL update.
+      </div>
+      <div id="deinstall-asset-error" role="alert" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5;margin-bottom:12px"></div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Asset</label>
+        <div id="di-target-code" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:13px;font-weight:600">—</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label for="di-confirm" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Type the asset code to confirm *</label>
+        <input id="di-confirm" type="text" maxlength="5" autocomplete="off" oninput="_diUpdateSubmitState()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:13px;text-transform:uppercase">
+        <div style="font-size:10px;color:var(--text-faint);margin-top:4px">Submit unlocks only on exact match (case-insensitive) plus a non-empty reason.</div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label for="di-reason" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Reason *</label>
+        <textarea id="di-reason" rows="3" oninput="_diUpdateSubmitState()" placeholder="e.g. customer cancelled CMC; system uninstalled at site." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);resize:vertical;font-family:inherit;font-size:12px;line-height:1.5"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" type="button" onclick="closeModal('deinstall-asset-modal')" style="font-size:12px;padding:8px 16px">Cancel</button>
+        <button id="di-submit-btn" class="btn btn-primary" type="button" disabled onclick="submitDeInstallAsset()" style="font-size:12px;padding:8px 18px;background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.5);color:#fca5a5"><i data-lucide="archive"></i>De-install</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
@@ -6127,6 +6165,115 @@ async function submitEditAsset(){
   }
 }
 
+// ── De-install Asset (Phase 2 B5.3) ────────────────────────────────────
+// Sets config_assets.status = 'de_installed' for the selected asset. The
+// operator must type the exact code to confirm; the submit button is
+// enabled only on match plus a non-empty reason. The existing
+// config_assets.note column is preserved — the de-install reason is
+// captured in the asset_lifecycle_history row so the audit trail is
+// complete without overwriting prior notes.
+let _deinstallAssetCode = null;
+let _deinstallAssetBefore = null;
+
+function _diShowError(msg){
+  const el = document.getElementById('deinstall-asset-error');
+  if(el){ el.textContent = msg; el.style.display = 'block'; }
+}
+
+function _diClearForm(){
+  ['di-confirm','di-reason'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const errBox = document.getElementById('deinstall-asset-error');
+  if(errBox){ errBox.textContent = ''; errBox.style.display = 'none'; }
+  const sub = document.getElementById('di-submit-btn');
+  if(sub) sub.disabled = true;
+}
+
+function _diUpdateSubmitState(){
+  const sub = document.getElementById('di-submit-btn');
+  if(!sub) return;
+  if(!_deinstallAssetCode){ sub.disabled = true; return; }
+  const typed = ((document.getElementById('di-confirm')?.value) || '').trim().toUpperCase();
+  const reason = ((document.getElementById('di-reason')?.value) || '').trim();
+  sub.disabled = !(typed === _deinstallAssetCode && reason.length > 0);
+}
+
+function openDeInstallAssetModal(code){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  const asset = (CONFIG_ASSETS || []).find(a => (a.code || '').toUpperCase() === (code || '').toUpperCase());
+  if(!asset){ alert(`Asset ${code} not found.`); return; }
+  _diClearForm();
+  _deinstallAssetCode = asset.code;
+  _deinstallAssetBefore = { ...asset };
+  const target = document.getElementById('di-target-code');
+  if(target) target.textContent = asset.code;
+  const ctx = document.getElementById('deinstall-asset-context');
+  if(ctx) ctx.textContent = `${asset.code}${asset.name ? ' — ' + asset.name : ''}`;
+  openModal('deinstall-asset-modal');
+}
+
+async function submitDeInstallAsset(){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  if(!_deinstallAssetCode){ _diShowError('No asset is selected for de-install.'); return; }
+  // Re-validate the confirmation match server-side too — submit may have
+  // been bypassed via DevTools enabling the disabled button.
+  const typed = ((document.getElementById('di-confirm')?.value) || '').trim().toUpperCase();
+  if(typed !== _deinstallAssetCode){
+    _diShowError(`Confirmation code does not match. Type ${_deinstallAssetCode} exactly.`);
+    return;
+  }
+  const reason = ((document.getElementById('di-reason')?.value) || '').trim();
+  if(!reason){
+    _diShowError('Reason is required.');
+    return;
+  }
+  const submitBtn = document.getElementById('di-submit-btn');
+  if(submitBtn) submitBtn.disabled = true;
+  try {
+    // Update payload — does NOT touch `note` so any pre-existing
+    // note value is preserved. The de-install reason is captured in
+    // asset_lifecycle_history.note instead.
+    const payload = {
+      status: 'de_installed',
+      de_installed_at: new Date().toISOString(),
+      de_installed_by: _currentUser ? _currentUser.id : null,
+      updated_by: _currentUser ? _currentUser.id : null,
+    };
+    suppressRealtimeReload(3000);
+    const { data: updated, error } = await _sb
+      .from('config_assets').update(payload).eq('code', _deinstallAssetCode).select().single();
+    if(error){
+      _diShowError(`De-install failed: ${error.message || error}`);
+      return;
+    }
+    // History insert — best-effort. The reason lives here, not on
+    // config_assets, so prior notes are intact.
+    const { error: histErr } = await _sb.from('asset_lifecycle_history').insert({
+      asset_code: _deinstallAssetCode,
+      lifecycle_id: null,
+      event: 'de_installed',
+      before_state: _deinstallAssetBefore,
+      after_state: updated,
+      actor: _currentUser ? _currentUser.id : null,
+      actor_email: _currentUser ? _currentUser.email : null,
+      source: 'app:install_base_form',
+      note: reason,
+    });
+    if(histErr) console.warn('asset_lifecycle_history insert (event=de_installed) failed:', histErr);
+    _deinstallAssetCode = null;
+    _deinstallAssetBefore = null;
+    closeModal('deinstall-asset-modal');
+    await loadAllFromDB({ silent: true });
+    if(typeof renderAll === 'function') renderAll();
+  } catch(e){
+    _diShowError(`De-install error: ${(e && e.message) || e}`);
+  } finally {
+    if(submitBtn) submitBtn.disabled = false;
+  }
+}
+
 // Holds the PM id while the completion modal is open.
 let _pmCompletePendingId = null;
 
@@ -6389,7 +6536,10 @@ function renderAssets(search=''){
       <td style="font-family:var(--mono);font-size:10px">${cmc?esc(cmc.end):'—'}</td>
       <td style="font-family:var(--mono);text-align:center;color:var(--brand)">${assetTickets.length}</td>
       <td style="font-family:var(--mono);text-align:center;color:${openAssetTickets.length>0?'var(--red)':'var(--green)'}">${openAssetTickets.length}</td>
-      <td class="mgr-plus" style="text-align:right;white-space:nowrap"><button class="btn btn-ghost" type="button" onclick="openEditAssetModal('${esc(a.code)}')" title="Edit ${esc(a.code)}" style="font-size:10px;padding:3px 8px"><i data-lucide="edit-2"></i></button></td>
+      <td class="mgr-plus" style="text-align:right;white-space:nowrap">
+        <button class="btn btn-ghost" type="button" onclick="openEditAssetModal('${esc(a.code)}')" title="Edit ${esc(a.code)}" style="font-size:10px;padding:3px 8px"><i data-lucide="edit-2"></i></button>
+        <button class="btn btn-ghost" type="button" onclick="openDeInstallAssetModal('${esc(a.code)}')" title="De-install ${esc(a.code)}" style="font-size:10px;padding:3px 8px;color:var(--red);margin-left:4px"><i data-lucide="archive"></i></button>
+      </td>
     </tr>`;
   }).join('');
 
