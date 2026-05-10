@@ -1502,7 +1502,12 @@ const INSTALL_BASE_V2 = [
 // reassignment (Supabase load, XLSX upload, cold seed).
 function applyInstallBaseOverlay(){
   const prev = new Map((CONFIG_ASSETS || []).map(a => [a.code, a]));
-  CONFIG_ASSETS = INSTALL_BASE_V2.map(src => {
+  // Phase 2 (B5.0): the DB is now master for the install base. V2 stays
+  // canonical for the XLSX spellings of seeded codes; any code in the
+  // pre-overlay state (just loaded from DB) but NOT in V2 is appended so
+  // app-created rows (Add Asset workflow) are visible.
+  const v2Codes = new Set(INSTALL_BASE_V2.map(s => s.code));
+  const fromV2 = INSTALL_BASE_V2.map(src => {
     const p = prev.get(src.code) || {};
     return {
       code: src.code, ast_id: src.ast_id, name: src.name,
@@ -1514,6 +1519,20 @@ function applyInstallBaseOverlay(){
       total_calls: p.total_calls || 0,
     };
   });
+  const dbOnly = (CONFIG_ASSETS || [])
+    .filter(a => a.code && !v2Codes.has(a.code))
+    .map(a => ({
+      code: a.code, ast_id: a.ast_id || null, name: a.name,
+      tesla: a.tesla || null, model: a.model || null,
+      town: a.town || null, state: a.state || null,
+      channel: a.channel || null, gradient: a.gradient || null,
+      sw: a.sw || null, compressor: a.compressor || null,
+      coldhead: a.coldhead || null,
+      _alias_of: a._alias_of || null,
+      open_calls:  a.open_calls  || 0,
+      total_calls: a.total_calls || 0,
+    }));
+  CONFIG_ASSETS = [...fromV2, ...dbOnly];
 }
 // Seed CONFIG_ASSETS immediately so cold-start renders show the 24 xlsx rows
 // before any Supabase/xlsx load completes.
