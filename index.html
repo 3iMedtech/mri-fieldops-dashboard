@@ -1381,6 +1381,85 @@ button,input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+<!-- EDIT ASSET MODAL (Phase 2 Track B B5.2) -->
+<div class="modal-overlay" id="edit-asset-modal" role="dialog" aria-modal="true" aria-labelledby="edit-asset-title" aria-hidden="true">
+  <div class="modal" style="max-width:680px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:3px">INSTALL BASE</div>
+        <div id="edit-asset-title" style="font-family:var(--display);font-weight:700;font-size:15px">Edit Asset</div>
+        <div id="edit-asset-context" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('edit-asset-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="edit-asset-error" role="alert" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="ea-code" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Code (read-only)</label>
+          <input id="ea-code" type="text" disabled style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text-dim);font-family:var(--mono);font-size:12px;cursor:not-allowed">
+        </div>
+        <div>
+          <label for="ea-ast-id" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">AST ID</label>
+          <input id="ea-ast-id" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label for="ea-name" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Customer / Site Name *</label>
+        <input id="ea-name" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="ea-tesla" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Tesla</label>
+          <input id="ea-tesla" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-model" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Model</label>
+          <input id="ea-model" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-town" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Town</label>
+          <input id="ea-town" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-state" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">State</label>
+          <input id="ea-state" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="ea-channel" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Channel</label>
+          <input id="ea-channel" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-gradient" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Gradient</label>
+          <input id="ea-gradient" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-sw" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">SW</label>
+          <input id="ea-sw" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-compressor" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Compressor</label>
+          <input id="ea-compressor" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-coldhead" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Coldhead</label>
+          <input id="ea-coldhead" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label for="ea-note" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Note</label>
+        <textarea id="ea-note" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);resize:vertical;font-family:inherit;font-size:12px;line-height:1.5"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" type="button" onclick="closeModal('edit-asset-modal')" style="font-size:12px;padding:8px 16px">Cancel</button>
+        <button class="btn btn-primary" id="ea-submit-btn" type="button" onclick="submitEditAsset()" style="font-size:12px;padding:8px 18px"><i data-lucide="check"></i>Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
@@ -5935,6 +6014,119 @@ async function submitAddAsset(){
   }
 }
 
+// ── Edit Asset (Phase 2 B5.2) ──────────────────────────────────────────
+// The selected asset's code is captured at open time and never sent in
+// the update payload — Edit must not change code.
+let _editingAssetCode = null;
+let _editingAssetBefore = null;
+
+function _eaShowError(msg){
+  const el = document.getElementById('edit-asset-error');
+  if(el){ el.textContent = msg; el.style.display = 'block'; }
+}
+
+function _eaClearForm(){
+  ['ea-code','ea-ast-id','ea-name','ea-tesla','ea-model','ea-town','ea-state',
+   'ea-channel','ea-gradient','ea-sw','ea-compressor','ea-coldhead','ea-note']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const errBox = document.getElementById('edit-asset-error');
+  if(errBox){ errBox.textContent = ''; errBox.style.display = 'none'; }
+}
+
+function openEditAssetModal(code){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  const asset = (CONFIG_ASSETS || []).find(a => (a.code || '').toUpperCase() === (code || '').toUpperCase());
+  if(!asset){ alert(`Asset ${code} not found.`); return; }
+  _eaClearForm();
+  _editingAssetCode = asset.code;
+  _editingAssetBefore = { ...asset };
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val ?? ''; };
+  set('ea-code', asset.code);
+  set('ea-ast-id', asset.ast_id);
+  set('ea-name', asset.name);
+  set('ea-tesla', asset.tesla);
+  set('ea-model', asset.model);
+  set('ea-town', asset.town);
+  set('ea-state', asset.state);
+  set('ea-channel', asset.channel);
+  set('ea-gradient', asset.gradient);
+  set('ea-sw', asset.sw);
+  set('ea-compressor', asset.compressor);
+  set('ea-coldhead', asset.coldhead);
+  set('ea-note', asset.note);
+  const ctx = document.getElementById('edit-asset-context');
+  if(ctx) ctx.textContent = `Editing ${asset.code}. Code is read-only.`;
+  openModal('edit-asset-modal');
+}
+
+async function submitEditAsset(){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  if(!_editingAssetCode){ _eaShowError('No asset is selected for editing.'); return; }
+  const v = id => {
+    const el = document.getElementById(id);
+    const s = el ? (el.value || '').trim() : '';
+    return s.length ? s : null;
+  };
+  const name = ((document.getElementById('ea-name')?.value) || '').trim();
+  if(!name){
+    _eaShowError('Customer / Site Name is required.');
+    return;
+  }
+  const submitBtn = document.getElementById('ea-submit-btn');
+  if(submitBtn) submitBtn.disabled = true;
+  try {
+    const note = v('ea-note');
+    // Update payload — explicitly excludes `code` per Phase 2 review §7.2.
+    // Only the safe editable field set is sent.
+    const payload = {
+      ast_id: v('ea-ast-id'),
+      name,
+      tesla: v('ea-tesla'),
+      model: v('ea-model'),
+      town: v('ea-town'),
+      state: v('ea-state'),
+      channel: v('ea-channel'),
+      gradient: v('ea-gradient'),
+      sw: v('ea-sw'),
+      compressor: v('ea-compressor'),
+      coldhead: v('ea-coldhead'),
+      updated_by: _currentUser ? _currentUser.id : null,
+      note,
+    };
+    suppressRealtimeReload(3000);
+    const { data: updated, error } = await _sb
+      .from('config_assets').update(payload).eq('code', _editingAssetCode).select().single();
+    if(error){
+      _eaShowError(`Update failed: ${error.message || error}`);
+      return;
+    }
+    // Append-only history. Best-effort: if the history insert fails the
+    // asset row is already updated; surface a console.warn rather than
+    // attempt a rollback.
+    const { error: histErr } = await _sb.from('asset_lifecycle_history').insert({
+      asset_code: _editingAssetCode,
+      lifecycle_id: null,
+      event: 'updated',
+      before_state: _editingAssetBefore,
+      after_state: updated,
+      actor: _currentUser ? _currentUser.id : null,
+      actor_email: _currentUser ? _currentUser.email : null,
+      source: 'app:install_base_form',
+      note,
+    });
+    if(histErr) console.warn('asset_lifecycle_history insert (event=updated) failed:', histErr);
+    _editingAssetCode = null;
+    _editingAssetBefore = null;
+    closeModal('edit-asset-modal');
+    await loadAllFromDB({ silent: true });
+    if(typeof renderAll === 'function') renderAll();
+  } catch(e){
+    _eaShowError(`Update error: ${(e && e.message) || e}`);
+  } finally {
+    if(submitBtn) submitBtn.disabled = false;
+  }
+}
+
 // Holds the PM id while the completion modal is open.
 let _pmCompletePendingId = null;
 
@@ -6148,6 +6340,7 @@ const _ASSETS_SORT_COLS = [
   { key:'cmc_end',    label:'CMC END',    accessor: a => parseFlexDate(findCmcForAsset(a)?.end)?.getTime() ?? null },
   { key:'total_calls',label:'TOTAL CALLS',accessor: a => RAW_TICKETS.filter(t => t.asset_code === a.code).length, defaultDir:'desc' },
   { key:'open_calls', label:'OPEN CALLS', accessor: a => RAW_TICKETS.filter(t => t.asset_code === a.code && isOpen(t)).length, defaultDir:'desc' },
+  { key:'actions',    label:'',           sortable: false, thAttrs: 'class="mgr-plus" style="width:60px"' },
 ];
 let _assetsSortInited = false;
 function _initAssetsSort(){
@@ -6196,13 +6389,14 @@ function renderAssets(search=''){
       <td style="font-family:var(--mono);font-size:10px">${cmc?esc(cmc.end):'—'}</td>
       <td style="font-family:var(--mono);text-align:center;color:var(--brand)">${assetTickets.length}</td>
       <td style="font-family:var(--mono);text-align:center;color:${openAssetTickets.length>0?'var(--red)':'var(--green)'}">${openAssetTickets.length}</td>
+      <td class="mgr-plus" style="text-align:right;white-space:nowrap"><button class="btn btn-ghost" type="button" onclick="openEditAssetModal('${esc(a.code)}')" title="Edit ${esc(a.code)}" style="font-size:10px;padding:3px 8px"><i data-lucide="edit-2"></i></button></td>
     </tr>`;
   }).join('');
 
   // v1.2.0 2e — empty state when search matches nothing.
   if(rows.length === 0){
     document.getElementById('asset-body').innerHTML = _emptyStateHtml({
-      icon:'search-x', headline:'No assets match your search', colspan:16,
+      icon:'search-x', headline:'No assets match your search', colspan:17,
       secondary: search
         ? `Nothing found for "${search}". Check spelling or clear the search.`
         : 'No assets are configured.',
@@ -6214,7 +6408,7 @@ function renderAssets(search=''){
   if(unmatchedTickets.length>0){
     const tbody=document.getElementById('asset-body');
     tbody.innerHTML+=`<tr class="admin-only" style="background:rgba(245,158,11,.06)">
-      <td colspan="16" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
+      <td colspan="17" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
         ⚠ ${unmatchedTickets.length} ticket${unmatchedTickets.length>1?'s':''} could not be matched to a known asset — review Flags &amp; Ambiguities
       </td>
     </tr>`;
