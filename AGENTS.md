@@ -2,7 +2,7 @@
 
 This is a live FieldOps project. Be careful.
 
-All agents must follow `CLAUDE.md`, `FIELDOPS_QUICK_CONTEXT.md`, `PROJECT_MAP.md`, `TEST_MATRIX.md`, and the **FieldOps3i Agent Orchestration Model** at [`docs/fieldops3i_agent_orchestration_model.md`](docs/fieldops3i_agent_orchestration_model.md).
+All agents must follow `CLAUDE.md`, `FIELDOPS_QUICK_CONTEXT.md`, `PROJECT_MAP.md`, `TEST_MATRIX.md`, the **FieldOps3i Agent Orchestration Model** at [`docs/fieldops3i_agent_orchestration_model.md`](docs/fieldops3i_agent_orchestration_model.md), and the **Task Routing Protocol** at [`docs/fieldops3i_task_routing_protocol.md`](docs/fieldops3i_task_routing_protocol.md).
 
 ---
 
@@ -12,7 +12,9 @@ All agents must follow `CLAUDE.md`, `FIELDOPS_QUICK_CONTEXT.md`, `PROJECT_MAP.md
 |---|---|---|
 | `CLAUDE.md` | Operating manual, protected areas, safety rules, release discipline. **Top priority.** | Operator + assistant. |
 | `AGENTS.md` (this file) | Roster of named agents and routing guide. Lists every agent and how to choose between them. | Operator + assistant. |
-| `docs/fieldops3i_agent_orchestration_model.md` | Phase-level orchestration model. Defines the FieldOps3i Delivery Orchestrator hierarchy, stop/go language, hard safety rules, and the automation maturity roadmap. | Operator + assistant; updates require operator approval. |
+| `docs/fieldops3i_agent_orchestration_model.md` | Phase-level orchestration model. Defines the FieldOps3i Delivery Orchestrator hierarchy + PM tier (added 2026-05-09), stop/go language, hard safety rules. | Operator + assistant; updates require operator approval. |
+| `docs/fieldops3i_task_routing_protocol.md` | Task routing decision tree, quality gates by track, speed practices, automation maturity roadmap (Levels 1-6), Phase 2 integration walkthrough, anti-overengineering rules. | Operator + assistant; updates require operator approval. |
+| `automation/STATE.md` | Persistent state snapshot owned by `fieldops-automation-memory-agent`. Read by every agent at session start. | Memory agent updates after each verified gate. |
 | `.claude/commands/*.md` | Slash-command prompts (e.g., `/fieldops-implement`, `/fieldops-release`). Invoked by humans; do not bypass agent gates. | Operator. |
 | `.claude/agents/*.md` | Formal definitions of the new orchestration agents. Each file specifies purpose, responsibilities, inputs, outputs, model, hard stops, forbidden actions, approval gates, and final response format. | Operator + assistant; updates require operator approval. |
 | `FIELDOPS_QUICK_CONTEXT.md` / `PROJECT_MAP.md` | Quick-context and module map. Read before starting any task. | Operator. |
@@ -69,29 +71,47 @@ Do not assume separate full Super Admin and Admin profiles.
 
 ### FieldOps3i Delivery Orchestrator (top of the hierarchy)
 
-The Delivery Orchestrator coordinates phase-level work that crosses the SQL ↔ runtime ↔ release boundary (e.g., v1.4.1 Phase 2). It sits ABOVE `fieldops-orchestrator` (which handles within-module coordination). For module-level work, continue to use `fieldops-orchestrator` — escalate to the Delivery Orchestrator only when a task spans SQL + runtime + release.
+The Delivery Orchestrator coordinates phase-level work that crosses the SQL ↔ runtime ↔ release boundary (e.g., v1.4.1 Phase 2). It sits ABOVE the per-track Project Managers (added 2026-05-09), which sit above the specialists. For module-level work, continue to use `fieldops-orchestrator` — escalate to the Delivery Orchestrator only when a task spans SQL + runtime + release.
 
 ```
-FieldOps3i Delivery Orchestrator (.claude/agents/fieldops-delivery-orchestrator.md)
-├── fieldops-orchestrator                        (existing — module coordination)
-├── fieldops-sql-rls-safety-agent                (.claude/agents/fieldops-sql-rls-safety-agent.md)
-├── fieldops-migration-runbook-verifier          (.claude/agents/fieldops-migration-runbook-verifier.md)
-├── fieldops-data-reconciliation-agent           (.claude/agents/fieldops-data-reconciliation-agent.md)
-├── fieldops-runtime-integration-agent           (.claude/agents/fieldops-runtime-integration-agent.md)
-├── fieldops-test-agent                          (existing)
-├── fieldops-release-agent                       (existing)
-├── fieldops-automation-memory-agent             (.claude/agents/fieldops-automation-memory-agent.md)
-└── product design advisory team                 (existing — see §4)
+FieldOps3i Delivery Orchestrator (Tier 0)         (.claude/agents/fieldops-delivery-orchestrator.md)
+│
+├── Project Managers (Tier 1) — one per track
+│   ├── fieldops-database-pm                     (.claude/agents/fieldops-database-pm.md)
+│   │   ├── fieldops-sql-rls-safety-agent
+│   │   ├── fieldops-migration-runbook-verifier
+│   │   └── fieldops-data-reconciliation-agent
+│   │
+│   ├── fieldops-runtime-pm                      (.claude/agents/fieldops-runtime-pm.md)
+│   │   ├── fieldops-runtime-integration-agent
+│   │   ├── fieldops-qa-test-automation-agent    (.claude/agents/fieldops-qa-test-automation-agent.md) ◀ NEW
+│   │   └── fieldops-ui-agent (legacy advisory)
+│   │
+│   └── fieldops-release-pm                      (.claude/agents/fieldops-release-pm.md)
+│       ├── fieldops-release-agent (legacy)
+│       ├── fieldops-test-agent (legacy manual matrix)
+│       └── fieldops-qa-test-automation-agent (regression)
+│
+├── Cross-cutting (report directly to Delivery Orchestrator on demand)
+│   ├── fieldops-automation-memory-agent         (.claude/agents/fieldops-automation-memory-agent.md)
+│   │   ↳ persistent state at automation/STATE.md
+│   ├── fieldops-orchestrator (legacy module coordination)
+│   ├── fieldops-bug-agent (legacy)
+│   └── fieldops-supabase-agent (legacy)
+│
+└── Product design advisory team (advisory-only — see §4)
 ```
 
-Stop / Go language used by every agent in the hierarchy:
+**Stop / Go language used by every agent in the hierarchy:**
 
 - **PASS** — proceed to next stop point.
 - **HOLD** — waiting for input (operator paste-back, downstream agent finding, or approval phrase).
 - **STOP** — do not proceed; blocker identified.
 - **ESCALATE** — human decision required (specialist cannot decide between two acceptable paths).
 
-Detailed orchestration semantics, hard safety rules, and the automation maturity roadmap live in [`docs/fieldops3i_agent_orchestration_model.md`](docs/fieldops3i_agent_orchestration_model.md). Each new agent's full prompt is in `.claude/agents/<name>.md`.
+**When to skip a tier:** see [`docs/fieldops3i_task_routing_protocol.md`](docs/fieldops3i_task_routing_protocol.md) §2 for the full skip-conditions table. Single-specialist tasks bypass the PM. Single-line doc edits bypass the orchestrator.
+
+Detailed orchestration semantics, hard safety rules, and the maturity roadmap live in [`docs/fieldops3i_agent_orchestration_model.md`](docs/fieldops3i_agent_orchestration_model.md) and [`docs/fieldops3i_task_routing_protocol.md`](docs/fieldops3i_task_routing_protocol.md). Each agent's full prompt is in `.claude/agents/<name>.md`.
 
 ### fieldops-orchestrator
 
@@ -362,19 +382,29 @@ Recommended model: Claude Sonnet.
 ### Phase-level work (cross-cutting SQL + runtime + release)
 
 - Phase coordination, stop-point enforcement, multi-PR / multi-environment task → **`fieldops-delivery-orchestrator`**
-- Session-start state snapshot, "what's true right now?" question → **`fieldops-automation-memory-agent`**
+- Session-start state snapshot, "what's true right now?" question → **`fieldops-automation-memory-agent`** (reads `automation/STATE.md`)
+
+### Track-level work (multi-specialist within one track)
+
+- Any DB migration / RLS / backfill task that needs sql-rls-safety + runbook-verifier + reconciliation → **`fieldops-database-pm`**
+- Any runtime change that needs design + tests + role gating → **`fieldops-runtime-pm`**
+- Any release / tag / deploy / rollback decision → **`fieldops-release-pm`**
+
+### Specialist-level work (single domain — bypass the PM)
+
 - SQL migration / rollback / hot patch / backfill review → **`fieldops-sql-rls-safety-agent`**
 - Runbook correctness review (pre-flight, apply order, stop points, cleanup privilege) → **`fieldops-migration-runbook-verifier`**
 - Data drift / V2 backfill / XLSX upsert diff / marker verification → **`fieldops-data-reconciliation-agent`**
 - App runtime integration plan (RPC, role gating, lifecycle UI) → **`fieldops-runtime-integration-agent`**
+- Automated test coverage design / role-permission test harness / post-deploy smoke → **`fieldops-qa-test-automation-agent`** (NEW)
 
-### Module-level work (single domain)
+### Module-level work (single domain — legacy agents)
 
 - Planning or unclear request within a single module → `fieldops-orchestrator`
 - UI implementation → `fieldops-ui-agent`
 - Broken behavior → `fieldops-bug-agent`
 - Supabase/Auth/RLS/data writes (within module scope) → `fieldops-supabase-agent`
-- Verification/staging/regression → `fieldops-test-agent`
+- Manual `TEST_MATRIX.md` verification → `fieldops-test-agent`
 - Release/version/deployment → `fieldops-release-agent`
 
 ### Product design (advisory)

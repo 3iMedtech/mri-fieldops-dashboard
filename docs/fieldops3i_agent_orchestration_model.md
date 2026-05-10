@@ -99,22 +99,60 @@ The existing roster covers single-domain work (UI / bug / Supabase / test / rele
 
 ---
 
-## 5. New Agent Hierarchy
+## 5. New Agent Hierarchy (PM-tier extension, 2026-05-09)
 
 ```
-FieldOps3i Delivery Orchestrator
-├── fieldops-orchestrator (existing — module coordination)
-├── fieldops-sql-rls-safety-agent (new)
-├── fieldops-migration-runbook-verifier (new)
-├── fieldops-data-reconciliation-agent (new)
-├── fieldops-runtime-integration-agent (new)
-├── fieldops-test-agent (existing)
-├── fieldops-release-agent (existing)
-├── fieldops-automation-memory-agent (new)
-└── product design advisory team (existing — `fieldops-product-design-lead` + 5 specialists)
+FieldOps3i Delivery Orchestrator (Tier 0 — Executive)
+│
+├── Tier 1 — Project Managers (one per track)
+│   ├── fieldops-database-pm           (.claude/agents/fieldops-database-pm.md)
+│   ├── fieldops-runtime-pm            (.claude/agents/fieldops-runtime-pm.md)
+│   └── fieldops-release-pm            (.claude/agents/fieldops-release-pm.md)
+│
+├── Tier 2 — Specialists (owned by the PM in their track)
+│   │
+│   ├── DB-track specialists (owned by fieldops-database-pm)
+│   │   ├── fieldops-sql-rls-safety-agent
+│   │   ├── fieldops-migration-runbook-verifier
+│   │   └── fieldops-data-reconciliation-agent
+│   │
+│   ├── Runtime-track specialists (owned by fieldops-runtime-pm)
+│   │   ├── fieldops-runtime-integration-agent
+│   │   ├── fieldops-qa-test-automation-agent (NEW — automated test harness)
+│   │   └── fieldops-ui-agent (legacy; advisory)
+│   │
+│   └── Release-track specialists (owned by fieldops-release-pm)
+│       ├── fieldops-release-agent (legacy)
+│       ├── fieldops-test-agent (legacy; manual TEST_MATRIX)
+│       └── fieldops-qa-test-automation-agent (also reports here for regression)
+│
+├── Tier 3 — Cross-cutting (report directly to Delivery Orchestrator on demand)
+│   ├── fieldops-automation-memory-agent (state persistence: automation/STATE.md)
+│   ├── fieldops-orchestrator (legacy module coordination)
+│   ├── fieldops-bug-agent (legacy)
+│   └── fieldops-supabase-agent (legacy)
+│
+└── Tier 4 — Product design advisory team (advisory-only)
+    └── product design lead + 5 specialists (see PRODUCT_DESIGN_TEAM.md)
 ```
 
-The Delivery Orchestrator owns phase-level sequencing and stop points. The existing module Orchestrator continues to handle within-module work and reports up. Specialist agents own narrow, deep checks.
+**How the tiers work together:**
+- Tier 0 sequences phases, owns the final PASS/HOLD/STOP, never paraphrases anyone below.
+- Tier 1 PMs own a track end-to-end — they delegate to Tier 2 specialists, collect findings, produce ONE attributed verdict.
+- Tier 2 specialists own narrow, deep checks with hard stops.
+- Tier 3 + Tier 4 are invoked by name when needed; they don't automatically gate every task.
+
+**When to skip a tier:**
+- Single-specialist task → orchestrator may invoke the specialist directly (skip the PM).
+- Single-line doc edit → no orchestrator needed.
+- See [`docs/fieldops3i_task_routing_protocol.md`](fieldops3i_task_routing_protocol.md) §2 for the full skip-conditions table.
+
+**Why a PM tier was added (2026-05-09 round-2 audit finding):**
+The round-2 audit found that the orchestrator was synthesizing findings from 5+ specialists per multi-track task, creating cognitive overload and making it harder to enforce hard stops. A PM tier per track:
+- Reduces orchestrator load on multi-specialist tasks.
+- Gives each track ONE attributed verdict the orchestrator can combine cleanly.
+- Makes the SQL-apply-first sequencing constraint between DB and Runtime tracks an explicit cross-PM coordination, not an orchestrator-internal step.
+- Doesn't add gates — replaces "orchestrator does N specialist calls" with "orchestrator does 3 PM calls, each PM does its specialist calls in parallel".
 
 ---
 
@@ -260,14 +298,18 @@ These rules apply to every agent, every session, every task. They cannot be rela
 
 ## 11. Automation Maturity Roadmap
 
+This 4-level summary is preserved for backward compatibility. The full 6-level roadmap with target timelines lives in [`docs/fieldops3i_task_routing_protocol.md`](fieldops3i_task_routing_protocol.md) §6.
+
 | Level | Description | FieldOps3i status |
 |---|---|---|
-| **Level 1 — Human-guided automation** | Each task driven by the human; agents respond to specific prompts; no persistent state across sessions. | Pre-this-document baseline. |
-| **Level 2 — Semi-automated verification** | Specialist agents check artifacts (SQL / runbook) before execution; human still triggers every step; explicit stop points. | **Where this orchestration model places FieldOps3i.** Adds the SQL/RLS agent, runbook verifier, data reconciliation, runtime integration, and memory agents. |
-| **Level 3 — Controlled coding automation** | Agents own narrow implementation tasks (e.g., draft a runbook, draft a migration) under approved scope; human approves the artifact, agent commits; stop points still gate execution. | Phase 3+ aspiration. Will require additional discipline around commit-message convention, PR templates, automated checks (CI), and standardized review prompts. |
-| **Level 4 — Tesla-level coding automation with high-risk human approval** | End-to-end flow from task spec → design → implementation → staging verification → production approval → deploy, with the human appearing only at high-risk gates (production apply, security policy change, release tag). All other steps are agent-owned with full audit trail. | Long-term. Requires Level 3 discipline + automated testing + canary deploys + observable rollback metrics. |
+| **Level 1 — Human-guided automation** | Each task driven by the human; agents respond to specific prompts; no persistent state across sessions. | Pre-2026-05-09 baseline. |
+| **Level 2 — Semi-automated verification** | Specialist agents check artifacts (SQL / runbook) before execution; human still triggers every step; explicit stop points. | **Current state as of `e0da6a2`.** |
+| **Level 3 — Scripted verification** | Most pre-flight + post-apply checks are CI-asserted, not paste-backs. Memory persists. Rollback is tag-based. | **Target within 4-8 weeks** (after CI verify-migrations workflow + state persistence + Tier 1-3 tests land). |
+| **Level 4 — Automated test harness** | Playwright role-permission tests + RLS assertion suite + post-deploy smoke run on every PR/deploy. | Target within 3 months. |
+| **Level 5 — Self-checking release pipeline** | `scripts/release.sh` is authoritative; release flow automated end-to-end with rollback rehearsal. | Target within 6 months. |
+| **Level 6 — Near-autonomous delivery** | Human appears only at production apply, security policy change, release tag. | Long-term. |
 
-This document moves FieldOps3i from Level 1 to Level 2. PR #26 (Phase 2 review) is the first artifact that operates under Level 2 gates.
+The 2026-05-09 PM-tier upgrade itself does NOT advance the maturity level — it reduces operator burden on multi-track tasks and makes the existing Level 2 verification chain easier to follow. Maturity advances when CI assertions and the QA test harness actually land in `.github/workflows/` and `tests/`.
 
 ---
 
