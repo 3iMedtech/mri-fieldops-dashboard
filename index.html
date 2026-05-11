@@ -1731,6 +1731,14 @@ function applyInstallBaseOverlay(){
       channel: src.channel, gradient: src.gradient, sw: src.sw,
       compressor: src.compressor, coldhead: src.coldhead,
       _alias_of: null,
+      // Phase 2 B5.5: lifecycle + audit fields carried from the DB-loaded
+      // prev snapshot so V2-canonical codes still reflect their real status.
+      status: p.status || 'active',
+      de_installed_at: p.de_installed_at,
+      de_installed_by: p.de_installed_by,
+      note: p.note,
+      created_at: p.created_at, created_by: p.created_by,
+      updated_at: p.updated_at, updated_by: p.updated_by,
       open_calls:  p.open_calls  || 0,
       total_calls: p.total_calls || 0,
     };
@@ -1745,6 +1753,14 @@ function applyInstallBaseOverlay(){
       sw: a.sw || null, compressor: a.compressor || null,
       coldhead: a.coldhead || null,
       _alias_of: a._alias_of || null,
+      // Phase 2 B5.5: lifecycle + audit fields carried unchanged for
+      // app-created codes (Add Asset workflow).
+      status: a.status || 'active',
+      de_installed_at: a.de_installed_at,
+      de_installed_by: a.de_installed_by,
+      note: a.note,
+      created_at: a.created_at, created_by: a.created_by,
+      updated_at: a.updated_at, updated_by: a.updated_by,
       open_calls:  a.open_calls  || 0,
       total_calls: a.total_calls || 0,
     }));
@@ -4243,12 +4259,19 @@ function renderKPIGrid(){
       <div class="kpi-foot"><span class="kpi-status ${openStatus}">${openStatusLabel}</span><span style="font-size:10px;color:var(--text-faint);font-family:var(--mono)">${partsAwaited} parts pending</span></div>
     </div>
     ${(()=>{ const p=pendingAmbCount(); const ps=p>0?'risk':'good'; const pl=p>0?'Review Needed':'Clean'; return `<div class="kpi-card ${p>0?'purple':'green'} admin-only" title="Data flags apply to the entire dataset regardless of filter"><div class="kpi-label">Data Flags ${lockTag}</div><div class="kpi-value ${p>0?'purple':'green'}">${p}</div><div class="kpi-delta ${p>0?'warn':''}">${p>0?'Pending review':'All resolved'}</div><div class="kpi-foot"><span class="kpi-status ${ps}">${pl}</span></div></div>`; })()}
-    <div class="kpi-card cyan" title="Install base doesn't change by month">
+    ${(()=>{
+      // Phase 2 B5.5: Install Base KPI now shows active count; de-installed
+      // assets remain visible in the Install Base table but are excluded
+      // from the active-systems headline so the dashboard tracks live state.
+      const _activeIB = CONFIG_ASSETS.filter(a => (a.status || 'active') !== 'de_installed');
+      const _deIB = CONFIG_ASSETS.length - _activeIB.length;
+      return `<div class="kpi-card cyan" title="Install base doesn't change by month">
       <div class="kpi-label">Install Base Covered ${lockTag}</div>
-      <div class="kpi-value cyan">${CONFIG_ASSETS.length}</div>
-      <div class="kpi-delta">Across ${new Set(CONFIG_ASSETS.map(a=>a.town)).size} cities</div>
+      <div class="kpi-value cyan">${_activeIB.length}</div>
+      <div class="kpi-delta">${_deIB > 0 ? `${_deIB} de-installed · ` : ''}Across ${new Set(_activeIB.map(a=>a.town)).size} cities</div>
       <div class="kpi-foot"><span class="kpi-status info">Active Systems</span></div>
-    </div>
+    </div>`;
+    })()}
     <div class="kpi-card green" title="${slaTooltip}" style="cursor:help">
       <div class="kpi-label">SLA Compliance <span style="font-size:11px;vertical-align:middle">ⓘ</span></div>
       ${slaVal}
@@ -5043,7 +5066,11 @@ function _aggregateContracts(){
 
   const pmRows  = (typeof PM_SCHEDULE !== 'undefined' && Array.isArray(PM_SCHEDULE)) ? PM_SCHEDULE : [];
   const cmcRows = (typeof CMC_DATA    !== 'undefined' && Array.isArray(CMC_DATA))    ? CMC_DATA    : [];
-  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
+  // Phase 2 B5.5: active workflows exclude de-installed assets. Install Base
+  // table is the only view that still shows the full roster.
+  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS))
+    ? CONFIG_ASSETS.filter(a => (a.status || 'active') !== 'de_installed')
+    : [];
 
   // PM ordered first so it wins over CMC at the same tier inside the pool.
   const contractPool = {
@@ -5656,7 +5683,11 @@ function renderPM(){
   // match no IB asset at any tier are surfaced in a diagnostic, not the
   // main table — keeping Install Base / Contracts / PM aligned on one
   // canonical asset list.
-  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
+  // Phase 2 B5.5: active workflows exclude de-installed assets. Install Base
+  // table is the only view that still shows the full roster.
+  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS))
+    ? CONFIG_ASSETS.filter(a => (a.status || 'active') !== 'de_installed')
+    : [];
   const pmAll = (typeof PM_SCHEDULE !== 'undefined' && Array.isArray(PM_SCHEDULE)) ? PM_SCHEDULE.map(p => ({...p, _source:'pm'})) : [];
   const pmPool = { all: pmAll, consumed: new Set() };
 
@@ -6221,6 +6252,12 @@ function openDeInstallAssetModal(code){
   if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
   const asset = (CONFIG_ASSETS || []).find(a => (a.code || '').toUpperCase() === (code || '').toUpperCase());
   if(!asset){ alert(`Asset ${code} not found.`); return; }
+  // Phase 2 B5.5: short-circuit if already de-installed so we don't open
+  // the destructive modal or accrue duplicate de_installed history events.
+  if((asset.status || 'active') === 'de_installed'){
+    alert(`Asset ${asset.code} is already de-installed.`);
+    return;
+  }
   _diClearForm();
   _deinstallAssetCode = asset.code;
   _deinstallAssetBefore = { ...asset };
@@ -6589,6 +6626,7 @@ const _ASSETS_SORT_COLS = [
   { key:'state',      label:'STATE',      accessor: a => (a.state||'').toLowerCase() },
   { key:'model',      label:'MODEL',      accessor: a => (a.model||'').toLowerCase() },
   { key:'modality',   label:'MODALITY',   accessor: a => getAssetModality(a) },
+  { key:'status',     label:'STATUS',     accessor: a => (a.status || 'active') },
   { key:'channel',    label:'CHANNEL',    accessor: a => (a.channel||'').toLowerCase() },
   { key:'gradient',   label:'GRADIENT',   accessor: a => (a.gradient||'').toLowerCase() },
   { key:'sw',         label:'SW VER',     accessor: a => (a.sw||'').toLowerCase() },
@@ -6632,13 +6670,14 @@ function renderAssets(search=''){
     const openAssetTickets=assetTickets.filter(isOpen);
     const cmc=findCmcForAsset(a);
     const modality=getAssetModality(a);
-    return `<tr>
+    return `<tr${a.status === 'de_installed' ? ' style="opacity:0.55"' : ''}>
       <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(a.code)}</td>
       <td style="font-weight:500">${esc(a.name)}</td>
       <td style="color:var(--text-dim)">${esc(a.town)}</td>
       <td style="color:var(--text-dim)">${esc(a.state)}</td>
       <td style="font-size:11px">${esc(a.model)}</td>
       <td style="font-family:var(--mono);font-size:10px"><span class="badge ${modality==='PET-CT'?'pms':modality==='DR'?'installation':'medium'}">${modality}</span></td>
+      <td>${a.status === 'de_installed' ? '<span class="badge" style="background:rgba(239,68,68,.18);color:#fca5a5">DE-INSTALLED</span>' : '<span class="badge" style="background:rgba(16,185,129,.18);color:#6ee7b7">ACTIVE</span>'}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.channel)}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.gradient)}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.sw)}</td>
@@ -6660,7 +6699,7 @@ function renderAssets(search=''){
   // v1.2.0 2e — empty state when search matches nothing.
   if(rows.length === 0){
     document.getElementById('asset-body').innerHTML = _emptyStateHtml({
-      icon:'search-x', headline:'No assets match your search', colspan:18,
+      icon:'search-x', headline:'No assets match your search', colspan:19,
       secondary: search
         ? `Nothing found for "${search}". Check spelling or clear the search.`
         : 'No assets are configured.',
@@ -6672,7 +6711,7 @@ function renderAssets(search=''){
   if(unmatchedTickets.length>0){
     const tbody=document.getElementById('asset-body');
     tbody.innerHTML+=`<tr class="admin-only" style="background:rgba(245,158,11,.06)">
-      <td colspan="18" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
+      <td colspan="19" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
         ⚠ ${unmatchedTickets.length} ticket${unmatchedTickets.length>1?'s':''} could not be matched to a known asset — review Flags &amp; Ambiguities
       </td>
     </tr>`;
@@ -8886,6 +8925,14 @@ async function loadAllFromDB(opts = {}){
     town: r.town, state: r.state, channel: r.channel, gradient: r.gradient,
     sw: r.sw, compressor: r.compressor, coldhead: r.coldhead,
     _alias_of: r.alias_of,
+    // Phase 2 B5.5: carry Phase 1 lifecycle + audit fields so consumers can
+    // distinguish active vs de-installed rows and filter active workflows.
+    status: r.status || 'active',
+    de_installed_at: r.de_installed_at,
+    de_installed_by: r.de_installed_by,
+    note: r.note,
+    created_at: r.created_at, created_by: r.created_by,
+    updated_at: r.updated_at, updated_by: r.updated_by,
     open_calls: 0, total_calls: 0, // recomputed below
   }));
   // Replace whatever the DB returned with the 24-row xlsx source of truth
