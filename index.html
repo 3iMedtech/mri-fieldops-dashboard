@@ -5404,11 +5404,9 @@ function renderContracts(){
           <td style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._end))}</td>
           <td style="text-align:right">${_contractsDayBadge(r._days)}</td>
           <td><span class="badge low" style="background:${(_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8')}1a;color:${_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8'}">${esc(r.statusLabel)}</span></td>
-          <td>${pmCell(r)}</td>
-          <td style="font-size:11px;color:var(--text-dim)">${esc(r.town || '')}${r.region ? ' · ' + esc(r.region) : ''}</td>
           <td>${matchPill(r)}</td>
         </tr>`).join('')
-    : `<tr><td colspan="11"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
+    : `<tr><td colspan="9"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
 
   const pagination = sorted.length > CONTRACTS_PAGE_SIZE ? `
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px">
@@ -5440,8 +5438,6 @@ function renderContracts(){
             ${th('end','End')}
             ${th('days','Days', 'right')}
             ${th('status','Status')}
-            ${th('pm_status','PM Next / Status')}
-            ${th('town','Town / Region')}
             ${th('match','Match')}
           </tr></thead>
           <tbody>${tableRows}</tbody>
@@ -6632,11 +6628,8 @@ const _ASSETS_SORT_COLS = [
   { key:'sw',         label:'SW VER',     accessor: a => (a.sw||'').toLowerCase() },
   { key:'compressor', label:'COMPRESSOR', accessor: a => (a.compressor||'').toLowerCase() },
   { key:'coldhead',   label:'COLDHEAD',   accessor: a => (a.coldhead||'').toLowerCase() },
-  { key:'contract',   label:'CONTRACT',   accessor: a => (findCmcForAsset(a)?.contract || '').toLowerCase() },
-  { key:'cmc_start',  label:'CMC START',  accessor: a => parseFlexDate(findCmcForAsset(a)?.start)?.getTime() ?? null, defaultDir:'desc' },
-  { key:'cmc_end',    label:'CMC END',    accessor: a => parseFlexDate(findCmcForAsset(a)?.end)?.getTime() ?? null },
-  { key:'total_calls',label:'TOTAL CALLS',accessor: a => RAW_TICKETS.filter(t => t.asset_code === a.code).length, defaultDir:'desc' },
-  { key:'open_calls', label:'OPEN CALLS', accessor: a => RAW_TICKETS.filter(t => t.asset_code === a.code && isOpen(t)).length, defaultDir:'desc' },
+  // Phase 2 B5.6: contract/CMC dates moved to Contracts tab; total/open calls
+  // moved to Service History tab. Install Base is now asset-master-focused.
   { key:'history',    label:'',           sortable: false, thAttrs: 'style="width:50px"' },
   { key:'actions',    label:'',           sortable: false, thAttrs: 'class="mgr-plus" style="width:60px"' },
 ];
@@ -6665,10 +6658,8 @@ function renderAssets(search=''){
   }
 
   document.getElementById('asset-body').innerHTML=rows.map(a=>{
-    // Strict asset_code matching for ticket counts
-    const assetTickets=RAW_TICKETS.filter(t=>t.asset_code&&t.asset_code===a.code);
-    const openAssetTickets=assetTickets.filter(isOpen);
-    const cmc=findCmcForAsset(a);
+    // Phase 2 B5.6: Install Base is the asset-master view. Contract/CMC info
+    // lives on the Contracts tab; call counts live on Service History.
     const modality=getAssetModality(a);
     return `<tr${a.status === 'de_installed' ? ' style="opacity:0.55"' : ''}>
       <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(a.code)}</td>
@@ -6683,11 +6674,6 @@ function renderAssets(search=''){
       <td style="font-family:var(--mono);font-size:10px">${esc(a.sw)}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.compressor)}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.coldhead)}</td>
-      <td>${cmc?`<span class="badge cmc">${esc(cmc.contract)}</span>`:'<span style="color:var(--text-faint)">—</span>'}</td>
-      <td style="font-family:var(--mono);font-size:10px">${cmc?esc(cmc.start):'—'}</td>
-      <td style="font-family:var(--mono);font-size:10px">${cmc?esc(cmc.end):'—'}</td>
-      <td style="font-family:var(--mono);text-align:center;color:var(--brand)">${assetTickets.length}</td>
-      <td style="font-family:var(--mono);text-align:center;color:${openAssetTickets.length>0?'var(--red)':'var(--green)'}">${openAssetTickets.length}</td>
       <td style="text-align:center;white-space:nowrap"><button class="btn btn-ghost" type="button" onclick="openHistoryModal('${esc(a.code)}')" title="History for ${esc(a.code)}" style="font-size:10px;padding:3px 8px;color:var(--text-dim)"><i data-lucide="history"></i></button></td>
       <td class="mgr-plus" style="text-align:right;white-space:nowrap">
         <button class="btn btn-ghost" type="button" onclick="openEditAssetModal('${esc(a.code)}')" title="Edit ${esc(a.code)}" style="font-size:10px;padding:3px 8px"><i data-lucide="edit-2"></i></button>
@@ -6699,7 +6685,7 @@ function renderAssets(search=''){
   // v1.2.0 2e — empty state when search matches nothing.
   if(rows.length === 0){
     document.getElementById('asset-body').innerHTML = _emptyStateHtml({
-      icon:'search-x', headline:'No assets match your search', colspan:19,
+      icon:'search-x', headline:'No assets match your search', colspan:14,
       secondary: search
         ? `Nothing found for "${search}". Check spelling or clear the search.`
         : 'No assets are configured.',
@@ -6711,7 +6697,7 @@ function renderAssets(search=''){
   if(unmatchedTickets.length>0){
     const tbody=document.getElementById('asset-body');
     tbody.innerHTML+=`<tr class="admin-only" style="background:rgba(245,158,11,.06)">
-      <td colspan="19" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
+      <td colspan="14" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
         ⚠ ${unmatchedTickets.length} ticket${unmatchedTickets.length>1?'s':''} could not be matched to a known asset — review Flags &amp; Ambiguities
       </td>
     </tr>`;
