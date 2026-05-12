@@ -124,6 +124,20 @@
 - **Action added:** specialist hard stop.
 - **Linked files:** `db/migrations/0004_*.sql`, `.claude/agents/fieldops-sql-rls-safety-agent.md`.
 
+### L-SQL-005 — config_assets has no `modality` column; modality is runtime-derived from `model`
+
+- **Date:** 2026-05-11
+- **Commit / PR:** PR #27 / B6 Session X X1 setup at `cb6fa19`
+- **Agent:** Data reconciliation + SQL/RLS safety
+- **Event:** B6 Session X first attempt to insert `TEST-IB-AAA` into `public.config_assets` included a `modality` column, which failed with a column-does-not-exist error. The retry without the modality column succeeded.
+- **Mistake or discovery:** `config_assets` schema does NOT have a `modality` column. Modality is derived at runtime in `index.html` via `getAssetModality(a)` from the asset's `model` field (e.g. `"Discovery VCT"` → `"PET-CT"`, `"Radiography"` → `"DR"`, default → `"MRI"`). This separation is intentional: keeping the DB schema lean and the modality classification logic in JS makes it easy to refine without schema migrations.
+- **Root cause:** the impression that "asset has modality" comes from the visual IB table column, not the DB schema. The visual column is computed; the DB column does not exist.
+- **Prevention rule:** when inserting into `config_assets` via SQL (test setup, backfill, future migration), use only the actual DB columns: `code, ast_id, name, tesla, model, town, state, channel, gradient, sw, compressor, coldhead, alias_of, status, de_installed_at, de_installed_by, note, created_at, created_by, updated_at, updated_by`. Modality is NEVER a column.
+- **Applies to:** every direct SQL on `config_assets`. Category: SQL/RLS traps; recurring errors.
+- **Staleness risk:** invariant unless a future migration adds the column (which would be a Phase 3+ design decision contradicting the current architecture).
+- **Action added:** new memory entry; data-reconciliation agent should reference this when generating sample data or runbook insert examples.
+- **Linked files:** `index.html` (`getAssetModality` definition); `db/migrations/` (no future migration should add this column without explicit design review).
+
 ---
 
 ## fieldops-migration-runbook-verifier

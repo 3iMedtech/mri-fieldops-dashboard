@@ -64,6 +64,20 @@
 - **Action added:** orchestrator gate matrix lists per-action production phrases explicitly.
 - **Linked files:** `.claude/agents/fieldops-delivery-orchestrator.md`.
 
+### L-DO-005 — Phase 2 staging acceptance complete via multi-stop-point B5+B6 sequence
+
+- **Date:** 2026-05-11
+- **Commit / PR:** PR #27 / B6 PASS at `cb6fa19`
+- **Agent:** Delivery Orchestrator
+- **Event:** Phase 2 v1.4.1 staging acceptance reached PASS through a disciplined sequence: 0004 + 0005 SQL apply (2026-05-10) → runtime impl B1..B5.6 (12 commits) → B5.6 interactive verification PASS → B6 manual role matrix PASS across pre-flight SQL (Session C), Manager interactive (Session D), RPC failure path (Session F), Audit Log + realtime (Session O), XLSX preservation regression (Session X with operator-approved TEST-IB-AAA setup), and cleanup (Session I). Multiple stop points caught real defects: the B5.5 status-visibility gap, the cmc_contracts unique-key uncertainty (deferred to v1.4.2), and the load-mapper-drops-status finding.
+- **Mistake or discovery:** the multi-stop-point sequencing (each gate operator-approved + per-stop paste-back + Runtime PM HOLDing between substeps) was decisive in catching the B5.5 status visibility gap before any production action. Without per-stop discipline, B5.5 would have shipped silently and de-install would have appeared as a no-op visually.
+- **Root cause:** Phase 2 crossed SQL + runtime + role-gating + visual table simplification + lifecycle UI. The earlier orchestration model (Tier 0 + PMs + specialists + hard stops) was the right structure; the per-stop-point B-series was the right execution discipline.
+- **Prevention rule:** every multi-track phase MUST run a B-style sequenced staging matrix before production gates open. Per-stop paste-back is mandatory. STATE.md captures verified state after each PASS. Operator approval phrases are environment-specific (`L-G-003`) and per-step (production never inherits from staging).
+- **Applies to:** every multi-track phase. Category: recurring errors; release/deploy traps.
+- **Staleness risk:** invariant pattern.
+- **Action added:** B5 + B6 sequence is the canonical multi-track acceptance template for future Phase work (v1.4.2 cmc_contracts conversion, v1.4.x Renew RPC `0006_*`, etc.).
+- **Linked files:** `docs/v1.4.1_phase2_review.md`, `docs/v1.4.1_phase2_staging_apply_runbook.md`, `automation/STATE.md`.
+
 ---
 
 ## fieldops-automation-memory-agent

@@ -82,6 +82,68 @@
 - **Action added:** runtime-integration hard stop.
 - **Linked files:** `.claude/agents/fieldops-runtime-integration-agent.md`.
 
+### L-RTI-005 — XLSX safe-upsert preserves app-created config_assets rows on real production-shape data
+
+- **Date:** 2026-05-11
+- **Commit / PR:** PR #27 / B6 Session X PASS at `cb6fa19`
+- **Agent:** Runtime Integration
+- **Event:** B6 Session X (Phase 2 review §6.4 critical regression test) ran the full production-shape XLSX upload (402 tickets, 24 IB assets, 13 contracts, 43 new ambiguities auto-detected) against staging with a synthetic `TEST-IB-AAA` row present in `config_assets`. The synthetic row survived unchanged across all 13 columns and was later cleaned up via operator-approved DELETE.
+- **Mistake or discovery:** the B4-partial `xlsxOwnedConfigCols` whitelist (13 columns) plus `_sb.from('config_assets').upsert(deduped, { onConflict: 'code' })` correctly preserves rows whose codes are NOT in the XLSX. The pre-B4 `delete().neq('code','__sentinel__') + insert()` pattern would have wiped TEST-IB-AAA.
+- **Root cause:** safe-upsert pattern is correct; whitelist is correct; on-conflict key (`code`) is correct.
+- **Prevention rule:** every change to the XLSX upload path must preserve the synthetic-row regression test (insert manual row → upload XLSX that excludes it → confirm row survives). Once QA Tier-4 Playwright harness lands, add this as an automated check. Operator approval phrases for the test setup: `approved, create TEST-IB-AAA on staging` (insert) and `approved, cleanup TEST-IB-AAA on staging` (delete).
+- **Applies to:** XLSX upload path; future XLSX-related changes. Category: runtime/UI traps; release/deploy traps; recurring errors.
+- **Staleness risk:** invariant unless the XLSX flow changes.
+- **Action added:** B6 Session X (X1 setup → X2 upload → X3 verify survival → X5 cleanup) is the canonical regression test for the XLSX flow.
+- **Linked files:** `index.html` (`xlsxOwnedConfigCols` whitelist, `applyUploadedData` flow); `docs/v1.4.1_phase2_review.md` §6.4.
+
+### L-RTI-006 — Manager role MUST be driven by `app_user_role` RPC + `_userRole`; never email allowlists
+
+- **Date:** 2026-05-11
+- **Commit / PR:** PR #27 / B6 Session D M1 PASS at `cb6fa19`
+- **Agent:** Runtime Integration
+- **Event:** B6 Session D M1 confirmed Manager (`manager@3imedtech.com`) signed in on staging at `cb6fa19` resolved to `_userRole: "manager"` via RPC 200/`"manager"`, with `viewer_mode: true`, `manager_mode: true`, `superadmin_mode: false`. Phase 1.5 gap closed (in v1.4.0.1 baseline this same user resolved to `_userRole: "viewer"` because JWT `app_metadata.role='viewer'`).
+- **Mistake or discovery:** the RPC + user_roles seed mechanism is the operational source of truth for Manager-tier privilege, not any email comparison.
+- **Root cause:** verified empirically; B1 RPC integration + B2 email-allowlist removal both work as designed for Manager.
+- **Prevention rule:** never reintroduce any email-based check for Manager privilege in `canManagePM()`, `applyRoleRestrictions()`, route gates, or any handler. Always use `_userRole === 'manager'` (or `canManagePM()` which composes admin + manager). B2 removed the email allowlist in two places (`canManagePM` body and the `manager-mode` body class branch). Reaffirms and provides B6 evidence for `L-RTI-001`.
+- **Applies to:** every role-gating site in runtime code. Category: runtime/UI traps.
+- **Staleness risk:** invariant until B1 RPC is replaced or `user_roles` schema changes.
+- **Action added:** B6 Session D M1 is the canonical regression test for Manager role resolution.
+- **Linked entries:** `L-RTI-001` (original Manager-UX-from-`_userRole` rule).
+- **Linked files:** `index.html` (`applyRoleRestrictions`, `canManagePM`, `manager-mode` body class — refer to current `cb6fa19` content for exact line numbers).
+
+### L-RTI-007 — RPC failure path: Manager degrades to viewer; admin only via valid JWT; non-admin NEVER becomes admin
+
+- **Date:** 2026-05-11
+- **Commit / PR:** PR #27 / B6 Session F PASS at `cb6fa19`
+- **Agent:** Runtime Integration
+- **Event:** B6 Session F (F1–F4) blocked `*rpc/app_user_role*` via DevTools network condition and verified failure behavior across all three roles:
+  - F1 Admin: `_userRole='admin'` via JWT fallback (Admin's JWT `app_metadata.role='admin'`); admin UI works.
+  - F2 Manager: `_userRole='viewer'` via JWT fallback (Manager's JWT is v1.4.0.1 baseline `'viewer'`); `manager_mode: false`; admin UI hidden; **degrades safely without privilege escalation**.
+  - F3 Engineer: `_userRole='viewer'`; no change.
+  - F4 Unblock + reload as Manager: `_userRole='manager'` restored; `manager_mode: true`; admin UI returns.
+- **Mistake or discovery:** the B1 implementation's `try/catch` + `let resolvedRole = 'viewer'` safe default + JWT fallback correctly produces a NEVER-escalates outcome under RPC failure.
+- **Root cause:** B1 design is correct; staging behavior matches design.
+- **Prevention rule:** never modify `applyRoleRestrictions()` in a way that allows `resolvedRole` to be `'admin'` without a valid corresponding source (RPC returning literal `'admin'` AND the `app_user_role` schema check OR JWT `app_metadata.role === 'admin'`). The default-to-viewer pattern is load-bearing. Reaffirms and provides B6 evidence for `L-RTI-002`.
+- **Applies to:** `applyRoleRestrictions()` and any future role-resolution function. Category: runtime/UI traps; recurring errors; **security**.
+- **Staleness risk:** invariant.
+- **Action added:** B6 Session F (F1–F4) is the canonical RPC-failure regression test. Repeat for any change to the role-resolution path.
+- **Linked entries:** `L-RTI-002` (original auth-fallback / never-default-admin rule).
+- **Linked files:** `index.html` (`applyRoleRestrictions` — refer to current `cb6fa19` content).
+
+### L-RTI-008 — Manager XLSX upload remains admin-only until cmc_contracts safe-upsert ships
+
+- **Date:** 2026-05-11
+- **Commit / PR:** PR #27 / B6 Session D M6 PASS at `cb6fa19`
+- **Agent:** Runtime Integration
+- **Event:** B6 Session D M6 confirmed that the XLSX upload control is not visible/usable to Manager on staging at `cb6fa19`. The function-level Admin gate at `applyUploadedData` (`if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }`) correctly blocks Manager. Inner `cmc_contracts` admin guard from B4-complete is also intact as defense-in-depth.
+- **Mistake or discovery:** per Phase 2 review §1 Q1 ("Manager XLSX permission: allow, but only after XLSX upload is converted to safe upsert behavior"), Manager XLSX permission is conditional on cmc_contracts conversion. B4-partial converted config_assets safely (proven via `L-RTI-005`). cmc_contracts conversion was deferred to v1.4.2 pending a UNIQUE constraint on `sn`. **Until cmc_contracts conversion ships, Manager XLSX must remain admin-only.**
+- **Root cause:** the function-level Admin gate is the operative safety. The cmc_contracts section also has an inner Admin guard (B4-complete) as defense-in-depth.
+- **Prevention rule:** any commit that relaxes the function-level Admin gate at `applyUploadedData` MUST coincide with: (a) cmc_contracts safe-upsert ready, (b) a UNIQUE constraint on `cmc_contracts.sn` via a separate migration approved by sql-rls-safety, and (c) updated B6 Session D M6 expected behavior. Until all three land, the gate stays at `_userRole !== 'admin'`.
+- **Applies to:** future v1.4.2 cmc_contracts conversion work. Category: runtime/UI traps; release/deploy traps; recurring errors.
+- **Staleness risk:** retires when v1.4.2 cmc_contracts safe-upsert ships with the UNIQUE constraint.
+- **Action added:** B6 Session D M6 is the regression test for this gate.
+- **Linked files:** `index.html` (Admin gate inside `applyUploadedData`); B4-complete commit `34e5433`; future `0007_*` migration if it lands.
+
 ---
 
 ## fieldops-qa-test-automation-agent
