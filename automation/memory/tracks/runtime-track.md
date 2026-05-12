@@ -144,6 +144,36 @@
 - **Action added:** B6 Session D M6 is the regression test for this gate.
 - **Linked files:** `index.html` (Admin gate inside `applyUploadedData`); B4-complete commit `34e5433`; future `0007_*` migration if it lands.
 
+### L-RTI-009 — Production confirmation of role-gating three-layer defense (CSS / JS / RLS) + Audit Log dual gate
+
+- **Date:** 2026-05-12
+- **Commit / PR:** PR #27 merge `0c4e9d1`; production runtime smoke browser-driven
+- **Agent:** Runtime Integration
+- **Event:** Browser-driven production smoke verified the full three-layer role gate on the production-deployed runtime payload (`cb6fa19` content served via merge commit `0c4e9d1`, content-length 629,540 B). Three roles tested in sequence. Manager resolved to `_userRole='manager'` via RPC 200 (production-side confirmation of Phase 1.5 gap closure). Engineer's per-row Edit / De-install buttons exist in DOM (defense-in-depth, 25 each via `title` attribute query) but are CSS-hidden — `getBoundingClientRect()` reports `height=0` and `getComputedStyle()` reports the `.mgr-plus { display: none; }` rule active for `viewer-mode`. IB Header index 13 (Actions column) carries `class="mgr-plus"` and is CSS-hidden for Engineer; header index 12 (History column) is unclassed and visible to all roles, with 25 visible History buttons for Engineer (matches `L-RTI-004` read-only-all-roles spec). Manager XLSX upload control hidden on production (`upload_xlsx_visible_count: 0`) — production confirmation of `L-RTI-008`. **Manager's Audit Log access is gated at TWO layers**: nav-hidden (no Audit Log nav item in Manager's sidebar) AND route-gated (direct `location.hash='#/auditlog'` redirects to Dashboard without rendering the audit table — `audit_table_present: false`, `has_showing_500_banner: false`).
+- **Mistake or discovery:** confirmation, not surprise — reaffirms `L-RTI-001` / `L-RTI-006` / `L-RTI-008` with production evidence. The Audit Log gate is more robust than a nav-only gate would be: nav-level hiding alone would be bypassable via DevTools URL navigation, but the route-level redirect prevents the audit data from rendering regardless of how the URL is set. Defense-in-depth works.
+- **Root cause:** not a defect; design held on production.
+- **Prevention rule:** future role-related changes to `applyRoleRestrictions()`, `canManagePM()`, the `.mgr-plus` CSS rule, or any route handler must preserve **all three layers** of defense AND **route-level gates** for sensitive UI surfaces (Audit Log today; future Renew UI; future v1.4.2 cmc_contracts upload). Surface-level nav-hiding alone is insufficient.
+- **Applies to:** every role-gating site in runtime code. Category: runtime/UI traps; **security**.
+- **Staleness risk:** invariant until role architecture changes.
+- **Action added:** production-side regression baseline captured in `automation/STATE.md` production smoke table.
+- **Linked entries:** `L-RTI-001` (Manager UX from `_userRole`), `L-RTI-006` (Manager RPC role on staging), `L-RTI-008` (Manager XLSX admin-only), `L-RTI-004` (History read-only all-roles).
+- **Linked files:** `index.html` (`applyRoleRestrictions`, `canManagePM`, `.mgr-plus` CSS, route handlers), `automation/STATE.md`.
+
+### L-RTI-010 — Production confirmation of RPC failure path security: Manager degrades to viewer, never to admin
+
+- **Date:** 2026-05-12
+- **Commit / PR:** PR #27 production runtime smoke §E
+- **Agent:** Runtime Integration
+- **Event:** Production §E security smoke confirmed Manager under blocked `app_user_role` RPC degrades to viewer (`_userRole='viewer'`, `manager_mode=false`, `superadmin_mode=false`, `can_manage_pm=false`). **Manager never escalated to admin under RPC failure.** Mechanism: a JS-level `window.fetch` wrapper intercepted any request whose URL matched `/rpc\/app_user_role/i` and returned `Promise.reject(new TypeError('NetworkError: Blocked by §E smoke test'))`. Direct `_sb.rpc('app_user_role')` then returned `{ data: null, status: 0, error: "NetworkError: …" }`; `_sb.rpc('app_can_write')` continued to succeed (only `app_user_role` blocked, by design). After `applyRoleRestrictions()` re-run under the block, `_userRole` resolved to `viewer` via JWT fallback (Manager's JWT `app_metadata.role` is the v1.4.0.1 baseline `'viewer'`). The interceptor was uninstalled after the test (`window._origFetchE5` restored to native `window.fetch` and deleted from `window` scope); Manager then recovered to `_userRole='manager'` after the next `applyRoleRestrictions()` call (RPC 200/"manager"). **Production server state was never altered** — the interceptor lived only in the operator's browser tab and is fully reversible.
+- **Mistake or discovery:** reaffirms `L-RTI-002` and `L-RTI-007` with production-side evidence. The JWT fallback path correctly produces `viewer` for Manager (whose JWT `app_metadata.role` is `'viewer'`) and `admin` for Admin (whose JWT is `'admin'`). The default-to-viewer pattern at the top of `applyRoleRestrictions()` is load-bearing — `let resolvedRole = 'viewer'` plus a try/catch wrapping the RPC plus an explicit JWT fallback yields the security-correct outcome.
+- **Root cause:** B1 design (`L-RTI-001` / `L-RTI-002`) is correct. Production matches staging Session F behavior verified at `cb6fa19` per `L-RTI-007`.
+- **Prevention rule:** never modify `applyRoleRestrictions()` in a way that allows `resolvedRole` to become `'admin'` without a valid corresponding source — i.e., either RPC returning literal `'admin'` AND passing the `app_user_role` schema check, OR JWT `app_metadata.role === 'admin'`. Any future "default to higher privilege on uncertainty" change is a security regression. The production-side §E smoke can be re-run at any time without touching server state — the fetch-interceptor + `applyRoleRestrictions()` re-call is a fully client-side, fully reversible test.
+- **Applies to:** `applyRoleRestrictions()` and any future role-resolution function. Category: runtime/UI traps; recurring errors; **security**.
+- **Staleness risk:** invariant.
+- **Action added:** production-side §E security smoke is the canonical regression for the RPC-failure security invariant. Repeat for any change to the role-resolution path. The fetch-interceptor mechanism is documented for reuse.
+- **Linked entries:** `L-RTI-002` (original auth-fallback / never-default-admin rule), `L-RTI-007` (B6 Session F staging evidence).
+- **Linked files:** `index.html` (`applyRoleRestrictions`), `docs/v1.4.1_phase2_production_apply_runbook.md` §12.5.
+
 ---
 
 ## fieldops-qa-test-automation-agent

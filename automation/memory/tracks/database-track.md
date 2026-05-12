@@ -64,6 +64,21 @@
 - **Action added:** runbook §4.2 to add a note: "If SQL Editor only shows 'Success. No rows returned.', that is the headline of `COMMIT` — verify via §4.3 SELECTs." Database PM reporting includes the headline-vs-Results-panel disambiguation.
 - **Linked files:** `docs/v1.4.1_phase2_staging_apply_runbook.md` §4.2, `db/migrations/0005_v141_phase2_install_base_master_backfill_REVIEW_ONLY.sql`, `automation/memory/tracks/database-track.md`.
 
+### L-DBPM-005 — Production Phase 2 SQL applied 2026-05-12; baseline = 25 active config_assets, AN025 backfilled
+
+- **Date:** 2026-05-12
+- **Commit / PR:** Production SQL Gate B PASS (operator-applied via runbook §6-§9)
+- **Agent:** Database PM
+- **Event:** Production `0004_v141_phase2_additive_write_policies_REVIEW_ONLY.sql` and `0005_v141_phase2_install_base_master_backfill_REVIEW_ONLY.sql` were applied to production Supabase on 2026-05-12 per `docs/v1.4.1_phase2_production_apply_runbook.md` §6-§9. Pre-flight (§5 Gate A) PASSed earlier the same day. Operator-asserted post-apply baseline (indirectly confirmed by the production runtime smoke's role-resolution outcomes — Manager `rpc_app_can_write=true` requires the 0004 policies to be live; Manager `rpc_app_user_role="manager"` requires the helpers + seed intact): config_assets=25 (active=25, de_installed=0), pm_schedule=22, cmc_contracts=13, asset_lifecycle=0, asset_lifecycle_history=0. AN025 / KVC Diagnostics / Mysore / KA / 1.5T / Philips 1.5 T Achieva / CDAS 16CH / 281 / R5.7.1 / HC-8E / F2000 backfilled with `note='v1.4.1 phase 2 install_base_v2 backfill'` (operator-verified by §9.2). Marker set equals pre-state missing set (one code, `AN025`) per `L-REC-001`. No staging-side fixtures (AN026, AN027, TEST-IB-AAA) reached production — verified by `CONFIG_ASSETS` distinct-codes probe in the production runtime smoke (codes exactly AN001..AN025).
+- **Mistake or discovery:** SQL apply on production followed the same `L-DBPM-001` (0004→0005 sequencing) and `L-REC-001` (marker rows = pre-state missing set) pattern as staging. No surprises. The `L-DBPM-004` "SQL Editor suppresses NOTICE" disambiguation applied identically — operator paste-back used `SELECT` verification per `L-DBPM-004` rather than relying on SQL Editor's intermediate output.
+- **Root cause:** runbook-driven SQL apply with operator-typed phrase gating worked end-to-end.
+- **Prevention rule:** archive 0004/0005 as historical migrations after Gate F (consider moving from `db/migrations/000X_*_REVIEW_ONLY.sql` naming convention to plain `000X_*.sql` if/when the team adopts that). The Renew RPC (`0006_*`) is the next migration and is gated on its own design + sql-rls-safety review + runbook-verifier review + apply cycle. The `cmc_contracts` safe-upsert (`0007_*`) is still deferred per `L-RTI-008` pending a UNIQUE constraint on `cmc_contracts.sn`.
+- **Applies to:** Phase 2 v1.4.1 production state recording; future migration apply work. Category: SQL/RLS traps; recurring errors.
+- **Staleness risk:** archive after v1.4.2 `cmc_contracts` conversion if/when it ships.
+- **Action added:** production baseline captured in `automation/STATE.md` production Supabase section.
+- **Linked entries:** `L-DBPM-001` (0004→0005 sequencing), `L-DBPM-004` (SQL Editor NOTICE suppression / verify via SELECT), `L-REC-001` (marker rows = pre-state missing set), `L-RTI-008` (Manager XLSX gate gated on cmc_contracts).
+- **Linked files:** `db/migrations/0004_v141_phase2_additive_write_policies_REVIEW_ONLY.sql`, `db/migrations/0005_v141_phase2_install_base_master_backfill_REVIEW_ONLY.sql`, `docs/v1.4.1_phase2_production_apply_runbook.md`, `automation/STATE.md`.
+
 ---
 
 ## fieldops-sql-rls-safety-agent

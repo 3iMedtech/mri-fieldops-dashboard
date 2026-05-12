@@ -12,18 +12,18 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 ## Last verified
 
-- **Snapshot timestamp:** 2026-05-11 (B6 manual role matrix PASS on staging at `cb6fa19`)
-- **Snapshot author:** Claude (acting as Delivery Orchestrator + Runtime PM + QA + Release PM + automation-memory)
+- **Snapshot timestamp:** 2026-05-12 (Phase 2 v1.4.1 production smoke PASS at production-served `cb6fa19` runtime via merge commit `0c4e9d1`)
+- **Snapshot author:** Claude (acting as Delivery Orchestrator + Runtime PM + Database PM + Release PM + QA + automation-memory)
 
 ---
 
 ## Branch + commit
 
-- **Active runtime branch:** `feat/v1.4.1-phase2-impl`
-- **Latest commit on runtime branch:** `cb6fa19` — `B5.6: simplify Install Base + Contracts column information architecture`
-- **Active governance branch:** `feat/v1.4.1-phase2-review`
-- **Latest commit on governance branch:** `62c5018` — `Update STATE.md + database-track memory after Phase 2 staging SQL apply`
-- **Commits ahead of `main`:** 21 on the runtime branch (the governance branch is an ancestor)
+- **Canonical branch:** `main`
+- **Latest commit on `main`:** `0c4e9d1` — `Merge PR #27: v1.4.1 Phase 2 runtime implementation`
+- **Production-deployed runtime payload:** `index.html` at `cb6fa19` content (B5.6) — commits after `cb6fa19` are docs/memory/runbook only
+- **Retained feature branch (post-merge):** `feat/v1.4.1-phase2-impl` head `dcd0367` (kept per `gh pr merge --delete-branch=false`)
+- **Retained governance branch:** `feat/v1.4.1-phase2-review` head `62c5018` (now MERGED via PR #27 ancestry)
 - **Working tree:** clean (as of last verified snapshot)
 
 ---
@@ -32,9 +32,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 | # | Title | State | Draft | Head branch | Latest commit | Owner verdict |
 |---|---|---|---|---|---|---|
-| 27 | Draft: v1.4.1 Phase 2 runtime implementation | OPEN | YES | `feat/v1.4.1-phase2-impl` | `cb6fa19` | B5.6 interactive verification PASS; B6 manual role matrix PASS (Sessions C/D/F/O/X/I); staging serves `cb6fa19`; PR remains DRAFT pending production runbook + production-side gates |
-| 26 | Draft: v1.4.1 Phase 2 review package | OPEN | YES | `feat/v1.4.1-phase2-review` | `62c5018` | Phase 2 governance package (review doc + runbook + memory + agent definitions). Phase 2 staging SQL apply COMPLETE. Held for merge pending PR #27 ready + production gates. |
-| 25 | Draft: v1.4.1 Phase 1 production-apply runbook (review-only) | OPEN | YES | `docs/v1.4.1-phase1-production-runbook` | `d59f41b` | Held until Phase 2 production discussion |
+| 25 | Draft: v1.4.1 Phase 1 production-apply runbook (review-only) | OPEN | YES | `docs/v1.4.1-phase1-production-runbook` | `d59f41b` | Phase 2 production discussion now complete; PR #25 may be revisited or closed separately — operator-deferred |
 
 ---
 
@@ -42,6 +40,8 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 | # | Merged at | Merge SHA | Note |
 |---|---|---|---|
+| 27 | 2026-05-12T14:32:18Z | `0c4e9d1` | v1.4.1 Phase 2 runtime implementation. 34 files / +7,797 / −70 lines. Brought B1..B5.6 runtime + 0004/0005 migrations + Phase 2 docs + agent definitions + memory system into main. |
+| 26 | (auto-marked merged via PR #27 ancestry path) | n/a (no separate merge commit) | Phase 2 review package. Its branch (`feat/v1.4.1-phase2-review` head `62c5018`) was an ancestor of `feat/v1.4.1-phase2-impl`, so PR #27's merge brought its content onto main; GitHub auto-marked PR #26 MERGED. |
 | 24 | (Phase 1 ship) | `8c54334` | Phase 1 schema + helpers + RLS + user_roles seed; recursion-fix baked in |
 
 ---
@@ -52,41 +52,18 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 - **URL ref:** `qupkpprptopyejbnslev`
 - **Org:** Abhijit Sen (FREE)
 - **Last verified:** 2026-05-11 (B6 Session C pre-flight SQL PASS; Session I final baseline confirmation)
-- **Migrations applied:**
-  - 0001 (pm_completions_engineer_ids)
-  - 0002 (lock_audit_log_writes)
-  - 0003 (asset_lifecycle_phase1) — Phase 1 baseline; 11 v141_* policies on lifecycle tables; 4 SECURITY DEFINER helpers + recursion guard; 1 `v141_history_insert_app_can_write` policy on `asset_lifecycle_history`
-  - 0004 (additive write policies) — **APPLIED 2026-05-10**; 6 new `v141_*_app_can_write` policies on `config_assets`/`pm_schedule`/`cmc_contracts` (verified runbook §3.3, B6 C-R3)
-  - 0005 (install base master backfill) — **APPLIED 2026-05-10 09:36:55 UTC**; 1 row inserted (`AN025`); marker set = pre-state missing set per `L-REC-001` (verified runbook §4.3)
-
+- **Migrations applied:** 0001, 0002, 0003 (Phase 1), 0004 (Phase 2 additive write policies, 2026-05-10), 0005 (Phase 2 IB master backfill, 2026-05-10 09:36:55 UTC). All operator-applied + verified per `L-DBPM-001` / `L-REC-001`.
 - **Row counts (last verified 2026-05-11, B6 Session I):**
-  - `config_assets`: **27** (25 active + 2 de-installed; baseline = 25 V2 codes after 0005 backfill + 2 app-created test fixtures AN026/AN027)
+  - `config_assets`: **27** (25 active + 2 de-installed; baseline = 25 V2 codes after 0005 backfill + 2 app-created test fixtures AN026/AN027 retained as staging-only)
   - `config_assets` active: 25
-  - `config_assets` de-installed: 2 (AN026, AN027 — intentional staging fixtures; cleanup operator-deferred)
+  - `config_assets` de-installed: 2 (AN026, AN027 — staging fixtures; production never sees them)
   - `pm_schedule`: 22
   - `cmc_contracts`: 13
-  - `audit_log`: ≥ 1500+ (B6 Session O Audit Log read showed 500 of 500 most recent events)
-  - `user_roles`: 3 (admin / manager / viewer — one each; verified B6 C-R1)
-  - `asset_lifecycle`: 0 (no lifecycle rows yet; Renew workflow gated on `0006_*`)
-  - `asset_lifecycle_history`: 6 (3 events each for AN026 + AN027: `created` + `updated`(s) + `de_installed`)
-
-- **Helpers present (5):**
-  - `app_user_role()` — SECURITY DEFINER, search_path=public ✓ (verified B6 C-R2)
-  - `app_can_write()` — SECURITY DEFINER, search_path=public ✓
-  - `app_is_admin()` — SECURITY DEFINER, search_path=public ✓
-  - `_other_active_admin_exists(uuid)` — SECURITY DEFINER, search_path=public ✓
-  - `_user_roles_block_last_admin_delete()` — trigger function ✓
-
-- **v141_* policies on lifecycle tables:** 11 (from 0003)
-- **v141_*_app_can_write policies on legacy tables (config_assets, pm_schedule, cmc_contracts):** 6 (3 INSERT + 3 UPDATE; added by 0004 on 2026-05-10)
-- **v141_history_insert_app_can_write policy on asset_lifecycle_history:** 1 (from 0003)
-- **Legacy admin_* policies on 4 legacy tables:** 16 (unchanged; 0004 is strictly additive)
-- **V2 fingerprint:** `965ffcec48aa3ddfbfb7b975bc48dca9` (md5 of AN001..AN025 in sorted order)
-- **V2 missing code on staging:** none (was `AN025`; inserted by 0005 at 2026-05-10 09:36:55 UTC)
-
-- **GRANT vs RLS for `authenticated` role on (config_assets, pm_schedule, cmc_contracts):** INSERT=true, UPDATE=true, DELETE=variable (not required for Phase 2)
-
-- **B6 XLSX preservation regression:** PASS at 2026-05-11. Synthetic `TEST-IB-AAA` created (operator-approved), survived full 402-ticket XLSX upload (43 new ambiguities auto-detected), cleaned up via operator-approved DELETE. See `L-RTI-005`.
+  - `audit_log`: ≥ 1500+
+  - `user_roles`: 3 (admin / manager / viewer)
+  - `asset_lifecycle`: 0
+  - `asset_lifecycle_history`: 6 (3 events each for AN026 + AN027)
+- **Helpers + policies + V2 fingerprint:** same as Phase 1 / earlier snapshot — see `automation/memory/tracks/database-track.md` for full reconciliation.
 
 ---
 
@@ -94,46 +71,67 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 - **Staging Pages URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/staging/index.html`
 - **Currently served commit:** `cb6fa19` (B5.6)
-- **etag:** `"6a01a200-99b24"`
 - **content-length:** 629,540 B (byte-identical to local `index.html` at `cb6fa19`)
-- **last-modified:** 2026-05-11T09:31:44 GMT
-- **Deploy history (most recent first):**
-  - 2026-05-11T09:31:50Z — `cb6fa19` (B5.6 column simplification)
-  - 2026-05-11T04:30:37Z — `d61e907` (B5.5 status visibility)
-  - 2026-05-10T18:33:04Z — `5d33f8c` (B5.4 History viewer)
+- **etag:** `"6a01a200-99b24"`
 - **Deploy authorization phrases consumed:** `approved, deploy 5d33f8c to staging`, `approved, deploy d61e907 to staging`, `approved, deploy cb6fa19 to staging`
 
 ---
 
 ## Production Supabase state
 
-- **Last verified:** 2026-05-09 (Phase 1 baseline) — **STALE; must re-verify before any Phase 2 production discussion**
-- **Migrations applied:** same as staging through 0003. **0004 + 0005 NOT applied.**
-- **Row counts (last verified 2026-05-09):** same shape as staging baseline pre-0005. Re-verify before Phase 2 production discussion.
-- **Helpers + policies:** same as staging.
-- **V2 missing code on production:** assumed `AN025` matching staging; **must be re-verified via §1.3 query before any production 0005 approval.**
+- **Last verified:** 2026-05-12 (operator-applied SQL Gate B PASS + production runtime smoke PASS as indirect confirmation that `app_can_write()` / `app_user_role()` resolve correctly)
+- **Migrations applied:** 0001, 0002, 0003 (Phase 1), **0004 (Phase 2 additive write policies, 2026-05-12)**, **0005 (Phase 2 IB master backfill, 2026-05-12)**. Operator-applied per `docs/v1.4.1_phase2_production_apply_runbook.md` §6-§9.
+- **Row counts (operator-asserted post-Gate-B):**
+  - `config_assets`: **25** (active=25, de_installed=0 — no staging fixtures on production)
+  - `pm_schedule`: 22
+  - `cmc_contracts`: 13
+  - `asset_lifecycle`: 0
+  - `asset_lifecycle_history`: 0 (no lifecycle activity on production yet; future de-installs / renews will populate)
+  - `user_roles`: 3 (admin / manager / viewer, verified by Gate A pre-flight query B)
+- **AN025 backfill row (production):** `AN025 | KVC Diagnostics | Mysore | KA | 1.5T | Philips 1.5 T Achieva | active | CDAS 16CH | 281 | R5.7.1 | HC-8E | F2000 | note='v1.4.1 phase 2 install_base_v2 backfill'` — verified by runbook §9.2.
+- **Helpers present (5):** same as staging — `app_user_role` / `app_can_write` / `app_is_admin` / `_other_active_admin_exists` / `_user_roles_block_last_admin_delete` (SECURITY DEFINER + locked search_path; verified by Gate A query A).
+- **v141_* lifecycle-table policies:** 11 (from 0003).
+- **v141_*_app_can_write policies on legacy tables:** 6 (3 INSERT + 3 UPDATE from 0004).
+- **Legacy admin_* policies on 4 legacy tables:** 16 (unchanged).
+- **V2 fingerprint:** `965ffcec48aa3ddfbfb7b975bc48dca9` (operator-verified equal to staging by runbook §5.4 query E3).
+- **V2 missing code on production at pre-flight:** was `AN025` (matched staging; verified by runbook §5.4 query E); now backfilled.
 
 ---
 
 ## Production Pages state
 
-- **Production Pages URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/index.html`
-- **Currently served content:** the latest deploy artifact built from `main`. `main` HEAD is `8c54334` (merge of PR #24 / Phase 1 review package). Production app content is byte-identical to `releases/v1.4.0.1/index.html`.
-- **etag size suffix:** `-8f1c6`
-- **content-length:** 586,182 B — matches `releases/v1.4.0.1/index.html` exactly (verified across the three staging deploys; production size did not change)
-- **APP_VERSION on production:** `1.4.0.1`
-- **Latest tag:** `v1.4.0.1`
-- **Phase 2 runtime drift:** production has ZERO Phase 2 runtime changes. Production untouched throughout Phase 2 staging acceptance.
+- **Production Pages URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/`
+- **Currently served commit:** main HEAD `0c4e9d1` (merge of PR #27). The served `index.html` content is byte-identical to the runtime payload at `cb6fa19` (commits after `cb6fa19` are docs/memory/runbook only).
+- **etag:** `"6a033a22-99b24"` (was `*-8f1c6` pre-Phase-2)
+- **content-length:** 629,540 B (was 586,182 B pre-Phase-2 — matches `releases/v1.4.0.1/index.html`). **Old baseline 586,182 is no longer served.**
+- **last-modified:** Tue, 12 May 2026 14:33:06 GMT
+- **Most recent Pages workflow:** run `25741285166` — completed/success in 47s, push event from the merge commit (2026-05-12T14:32:24Z).
+- **Deploy authorization phrases consumed:** `approved, deploy cb6fa19 to production` (Gate C — coupled to the merge mechanism), `approved, mark PR #27 ready` (Gate D), `approved, merge PR #27` (Gate E — actual deploy trigger via `pages-deploy.yml on: push: branches: [main]`).
 
 ---
 
 ## App runtime state
 
-- **APP_VERSION on production:** `1.4.0.1`
-- **APP_VERSION on staging:** `1.4.0.1` (Phase 2 runtime IS deployed but VERSION was not bumped — version bump deferred to the production release gate)
-- **Latest tag:** `v1.4.0.1`
-- **`index.html` line count on impl branch:** approximately 9,200+ (post-B1..B5.6 runtime work; refer to current `cb6fa19` checkout for exact count)
-- **`index.html` drift vs `releases/v1.4.0.1/index.html`:** significant drift on impl branch (B1 async role resolution + B2 allowlist removal + B3 onAuthStateChange refresh + B4 XLSX safe upsert + B5.0 V2 overlay fix + B5.1..B5.4 lifecycle UI + B5.5 status visibility + B5.6 column simplification). Production still serves the unchanged `releases/v1.4.0.1/index.html` content.
+- **APP_VERSION on production:** `1.4.0.1` (label intentionally lags runtime payload until Gate F bumps `VERSION` / `CHANGELOG.md` / `releases/v1.4.1/MANIFEST.txt` / the `APP_VERSION` constant — see `L-RPM-005`).
+- **APP_VERSION on staging:** `1.4.0.1` (same reasoning).
+- **Latest tag:** `v1.4.0.1` (the `v1.4.1` tag is not yet created — pending Gate F).
+- **`index.html` content on main:** the Phase 2 runtime payload from `cb6fa19` (B1 RPC integration + B2 allowlist removal + B3 onAuthStateChange refresh + B4 XLSX safe upsert + B5.0 V2 overlay fix + B5.1..B5.4 lifecycle UI + B5.5 status visibility + B5.6 column simplification).
+
+---
+
+## Production runtime smoke (2026-05-12)
+
+Browser-driven smoke verification per `docs/v1.4.1_phase2_production_apply_runbook.md` §12. All gates PASS.
+
+| Gate | Result |
+|---|---|
+| §A Pre-login payload | PASS — APP_VERSION="1.4.0.1", APP_BUILD.tag="v1.4.0.1", supabase client loaded, login screen renders |
+| §B Admin / Superadmin | PASS — `client_userRole="admin"`, RPC 200/"admin", `app_can_write=true`, `app_is_admin=true`, `superadmin_mode=true`, IB=25 systems (AN001..AN025), de_installed=0, Add/Edit/De-install/History visible, Audit Log opens with 500 rows, Upload XLSX visible, no FieldOps app-code errors |
+| §C Manager | PASS — `client_userRole="manager"` (Phase 1.5 gap CLOSED on production), RPC 200/"manager", `bodyClasses="viewer-mode manager-mode"`, `manager_mode=true`, `superadmin_mode=false`, `can_manage_pm=true`, IB=25 systems, Add/Edit/De-install/History visible, **Upload XLSX hidden** (`L-RTI-008`), **Audit Log nav hidden + route-gated** (direct `location.hash='#/auditlog'` redirected to Dashboard without rendering audit table), no FieldOps app-code errors |
+| §D Engineer / Viewer | PASS — `client_userRole="viewer"`, RPC 200/"viewer", `app_can_write=false`, `app_is_admin=false`, `bodyClasses="viewer-mode"` only, `can_manage_pm=false`, IB=25 systems, **Edit/De-install hidden via `.mgr-plus` CSS** (DOM contains buttons for defense-in-depth; `getBoundingClientRect`/`getComputedStyle` report `visible=false`), Add Asset hidden, History visible (read-only all-roles per `L-RTI-004`), Upload XLSX hidden, Audit Log hidden, no FieldOps app-code errors |
+| §E RPC failure path (security) | PASS — Manager with `app_user_role` RPC blocked via JS-level fetch interceptor degraded to `_userRole="viewer"`, `manager_mode=false`, `superadmin_mode=false`, `can_manage_pm=false`; **no non-admin role escalated to admin** (`L-RTI-007`). Interceptor uninstalled cleanly; Manager recovered to `_userRole="manager"` after RPC restored + `applyRoleRestrictions()` re-run. |
+
+Console: aggregate ~40 exceptions across all role sessions, **all** matching the browser-extension async-listener pattern (`"A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received"`) — explicitly in the ignore list. **Zero** Uncaught TypeError / Uncaught ReferenceError / SyntaxError / FieldOps app-code errors.
 
 ---
 
@@ -144,17 +142,19 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 | Phase 2 staging SQL apply (0004 + 0005) | `approved, apply phase 2 to staging` | **CONSUMED** 2026-05-10 |
 | Phase 2 runtime impl on `feat/v1.4.1-phase2-impl` | `approved, begin runtime track B implementation on feat/v1.4.1-phase2-impl` | **CONSUMED** 2026-05-10 |
 | Phase 2 staging runtime deploys | `approved, deploy <commit> to staging` | **CONSUMED 3×** (5d33f8c, d61e907, cb6fa19) |
-| Test asset create on staging (TEST-IB-AAA) | `approved, create TEST-IB-AAA on staging` | **CONSUMED** 2026-05-11 (B6 X1) |
-| Test asset cleanup on staging (TEST-IB-AAA) | `approved, cleanup TEST-IB-AAA on staging` | **CONSUMED** 2026-05-11 (B6 X5) |
-| Documentation/memory commit after B6 | `commit STATE.md + memory updates after B6` | **CONSUMED** 2026-05-11 (this commit) |
-| Production runbook drafting for Phase 2 | `approved, draft production runbook for phase 2` | not yet issued |
-| Phase 2 production SQL apply | `approved, apply phase 2 to production` | not yet issued |
-| Phase 2 production runtime deploy | `approved, deploy <commit> to production` | not yet issued |
-| Tag for Phase 2 release | `approved, tag v1.4.1` | not yet issued |
-| PR #27 mark ready | `approved, mark PR #27 ready` | not yet issued |
-| PR #27 merge | `approved, merge PR #27` | not yet issued |
-| PR #26 mark ready | `approved, mark PR #26 ready` | not yet issued |
-| PR #26 merge | `approved, merge PR #26` | not yet issued |
+| Test asset create on staging (TEST-IB-AAA) | `approved, create TEST-IB-AAA on staging` | **CONSUMED** 2026-05-11 |
+| Test asset cleanup on staging (TEST-IB-AAA) | `approved, cleanup TEST-IB-AAA on staging` | **CONSUMED** 2026-05-11 |
+| Documentation/memory commit after B6 | `commit STATE.md + memory updates after B6` | **CONSUMED** 2026-05-11 (`5cde80b`) |
+| Production runbook drafting | `approved, draft production runbook for phase 2` | **CONSUMED** 2026-05-12 (`dcd0367`) |
+| Production SQL pre-flight | `approved, run production SQL pre-flight for phase 2` | **CONSUMED** 2026-05-12 (Gate A) |
+| Phase 2 production SQL apply (0004 + 0005) | `approved, apply phase 2 to production` | **CONSUMED** 2026-05-12 (Gate B) |
+| Phase 2 production runtime deploy | `approved, deploy cb6fa19 to production` | **CONSUMED** 2026-05-12 (Gate C — coupled to merge) |
+| PR #27 mark ready | `approved, mark PR #27 ready` | **CONSUMED** 2026-05-12 (Gate D) |
+| PR #27 merge | `approved, merge PR #27` | **CONSUMED** 2026-05-12 (Gate E — merge commit `0c4e9d1`) |
+| Documentation/memory commit after production smoke | `commit STATE.md + memory updates after production smoke PASS` | **CONSUMED** 2026-05-12 (this commit) |
+| Tag for Phase 2 release | `approved, tag v1.4.1` | **PENDING** (Gate F — next forward gate) |
+| PR #26 mark ready | `approved, mark PR #26 ready` | **N/A** (PR #26 auto-merged via PR #27 ancestry; no separate ready toggle needed) |
+| PR #26 merge | `approved, merge PR #26` | **N/A** (see above) |
 
 ---
 
@@ -162,13 +162,15 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 | Risk | Severity | Owner | Recorded at |
 |---|---|---|---|
-| Realtime CHANNEL_ERROR warnings on 5 `_RT_TABLES` (tickets, pm_schedule, engineers, cmc_contracts, ambiguities) — cross-session realtime sync failing on staging | Low (single-user verification unaffected) | runtime-pm | B5.6 / B6 sessions |
-| 43 new ambiguity flags auto-detected during B6 X2 XLSX upload — non-blocking but need operator review before production discussion | Low | runtime-pm + test-agent | B6 Session X 2026-05-11 |
-| `cmc_contracts` XLSX safe-upsert deferred to v1.4.2 (needs UNIQUE constraint on `sn` via separate migration) | Medium | database-pm | B4-partial / `L-RTI-008` |
-| AN026 + AN027 retained as staging de-installed fixtures; production never sees them | Low | runtime-pm | B6 Session I 2026-05-11 |
+| `APP_VERSION` label lags runtime payload — production reports `"1.4.0.1"` while serving Phase 2 runtime; resolved by Gate F | Low (documented intermediate state per `L-RPM-005`) | release-pm | 2026-05-12 |
+| Merged PR #27 title still carries `"Draft:"` prefix (cosmetic; not edited because PR-metadata edits were not separately authorized) | Low (cosmetic) | release-pm | 2026-05-12 |
+| Realtime CHANNEL_ERROR warnings on `_RT_TABLES` (tickets, pm_schedule, engineers, cmc_contracts, ambiguities) — did not surface in 2026-05-12 production smoke window but observed on staging during B6 | Low (single-user UX unaffected) | runtime-pm | B6 Session O; not observed on 2026-05-12 production smoke |
+| 43 ambiguity flags auto-detected during B6 X2 XLSX upload (staging) — staging-only artefact; production XLSX upload not exercised yet | Low | runtime-pm + test-agent | B6 Session X 2026-05-11 |
+| `cmc_contracts` XLSX safe-upsert deferred to v1.4.2 — needs UNIQUE constraint on `sn` via separate migration | Medium | database-pm | B4-partial / `L-RTI-008` |
+| AN026 + AN027 retained as staging de-installed fixtures; production never sees them (verified by Gate A query E2) | Low | runtime-pm | 2026-05-12 production smoke |
 | Renew RPC `0006_*` not authored; Renew button intentionally deferred to second impl PR | Medium | database-pm | round-1 review M2 |
-| No automated tests in repo (Tier 1-5 PLANNED) | High | qa-test-automation | round-2 audit |
-| Production Supabase + Pages state last verified 2026-05-09 — staleness risk before production discussion | Medium | automation-memory | 2026-05-11 |
+| No automated tests in repo (Tier 1-5 PLANNED; only Tier 6 manual matrix operational) | High | qa-test-automation | round-2 audit |
+| No tag yet — production runtime is live but `v1.4.1` tag, `VERSION` / `CHANGELOG.md` / `releases/v1.4.1/MANIFEST.txt` artifacts are not yet authored | Medium (Gate F's known scope) | release-pm | 2026-05-12 |
 
 ---
 
@@ -176,9 +178,10 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 | Item | Last verified | When to re-verify |
 |---|---|---|
-| Production row counts | 2026-05-09 (Phase 1 baseline) | Before any Phase 2 production discussion |
-| Production V2 missing code | assumed `AN025` matching staging | Before any production 0005 approval |
-| GitHub Actions deploy workflow correctness | 2026-05-11 (3 staging deploys executed cleanly: 5d33f8c, d61e907, cb6fa19) | Before next production deploy |
+| Production row counts | 2026-05-12 (operator-asserted post-Gate-B; indirectly confirmed by runtime smoke role-resolution) | If future SQL is applied or significant time passes |
+| Production V2 missing code | 2026-05-12 (was `AN025`; now backfilled per `L-REC-001`) | invariant unless V2 baseline changes |
+| Production Pages content + etag | 2026-05-12 14:33 UTC (etag `"6a033a22-99b24"`, content-length 629,540) | Re-verify after any future deploy |
+| GitHub Actions Pages workflow correctness | 2026-05-12 (4th successful run since OS upgrade: staging x3 + production merge x1) | Before next production deploy or workflow change |
 | Daily-alerts cadence | implicit | Weekly |
 
 ---
@@ -187,18 +190,15 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 (This section is overwritten on each snapshot. Older entries archive into a future `automation/STATE_HISTORY.md` if needed.)
 
-- **2026-05-09:** PR #26 advanced through Round 1 + Round 2 specialist review. M1–M5 medium fixes applied across `db/migrations/0005_*.sql` and Phase 2 docs. No SQL run.
-- **2026-05-09:** Round 2 audit identified GOOD-BUT-HEAVY status (4.8/10 automation maturity). Recommended adding PM tier + QA test automation agent + state persistence + tag-based rollback.
-- **2026-05-10:** OS upgrade `2f4ca23`. Protected scope unchanged across `e0da6a2..2f4ca23` per consistency audit.
-- **2026-05-10:** F8 + F9 documentation defects closed at `c3674f2`.
-- **2026-05-10:** Memory system landed at `e18f8d8` (12 files: 6 new under `automation/memory/` + 6 governance edits).
-- **2026-05-10:** Phase 2 staging SQL apply COMPLETE. 0004 + 0005 applied + verified. Marker reconciliation PASS per `L-REC-001`.
-- **2026-05-10:** Runtime track B begun on new branch `feat/v1.4.1-phase2-impl` with operator authorization. Series of commits: B1 (`49df8a3`) RPC integration; B2 (`f7274d1`) email allowlist removal; B3 (`fb5dabf`) onAuthStateChange refresh; B4-partial (`661daee`) config_assets safe upsert; B4-complete (`34e5433`) cmc_contracts admin-only guard; B5.0 (`88c5555`) V2 overlay preserves DB-only rows; B5.1 (`eb36be5`) Add Asset; B5.2 (`7aa34a4`) Edit Asset; B5.3 (`9fe35d5`) De-install Asset; B5.4 (`5d33f8c`) read-only History viewer; B5.5 (`d61e907`) status visibility + active-workflow filtering; B5.6 (`cb6fa19`) Install Base + Contracts column simplification.
-- **2026-05-10:** PR #27 opened as DRAFT for runtime impl. Head advanced from `5d33f8c` → `d61e907` → `cb6fa19` as commits landed.
-- **2026-05-10..11:** Three staging Pages deploys executed (`5d33f8c` → `d61e907` → `cb6fa19`). Production untouched.
-- **2026-05-11:** B5.6 interactive browser verification PASS on staging at `cb6fa19`. All 14 checks GREEN across Admin and Engineer sessions.
-- **2026-05-11:** B6 manual role matrix PASS on staging at `cb6fa19`. Six sessions (C/D/F/O/X/I) all PASS. Headline outcomes: TEST-IB-AAA XLSX preservation regression PASS — confirms B4-partial safe-upsert preserves app-created rows under real production-shape XLSX upload (`L-RTI-005`); Manager role RPC promotion verified (`L-RTI-006`); RPC failure path verified safe — non-admin never escalates to admin (`L-RTI-007`); Manager XLSX upload remains admin-only (`L-RTI-008`).
-- **2026-05-11:** Phase 2 staging acceptance COMPLETE. PR #27 stays DRAFT. Next gates: production runbook drafting → production SQL apply → production deploy → tag → PR ready/merge.
+- **2026-05-11:** Phase 2 staging acceptance COMPLETE. Documentation/memory commit `5cde80b` recorded B6 PASS + 5 lessons (`L-DO-005`, `L-RTI-005..008`, `L-SQL-005`).
+- **2026-05-12:** Production runbook drafted at `dcd0367` (1,159 lines, `docs/v1.4.1_phase2_production_apply_runbook.md`). PR #27 still DRAFT at this point.
+- **2026-05-12:** Gate A production SQL pre-flight PASS (operator-applied; 11 queries verified per runbook §5).
+- **2026-05-12:** Gate B production SQL apply PASS — 0004 + 0005 applied + verified on production. AN025 / KVC Diagnostics backfilled.
+- **2026-05-12:** Gate D PR #27 marked ready (DRAFT → ready-for-review; head still `dcd0367`; no SHA change).
+- **2026-05-12:** Gate E PR #27 merged into main via `gh pr merge 27 --merge --delete-branch=false --subject "Merge PR #27: v1.4.1 Phase 2 runtime implementation"`. Merge commit `0c4e9d1`. Feature branch retained at `dcd0367` on origin. PR #26 auto-marked MERGED by GitHub (via ancestry path).
+- **2026-05-12 14:32:24Z–14:33:11Z:** Pages workflow run `25741285166` succeeded in 47s. Production now serves `cb6fa19` runtime payload (content-length 629,540, was 586,182).
+- **2026-05-12:** Production runtime smoke PASS across §A (pre-login), §B (Admin), §C (Manager), §D (Engineer/Viewer), §E (RPC failure path security). Phase 1.5 manager-role gap confirmed CLOSED on production; `L-RTI-007` security invariant production-evidenced.
+- **2026-05-12:** This commit — `docs: record production smoke acceptance` — refreshes STATE.md and proposes `L-DO-006`, `L-RTI-009`, `L-RTI-010`, `L-RPM-005`, `L-DBPM-005` (full text in respective track files).
 
 ---
 

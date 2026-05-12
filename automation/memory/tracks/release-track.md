@@ -64,6 +64,21 @@
 - **Action added:** Release PM reporting format includes "Database PM verdict" line.
 - **Linked files:** `.claude/agents/fieldops-release-pm.md`, `tracks/database-track.md`.
 
+### L-RPM-005 — APP_VERSION label may lag the runtime payload between production deploy and Gate F tag
+
+- **Date:** 2026-05-12
+- **Commit / PR:** PR #27 merge `0c4e9d1`; production smoke PASS at `APP_VERSION='1.4.0.1'`
+- **Agent:** Release PM
+- **Event:** Production serves the Phase 2 runtime payload (byte-identical to staging `cb6fa19`, content-length 629,540 B, etag `"6a033a22-99b24"`). DevTools `window.APP_VERSION` still reports `"1.4.0.1"` and `APP_BUILD.tag` reports `"v1.4.0.1"` because `VERSION`, `CHANGELOG.md`, `releases/v1.4.1/MANIFEST.txt`, and the `APP_VERSION` constant inside `index.html` were not bumped by the merge commit. Those edits are deferred to a future Gate F (`approved, tag v1.4.1`) Release-PM session that authors VERSION + CHANGELOG.md + releases/v1.4.1/MANIFEST.txt + the APP_VERSION constant bump together.
+- **Mistake or discovery:** the merge-now-tag-later pattern produces a documented intermediate state where the runtime is Phase 2 but the version label is the pre-Phase-2 hotfix label. This is by design — the production runbook §3 gate matrix and §12.2 explicitly call this out. **Not a bug.**
+- **Root cause:** clean separation between "ship the code" and "tag the release" — required because `pages-deploy.yml` auto-deploys on merge but VERSION/CHANGELOG/releases author steps are deliberately gated to a separate Release-PM session.
+- **Prevention rule:** post-deploy verification must explicitly accept `APP_VERSION` lag as expected. The smoke checklist for v1.4.x and later phase work should set `APP_VERSION === "<pre-phase-version>"` as the expected pre-Gate-F value, **not** the in-progress phase label. Document this in any future production runbook. Gate F closes the lag by aligning all four artifacts (VERSION + APP_VERSION constant + CHANGELOG + snapshot) per `L-RPM-002` before pushing the tag.
+- **Applies to:** every cross-environment phase that uses the merge-now-tag-later pattern. Category: release/deploy traps; operator-confusion traps.
+- **Staleness risk:** invariant pattern.
+- **Action added:** production runbook §12.2 documents the expected lag. Future runbooks must include the same note.
+- **Linked entries:** `L-RPM-002` (VERSION+APP_VERSION+CHANGELOG+snapshot align before tag).
+- **Linked files:** `docs/v1.4.1_phase2_production_apply_runbook.md` §12.2, `automation/STATE.md`.
+
 ---
 
 ## fieldops-release-agent (legacy)

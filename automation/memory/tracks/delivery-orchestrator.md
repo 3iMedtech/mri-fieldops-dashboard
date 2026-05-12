@@ -78,6 +78,20 @@
 - **Action added:** B5 + B6 sequence is the canonical multi-track acceptance template for future Phase work (v1.4.2 cmc_contracts conversion, v1.4.x Renew RPC `0006_*`, etc.).
 - **Linked files:** `docs/v1.4.1_phase2_review.md`, `docs/v1.4.1_phase2_staging_apply_runbook.md`, `automation/STATE.md`.
 
+### L-DO-006 — Phase 2 production acceptance executed end-to-end via 7-gate sequence
+
+- **Date:** 2026-05-12
+- **Commit / PR:** PR #27 merge `0c4e9d1`; production runtime smoke PASS
+- **Agent:** Delivery Orchestrator
+- **Event:** Phase 2 v1.4.1 production acceptance completed through 7 sequential operator-phrase gates (A: SQL pre-flight → B: SQL apply 0004+0005 → C: deploy decision → D: PR ready → E: merge — which is the actual deploy trigger via `pages-deploy.yml on: push: branches: [main]` — → §12 runtime smoke verification → documentation/memory commit). Gate F (`approved, tag v1.4.1`) remains separate and not yet consumed.
+- **Mistake or discovery:** the strict per-gate phrasing held end-to-end. No gate inheritance occurred — every advance required a fresh literal phrase typed in chat. The merge-equals-deploy coupling (which the production runbook §11.1 documents explicitly) worked correctly: Gate C authorized the deploy decision; Gates D + E executed the only sanctioned mechanism (`gh pr merge` → push to main → `pages-deploy.yml` fires; ~47s build/deploy). The runbook's pre-merge protected-scope diff (§11.2) caught zero anomalies before merge. B6 staging acceptance plus SHA-bound migration files made production apply low-risk; the multi-gate flow reduced operator-confusion risk to zero.
+- **Root cause:** not a mistake — successful application of `L-G-003` / `L-DO-004` / `L-DBPM-002` on production, plus operator discipline.
+- **Prevention rule:** for future cross-environment phase work, use `docs/v1.4.1_phase2_production_apply_runbook.md` §3 as the canonical 7-gate template (A pre-flight, B SQL apply, C deploy decision, D PR ready, E merge, §12 smoke, F tag). The "tag is separate from deploy" pattern is load-bearing — runtime deploys and verifies safely before VERSION/CHANGELOG/releases author work, which makes the tag gate cleaner because the runtime is already production-evidenced.
+- **Applies to:** every multi-track production phase. Category: release/deploy traps; recurring errors.
+- **Staleness risk:** invariant pattern.
+- **Action added:** Phase 2 production gate set is the canonical template for v1.4.x and later production phase work. The browser-driven §12 smoke (Admin + Manager + Engineer + RPC failure path) is the canonical post-deploy regression.
+- **Linked files:** `docs/v1.4.1_phase2_production_apply_runbook.md`, `automation/STATE.md`, `.claude/agents/fieldops-delivery-orchestrator.md`.
+
 ---
 
 ## fieldops-automation-memory-agent
