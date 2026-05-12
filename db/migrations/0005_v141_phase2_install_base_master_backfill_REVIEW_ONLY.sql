@@ -1,0 +1,231 @@
+-- ═════════════════════════════════════════════════════════════════════
+-- 0005_v141_phase2_install_base_master_backfill_REVIEW_ONLY.sql
+--
+-- ╭─────────────────────────────────────────────────────────────────╮
+-- │  REVIEW ONLY — DO NOT APPLY YET                                 │
+-- │  Phase 2 — Install Base master-source backfill (one-time)       │
+-- │  Apply order will be: STAGING → verify → PROD, with explicit    │
+-- │  human approval at each gate.                                   │
+-- ╰─────────────────────────────────────────────────────────────────╯
+--
+-- Phase 2 of v1.4.1 lifecycle work — operationalizes the DB-is-master
+-- decision. Inserts any rows from the hardcoded `INSTALL_BASE_V2`
+-- array (in index.html lines 1472-1498) that are MISSING from
+-- public.config_assets. Codes already present are skipped silently.
+--
+-- Pre-this-migration baseline (2026-05-09 inspection):
+--   * Production config_assets count: 24
+--   * Staging config_assets count: 24
+--   * INSTALL_BASE_V2 count in source: 25 (codes AN001..AN025)
+--
+-- Post-this-migration expected:
+--   * config_assets count: 25 on both staging and production
+--   * 1+ row(s) marked with note='v1.4.1 phase 2 install_base_v2 backfill'
+--   * The rollback file deletes ONLY rows with that note marker
+--
+-- ── Idempotency ─────────────────────────────────────────────────────
+-- The INSERT uses `where not exists` per code. Running this migration
+-- a second time is a no-op for codes already present, regardless of
+-- whether they originated from this backfill or pre-existed.
+--
+-- ── Pre-requisites ──────────────────────────────────────────────────
+-- 1. 0003 migration applied (creates config_assets.status / created_at /
+--    updated_at / created_by / updated_by / note / de_installed_at /
+--    de_installed_by columns).
+-- 2. Operator has run the §3.7 audit query in v1.4.1_phase2_review.md
+--    to identify which V2 code(s) are missing from config_assets, and
+--    has confirmed exactly 1 row is expected to be inserted (or has
+--    investigated if the count differs).
+--
+-- ── Pre-flight diff query (run BEFORE this migration) ───────────────
+-- Operator should run this and confirm the result before running
+-- the INSERT block below:
+--
+--   with v2(code) as (values
+--     ('AN001'),('AN002'),('AN003'),('AN004'),('AN005'),
+--     ('AN006'),('AN007'),('AN008'),('AN009'),('AN010'),
+--     ('AN011'),('AN012'),('AN013'),('AN014'),('AN015'),
+--     ('AN016'),('AN017'),('AN018'),('AN019'),('AN020'),
+--     ('AN021'),('AN022'),('AN023'),('AN024'),('AN025')
+--   )
+--   select v2.code as missing_v2_code
+--     from v2
+--    where not exists (select 1 from public.config_assets c where c.code = v2.code)
+--    order by v2.code;
+--
+-- Expected: exactly 1 row (or whichever number matches your environment's
+-- actual divergence). If 0 rows → migration is a no-op. If >1 rows →
+-- investigate before proceeding.
+-- ═════════════════════════════════════════════════════════════════════
+
+-- ── Atomicity guard ─────────────────────────────────────────────────
+-- BEGIN / COMMIT wrap the entire migration so all four sections run
+-- in a single transaction REGARDLESS of client transaction handling.
+--
+-- Why explicit BEGIN/COMMIT:
+--   * Supabase Studio's SQL Editor uses simple-Query protocol, which
+--     most likely treats a multi-statement paste as one implicit
+--     transaction — but that is implementation behavior we don't want
+--     to depend on.
+--   * Temp tables created with `on commit drop` are dropped at the
+--     END of the current transaction. Without explicit BEGIN/COMMIT,
+--     in auto-commit mode each statement would commit separately and
+--     §1's temp table would vanish before §2 could reference it.
+--   * The verification block in §4 raises EXCEPTION on invariant
+--     failure. For that exception to roll back §3's INSERT, §3 and
+--     §4 must be in the same transaction.
+--
+-- This BEGIN/COMMIT pair makes the all-or-nothing semantics explicit
+-- and defensive: if §4 raises, §3's INSERT is rolled back; if §1-§4
+-- succeed, the COMMIT drops the temp tables and persists the
+-- backfilled rows.
+begin;
+
+-- ── §1. Stage canonical V2 row data into a temp table ───────────────
+-- Building a temp table once gives us:
+--   (a) one place to read V2 data from for both the INSERT and the
+--       pre-state capture (no duplicated VALUES list inside this file
+--       beyond the literal authoritative row data below).
+--   (b) the pre-INSERT missing_codes list, captured before the INSERT
+--       runs, so the post-INSERT verification can prove the marker
+--       rows EXACTLY match the codes that were missing pre-INSERT.
+--
+-- Field values mirror INSTALL_BASE_V2 in index.html:1472-1498 EXACTLY.
+-- If V2 changes in source, this block must be regenerated to match —
+-- do NOT edit row data here without also editing index.html.
+create temp table _v141_phase2_v2 (
+  code      text primary key,
+  ast_id    text,
+  name      text,
+  tesla     text,
+  model     text,
+  town      text,
+  state     text,
+  channel   text,
+  gradient  text,
+  sw        text,
+  compressor text,
+  coldhead  text
+) on commit drop;
+
+insert into _v141_phase2_v2 values
+  ('AN001','AST001','BGTH','1.5T','Philips 1.5 T Achieva','Gulbargah','KA','CDAS 8 CH','781','R3.2.3','HC-8E','F2000'),
+  ('AN002','AST002','NMR Medical institute','1.5T','Philips 1.5 T Achieva','Hubli','KA','CDAS 16CH','281 Single','R5.3.0','HC-8E','F2000'),
+  ('AN003','AST003','Bhavani Diagnostic Centre','3.0T','Philips 3.0 T Achieva','Muzaffarpur','BH','CDAS 16CH','281 Single','R3.2.3','F-50',''),
+  ('AN004','AST004','Tiruvarur Medical Centre','1.5T','Philips 1.5 T Achieva','Tiruvarur','TN','CDAS 8CH','271 Single','R.2.6.3.9','HC-8E','F2000/10k'),
+  ('AN005','AST005','Anderson (Chennai)','PET CT','GE Discovery VCT64 PET CT','Chennai','TN','','','','',''),
+  ('AN006','AST006','Kamakshi Memorial Hospital','DR','Retro Digital Radiography','Chennai','TN','','','','',''),
+  ('AN007','AST007','Isha Diagnostics','1.5T','Philips 1.5 T Achieva','Bangalore','KA','CDAS 8CH','281 Single','R.3.2.3','HC-8E','F2000'),
+  ('AN008','AST008','Chandru Diagnostics','1.5T','Philips 1.5 T Intera','Ramanagara','KA','BDAS 6CH','274 Single','R11.1.4','HC-8E','F2000'),
+  ('AN009','AST009','Ruby Indapur','1.5T','Philips 1.5 T Intera','Indapur','MH','CDAS 8CH','271 Single','R3.2.3','HC-8E','F2000'),
+  ('AN010','AST010','Ruby Chiplun','1.5T','Philips 1.5T Achieva','Chiplun','MH','CDAS 8CH','271 Single','R2.6.3','HC-8E','F2000'),
+  ('AN011','AST011','OAKTree Diagnostic Centre','1.5T','Philips 1.5 T Achieva','Calicut','KL','CDAS 16CH','781','R3.2.4','HC-8E','F2000/10k'),
+  ('AN012','AST012','Anderson diagnostic centre (Trichy)','1.5T','Philips 1.5 T Achieva','Trichy','TN','CDAS 16CH','781','R5.3.1','HC-8E','F2000/10k'),
+  ('AN013','AST013','Lifeline Superspeciality','3.0T','Philips Achieva 3.0T REX Magnet','Pandharpur','MH','CDAS 16CH','281','R5.1.0','',''),
+  ('AN014','AST014','Nucleus diagnostic','3.0T','Philips Achieva 3.0T REX Magnet','Pune','MH','CDAS 16CH','787','R5.3.1','',''),
+  ('AN015','AST015','Dr Prakash Kennedy','3.0T','Philips 3T Achieva TX','Chennai','TN','CDAS 16CH','787 dual','R3.2.3','F50(WC)','4k'),
+  ('AN016','AST016','Deepa Fortune','1.5T','1.5T Achieva','Mandya','KA','CDAS 8CH','274','R3.2.3','',''),
+  ('AN017','AST017','Kennedy scans Nanganallur','1.5T','GE 1.5T Brivo 355','Chennai','TN','8CH','','23x','csa-71A(air)','4k'),
+  ('AN018','AST018','Magnus Diagnostics','3.0T','Philips 3T Achieva','Bangalore','KA','CDAS 16CH','781','R5.7.1','F50(wc)','4k'),
+  ('AN019','AST019','JCRL','3T','Philips 3T Achieva','Patna','BH','CDAS 16CH','281','R3.2.3','CSW-71D','4K'),
+  ('AN020','AST020','TRR Medical','1.5T','Philips 1.5 T Achieva','Hyderabad','TS','CDAS 16CH','281','R2.6.3','',''),
+  ('AN021','AST021','Nivi Scans','1.5T','GE 1.5T HDxT','Namakkal','TN','8CH','','16X','','RDK-408 A2'),
+  ('AN022','AST022','Ruby Sangamner','1.5T','Anamaya 1.5T','Sangamner','MH','16CH','','4.2C','','RDK-412'),
+  ('AN023','AST023','Ruby Phaltan','1.5T','Philips 1.5 T Intera','Phaltan','MH','CDAS 8CH','271 Single','R3.2.3','HC-8E','F2000'),
+  ('AN024','AST024','District Hospital, Champawat','1.5T','Anamaya 1.5T','Champawat','UK','16CH','','4.2C','','RDK-412'),
+  ('AN025','AST025','KVC Diagnostics','1.5T','Philips 1.5 T Achieva','Mysore','KA','CDAS 16CH','281','R5.7.1','HC-8E','F2000');
+
+-- ── §2. Capture pre-INSERT state (pre_count + missing_codes) ─────────
+-- This MUST run BEFORE the INSERT so the missing_codes array reflects
+-- what is genuinely absent from config_assets at backfill start.
+create temp table _v141_phase2_state as
+select (select count(*) from public.config_assets) as pre_count,
+       (select array_agg(v.code order by v.code)
+          from _v141_phase2_v2 v
+         where not exists (select 1 from public.config_assets c where c.code = v.code)
+       ) as missing_codes;
+
+-- ── §3. Backfill — INSERT only V2 codes missing from config_assets ──
+insert into public.config_assets
+  (code, ast_id, name, tesla, model, town, state, channel, gradient,
+   sw, compressor, coldhead, alias_of, status, created_by,
+   created_at, updated_by, updated_at, note)
+select v.code, v.ast_id, v.name, v.tesla, v.model, v.town, v.state,
+       v.channel, v.gradient, v.sw, v.compressor, v.coldhead, null,
+       'active', null,
+       now(), null, now(), 'v1.4.1 phase 2 install_base_v2 backfill'
+  from _v141_phase2_v2 v
+ where not exists (
+   select 1 from public.config_assets c where c.code = v.code
+ );
+
+-- ── §4. Strict post-INSERT verification ─────────────────────────────
+-- Verifies three independent invariants:
+--   (a) post_count = pre_count + cardinality(missing_codes)
+--   (b) every code returned by the missing_codes audit is now present
+--       in config_assets with note = 'v1.4.1 phase 2 install_base_v2
+--       backfill' (proves the INSERT actually inserted those exact rows)
+--   (c) post_count >= 25 (hard floor — V2 has 25 canonical codes)
+-- Any failed invariant raises an exception, which (because §1, §2,
+-- §3, §4 all run in the same statement transaction) rolls the INSERT
+-- back. The temp tables drop on commit/rollback automatically.
+do $$
+declare s record;
+declare post_count int;
+declare missing_count int;
+declare marker_codes text[];
+declare expected_codes text[];
+begin
+  select * into s from _v141_phase2_state;
+
+  missing_count := coalesce(cardinality(s.missing_codes), 0);
+  expected_codes := coalesce(s.missing_codes, array[]::text[]);
+
+  select count(*) into post_count
+    from public.config_assets;
+
+  select coalesce(array_agg(code order by code), array[]::text[])
+    into marker_codes
+    from public.config_assets
+   where note = 'v1.4.1 phase 2 install_base_v2 backfill';
+
+  -- Invariant (a): arithmetic
+  if post_count <> s.pre_count + missing_count then
+    raise exception
+      'install_base_v2 backfill arithmetic mismatch: pre_count=% + missing_count=% != post_count=%',
+      s.pre_count, missing_count, post_count;
+  end if;
+
+  -- Invariant (b): marker codes set-equals missing codes
+  -- Note: this only checks marker rows just now inserted, which on a
+  -- fresh staging/prod run will exactly equal the pre-INSERT missing
+  -- set. On a re-run (idempotent re-apply), missing_count will be 0
+  -- and expected_codes will be empty, but marker rows from the prior
+  -- run still exist in config_assets — that's fine; this invariant
+  -- only requires marker_codes ⊇ expected_codes (every newly missing
+  -- code is now marked) — strict equality is too strict for re-runs.
+  if not (marker_codes @> expected_codes) then
+    raise exception
+      'install_base_v2 backfill marker mismatch: expected codes % not all present as marker rows (markers found: %)',
+      expected_codes, marker_codes;
+  end if;
+
+  -- Invariant (c): hard floor
+  if post_count < 25 then
+    raise exception
+      'install_base_v2 backfill produced post_count=% (<25); aborting',
+      post_count;
+  end if;
+
+  raise notice
+    'install_base_v2 backfill ok: pre_count=%, missing_count=%, post_count=%, expected_codes=%, marker_codes=%',
+    s.pre_count, missing_count, post_count, expected_codes, marker_codes;
+end $$;
+
+-- Note: temp tables _v141_phase2_v2 and _v141_phase2_state were
+-- created with `on commit drop` so they go away when this statement
+-- transaction commits. No manual cleanup needed.
+
+commit;
+
+-- ── End of 0005 ─────────────────────────────────────────────────────

@@ -1052,7 +1052,10 @@ button,input,select,textarea{font-family:inherit;}
   <div class="panel">
     <div class="panel-head">
       <h2 class="panel-title"><i data-lucide="building-2"></i>Install Base — <span id="install-base-count">—</span> Systems</h2>
-      <input class="search-box" placeholder="Search customer, town, model…" aria-label="Search install base" oninput="filterAssets(this.value)">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary mgr-plus" id="ib-add-asset-btn" type="button" style="font-size:11px;padding:6px 12px" onclick="openAddAssetModal()" title="Add a new asset to the install base"><i data-lucide="plus"></i>Add Asset</button>
+        <input class="search-box" placeholder="Search customer, town, model…" aria-label="Search install base" oninput="filterAssets(this.value)">
+      </div>
     </div>
     <div style="overflow-x:auto">
       <table class="data-table">
@@ -1299,6 +1302,219 @@ button,input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+<!-- ADD ASSET MODAL (Phase 2 Track B B5.1) -->
+<div class="modal-overlay" id="add-asset-modal" role="dialog" aria-modal="true" aria-labelledby="add-asset-title" aria-hidden="true">
+  <div class="modal" style="max-width:680px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:3px">INSTALL BASE</div>
+        <div id="add-asset-title" style="font-family:var(--display);font-weight:700;font-size:15px">Add Asset</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:4px">Code format: <span style="font-family:var(--mono)">AN</span> followed by 3 digits (e.g. <span style="font-family:var(--mono)">AN026</span>). Code is immutable after creation.</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('add-asset-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="add-asset-error" role="alert" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="aa-code" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Code *</label>
+          <input id="aa-code" type="text" maxlength="5" placeholder="AN026" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px;text-transform:uppercase">
+        </div>
+        <div>
+          <label for="aa-ast-id" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">AST ID</label>
+          <input id="aa-ast-id" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label for="aa-name" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Customer / Site Name *</label>
+        <input id="aa-name" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="aa-tesla" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Tesla</label>
+          <input id="aa-tesla" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-model" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Model</label>
+          <input id="aa-model" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-town" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Town</label>
+          <input id="aa-town" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-state" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">State</label>
+          <input id="aa-state" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="aa-channel" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Channel</label>
+          <input id="aa-channel" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-gradient" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Gradient</label>
+          <input id="aa-gradient" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-sw" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">SW</label>
+          <input id="aa-sw" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-compressor" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Compressor</label>
+          <input id="aa-compressor" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="aa-coldhead" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Coldhead</label>
+          <input id="aa-coldhead" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label for="aa-note" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Note</label>
+        <textarea id="aa-note" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);resize:vertical;font-family:inherit;font-size:12px;line-height:1.5"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" type="button" onclick="closeModal('add-asset-modal')" style="font-size:12px;padding:8px 16px">Cancel</button>
+        <button class="btn btn-primary" id="aa-submit-btn" type="button" onclick="submitAddAsset()" style="font-size:12px;padding:8px 18px"><i data-lucide="plus"></i>Create Asset</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ASSET MODAL (Phase 2 Track B B5.2) -->
+<div class="modal-overlay" id="edit-asset-modal" role="dialog" aria-modal="true" aria-labelledby="edit-asset-title" aria-hidden="true">
+  <div class="modal" style="max-width:680px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:3px">INSTALL BASE</div>
+        <div id="edit-asset-title" style="font-family:var(--display);font-weight:700;font-size:15px">Edit Asset</div>
+        <div id="edit-asset-context" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('edit-asset-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="edit-asset-error" role="alert" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="ea-code" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Code (read-only)</label>
+          <input id="ea-code" type="text" disabled style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text-dim);font-family:var(--mono);font-size:12px;cursor:not-allowed">
+        </div>
+        <div>
+          <label for="ea-ast-id" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">AST ID</label>
+          <input id="ea-ast-id" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label for="ea-name" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Customer / Site Name *</label>
+        <input id="ea-name" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="ea-tesla" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Tesla</label>
+          <input id="ea-tesla" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-model" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Model</label>
+          <input id="ea-model" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-town" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Town</label>
+          <input id="ea-town" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-state" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">State</label>
+          <input id="ea-state" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label for="ea-channel" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Channel</label>
+          <input id="ea-channel" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-gradient" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Gradient</label>
+          <input id="ea-gradient" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-sw" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">SW</label>
+          <input id="ea-sw" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-compressor" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Compressor</label>
+          <input id="ea-compressor" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+        <div>
+          <label for="ea-coldhead" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Coldhead</label>
+          <input id="ea-coldhead" type="text" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label for="ea-note" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Note</label>
+        <textarea id="ea-note" rows="2" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);resize:vertical;font-family:inherit;font-size:12px;line-height:1.5"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" type="button" onclick="closeModal('edit-asset-modal')" style="font-size:12px;padding:8px 16px">Cancel</button>
+        <button class="btn btn-primary" id="ea-submit-btn" type="button" onclick="submitEditAsset()" style="font-size:12px;padding:8px 18px"><i data-lucide="check"></i>Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DE-INSTALL ASSET MODAL (Phase 2 Track B B5.3) -->
+<div class="modal-overlay" id="deinstall-asset-modal" role="dialog" aria-modal="true" aria-labelledby="deinstall-asset-title" aria-hidden="true">
+  <div class="modal" style="max-width:560px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--red);margin-bottom:3px">DE-INSTALL ASSET</div>
+        <div id="deinstall-asset-title" style="font-family:var(--display);font-weight:700;font-size:15px">De-install Asset</div>
+        <div id="deinstall-asset-context" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('deinstall-asset-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:10px 12px;font-size:11px;color:#fca5a5;margin-bottom:14px;line-height:1.5">
+        <strong>This sets the asset status to <span style="font-family:var(--mono)">de_installed</span>.</strong>
+        The row remains in the database with full lifecycle history, but is no longer treated as active. Reversal from the UI is not supported in v1.4.1; reactivation requires a manual SQL update.
+      </div>
+      <div id="deinstall-asset-error" role="alert" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:8px 12px;font-size:11px;color:#fca5a5;margin-bottom:12px"></div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Asset</label>
+        <div id="di-target-code" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:13px;font-weight:600">—</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label for="di-confirm" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Type the asset code to confirm *</label>
+        <input id="di-confirm" type="text" maxlength="5" autocomplete="off" oninput="_diUpdateSubmitState()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:13px;text-transform:uppercase">
+        <div style="font-size:10px;color:var(--text-faint);margin-top:4px">Submit unlocks only on exact match (case-insensitive) plus a non-empty reason.</div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label for="di-reason" style="display:block;font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Reason *</label>
+        <textarea id="di-reason" rows="3" oninput="_diUpdateSubmitState()" placeholder="e.g. customer cancelled CMC; system uninstalled at site." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);resize:vertical;font-family:inherit;font-size:12px;line-height:1.5"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" type="button" onclick="closeModal('deinstall-asset-modal')" style="font-size:12px;padding:8px 16px">Cancel</button>
+        <button id="di-submit-btn" class="btn btn-primary" type="button" disabled onclick="submitDeInstallAsset()" style="font-size:12px;padding:8px 18px;background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.5);color:#fca5a5"><i data-lucide="archive"></i>De-install</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY MODAL (Phase 2 Track B B5.4) -->
+<div class="modal-overlay" id="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-modal-title" aria-hidden="true">
+  <div class="modal" style="max-width:760px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:3px">LIFECYCLE HISTORY</div>
+        <div id="history-modal-title" style="font-family:var(--display);font-weight:700;font-size:15px">Asset History</div>
+        <div id="history-modal-context" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('history-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" id="history-modal-body" style="max-height:60vh;overflow-y:auto">
+      <div style="text-align:center;color:var(--text-dim);font-size:12px;padding:30px 0">Loading…</div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
@@ -1502,7 +1718,12 @@ const INSTALL_BASE_V2 = [
 // reassignment (Supabase load, XLSX upload, cold seed).
 function applyInstallBaseOverlay(){
   const prev = new Map((CONFIG_ASSETS || []).map(a => [a.code, a]));
-  CONFIG_ASSETS = INSTALL_BASE_V2.map(src => {
+  // Phase 2 (B5.0): the DB is now master for the install base. V2 stays
+  // canonical for the XLSX spellings of seeded codes; any code in the
+  // pre-overlay state (just loaded from DB) but NOT in V2 is appended so
+  // app-created rows (Add Asset workflow) are visible.
+  const v2Codes = new Set(INSTALL_BASE_V2.map(s => s.code));
+  const fromV2 = INSTALL_BASE_V2.map(src => {
     const p = prev.get(src.code) || {};
     return {
       code: src.code, ast_id: src.ast_id, name: src.name,
@@ -1510,10 +1731,40 @@ function applyInstallBaseOverlay(){
       channel: src.channel, gradient: src.gradient, sw: src.sw,
       compressor: src.compressor, coldhead: src.coldhead,
       _alias_of: null,
+      // Phase 2 B5.5: lifecycle + audit fields carried from the DB-loaded
+      // prev snapshot so V2-canonical codes still reflect their real status.
+      status: p.status || 'active',
+      de_installed_at: p.de_installed_at,
+      de_installed_by: p.de_installed_by,
+      note: p.note,
+      created_at: p.created_at, created_by: p.created_by,
+      updated_at: p.updated_at, updated_by: p.updated_by,
       open_calls:  p.open_calls  || 0,
       total_calls: p.total_calls || 0,
     };
   });
+  const dbOnly = (CONFIG_ASSETS || [])
+    .filter(a => a.code && !v2Codes.has(a.code))
+    .map(a => ({
+      code: a.code, ast_id: a.ast_id || null, name: a.name,
+      tesla: a.tesla || null, model: a.model || null,
+      town: a.town || null, state: a.state || null,
+      channel: a.channel || null, gradient: a.gradient || null,
+      sw: a.sw || null, compressor: a.compressor || null,
+      coldhead: a.coldhead || null,
+      _alias_of: a._alias_of || null,
+      // Phase 2 B5.5: lifecycle + audit fields carried unchanged for
+      // app-created codes (Add Asset workflow).
+      status: a.status || 'active',
+      de_installed_at: a.de_installed_at,
+      de_installed_by: a.de_installed_by,
+      note: a.note,
+      created_at: a.created_at, created_by: a.created_by,
+      updated_at: a.updated_at, updated_by: a.updated_by,
+      open_calls:  a.open_calls  || 0,
+      total_calls: a.total_calls || 0,
+    }));
+  CONFIG_ASSETS = [...fromV2, ...dbOnly];
 }
 // Seed CONFIG_ASSETS immediately so cold-start renders show the 24 xlsx rows
 // before any Supabase/xlsx load completes.
@@ -2613,8 +2864,16 @@ async function applyUploadedData(){
     // uploads don't accumulate in the DB and leak back into the UI
     // after logout/login.
 
-    // 1. Replace config assets
+    // 1. Upsert config assets (Phase 2 B4: safe upsert by code).
+    // Lifecycle / app-managed fields (status, de_installed_at,
+    // de_installed_by, de_install_reason, created_at, updated_at, note) are
+    // intentionally excluded from the XLSX-owned column list, so a re-upload
+    // of the sheet never overwrites a Manager's lifecycle action. Rows in DB
+    // but not in XLSX are LEFT IN PLACE — de-installation goes through the
+    // lifecycle workflow, not XLSX omission.
     if(r.config && r.config.length > 0){
+      const xlsxOwnedConfigCols = ['code','ast_id','name','tesla','model','town',
+        'state','channel','gradient','sw','compressor','coldhead','alias_of'];
       const configRows = r.config.map(a => ({
         code: a.code, ast_id: a.ast_id || null, name: a.name,
         tesla: a.tesla || null, model: a.model || null,
@@ -2627,30 +2886,39 @@ async function applyUploadedData(){
       // Dedupe by primary key 'code' — PG ON CONFLICT can't handle duplicate keys
       const cfgSeen = new Map();
       configRows.forEach(row => { if(row.code) cfgSeen.set(row.code, row); });
-      const deduped = Array.from(cfgSeen.values());
-      showLoading('Replacing install base…');
-      // Wipe first so assets that were removed upstream don't linger.
-      // `neq('code', '__sentinel__')` matches every row (no asset has
-      // that literal code).
-      const delAssets = await _sb.from('config_assets').delete().neq('code', '__sentinel__');
-      if(delAssets.error) throw delAssets.error;
-      const { error } = await _sb.from('config_assets').insert(deduped);
+      // Project to the explicit whitelist so the payload never carries fields
+      // outside xlsxOwnedConfigCols even if the parser adds new keys later.
+      const deduped = Array.from(cfgSeen.values()).map(row => {
+        const out = {};
+        for(const k of xlsxOwnedConfigCols) out[k] = row[k] ?? null;
+        return out;
+      });
+      showLoading('Updating install base…');
+      const { error } = await _sb.from('config_assets')
+        .upsert(deduped, { onConflict: 'code' });
       if(error) throw error;
     }
 
-    // 2. Replace CMC contracts
+    // 2. CMC contracts — Admin-only until a future SQL migration adds a
+    // UNIQUE/PK constraint suitable for ON CONFLICT (deferred to v1.4.2).
+    // The section-level admin guard prevents Manager triggering delete+insert
+    // even if the function-level admin gate above is later relaxed.
     if(r.cmc && r.cmc.length > 0){
-      // CMC uses an auto-uuid pk, so we delete and reinsert for this upload
-      showLoading('Replacing CMC contracts…');
-      await _sb.from('cmc_contracts').delete().neq('sn', -99999);
-      const cmcRows = r.cmc.map(c => ({
-        sn: c.sn, customer: c.customer, town: c.town || null,
-        model: c.model || null, contract: c.contract || null,
-        start_date: displayToDbDate(c.start),
-        end_date: displayToDbDate(c.end),
-      }));
-      const { error } = await _sb.from('cmc_contracts').insert(cmcRows);
-      if(error) throw error;
+      if(_userRole === 'admin'){
+        // CMC uses an auto-uuid pk, so we delete and reinsert for this upload
+        showLoading('Replacing CMC contracts…');
+        await _sb.from('cmc_contracts').delete().neq('sn', -99999);
+        const cmcRows = r.cmc.map(c => ({
+          sn: c.sn, customer: c.customer, town: c.town || null,
+          model: c.model || null, contract: c.contract || null,
+          start_date: displayToDbDate(c.start),
+          end_date: displayToDbDate(c.end),
+        }));
+        const { error } = await _sb.from('cmc_contracts').insert(cmcRows);
+        if(error) throw error;
+      } else {
+        console.warn('cmc_contracts upload skipped: admin-only in v1.4.1 (no UNIQUE on sn); user role:', _userRole);
+      }
     }
 
     // 3. Replace tickets — wipe old rows so tickets removed upstream
@@ -3991,12 +4259,19 @@ function renderKPIGrid(){
       <div class="kpi-foot"><span class="kpi-status ${openStatus}">${openStatusLabel}</span><span style="font-size:10px;color:var(--text-faint);font-family:var(--mono)">${partsAwaited} parts pending</span></div>
     </div>
     ${(()=>{ const p=pendingAmbCount(); const ps=p>0?'risk':'good'; const pl=p>0?'Review Needed':'Clean'; return `<div class="kpi-card ${p>0?'purple':'green'} admin-only" title="Data flags apply to the entire dataset regardless of filter"><div class="kpi-label">Data Flags ${lockTag}</div><div class="kpi-value ${p>0?'purple':'green'}">${p}</div><div class="kpi-delta ${p>0?'warn':''}">${p>0?'Pending review':'All resolved'}</div><div class="kpi-foot"><span class="kpi-status ${ps}">${pl}</span></div></div>`; })()}
-    <div class="kpi-card cyan" title="Install base doesn't change by month">
+    ${(()=>{
+      // Phase 2 B5.5: Install Base KPI now shows active count; de-installed
+      // assets remain visible in the Install Base table but are excluded
+      // from the active-systems headline so the dashboard tracks live state.
+      const _activeIB = CONFIG_ASSETS.filter(a => (a.status || 'active') !== 'de_installed');
+      const _deIB = CONFIG_ASSETS.length - _activeIB.length;
+      return `<div class="kpi-card cyan" title="Install base doesn't change by month">
       <div class="kpi-label">Install Base Covered ${lockTag}</div>
-      <div class="kpi-value cyan">${CONFIG_ASSETS.length}</div>
-      <div class="kpi-delta">Across ${new Set(CONFIG_ASSETS.map(a=>a.town)).size} cities</div>
+      <div class="kpi-value cyan">${_activeIB.length}</div>
+      <div class="kpi-delta">${_deIB > 0 ? `${_deIB} de-installed · ` : ''}Across ${new Set(_activeIB.map(a=>a.town)).size} cities</div>
       <div class="kpi-foot"><span class="kpi-status info">Active Systems</span></div>
-    </div>
+    </div>`;
+    })()}
     <div class="kpi-card green" title="${slaTooltip}" style="cursor:help">
       <div class="kpi-label">SLA Compliance <span style="font-size:11px;vertical-align:middle">ⓘ</span></div>
       ${slaVal}
@@ -4791,7 +5066,11 @@ function _aggregateContracts(){
 
   const pmRows  = (typeof PM_SCHEDULE !== 'undefined' && Array.isArray(PM_SCHEDULE)) ? PM_SCHEDULE : [];
   const cmcRows = (typeof CMC_DATA    !== 'undefined' && Array.isArray(CMC_DATA))    ? CMC_DATA    : [];
-  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
+  // Phase 2 B5.5: active workflows exclude de-installed assets. Install Base
+  // table is the only view that still shows the full roster.
+  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS))
+    ? CONFIG_ASSETS.filter(a => (a.status || 'active') !== 'de_installed')
+    : [];
 
   // PM ordered first so it wins over CMC at the same tier inside the pool.
   const contractPool = {
@@ -5125,11 +5404,9 @@ function renderContracts(){
           <td style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._end))}</td>
           <td style="text-align:right">${_contractsDayBadge(r._days)}</td>
           <td><span class="badge low" style="background:${(_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8')}1a;color:${_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8'}">${esc(r.statusLabel)}</span></td>
-          <td>${pmCell(r)}</td>
-          <td style="font-size:11px;color:var(--text-dim)">${esc(r.town || '')}${r.region ? ' · ' + esc(r.region) : ''}</td>
           <td>${matchPill(r)}</td>
         </tr>`).join('')
-    : `<tr><td colspan="11"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
+    : `<tr><td colspan="9"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
 
   const pagination = sorted.length > CONTRACTS_PAGE_SIZE ? `
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px">
@@ -5161,8 +5438,6 @@ function renderContracts(){
             ${th('end','End')}
             ${th('days','Days', 'right')}
             ${th('status','Status')}
-            ${th('pm_status','PM Next / Status')}
-            ${th('town','Town / Region')}
             ${th('match','Match')}
           </tr></thead>
           <tbody>${tableRows}</tbody>
@@ -5404,7 +5679,11 @@ function renderPM(){
   // match no IB asset at any tier are surfaced in a diagnostic, not the
   // main table — keeping Install Base / Contracts / PM aligned on one
   // canonical asset list.
-  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS)) ? CONFIG_ASSETS : [];
+  // Phase 2 B5.5: active workflows exclude de-installed assets. Install Base
+  // table is the only view that still shows the full roster.
+  const ibAssets = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS))
+    ? CONFIG_ASSETS.filter(a => (a.status || 'active') !== 'de_installed')
+    : [];
   const pmAll = (typeof PM_SCHEDULE !== 'undefined' && Array.isArray(PM_SCHEDULE)) ? PM_SCHEDULE.map(p => ({...p, _source:'pm'})) : [];
   const pmPool = { all: pmAll, consumed: new Set() };
 
@@ -5709,12 +5988,435 @@ Service desk`);
   window.open(mailtoUrl, '_blank');
 }
 
-// PM-management access check — admin OR manager (interim email allowlist until
-// the `manager` role tier ships).
+// PM-management access check — admin OR manager.
 function canManagePM(){
-  if(_userRole === 'admin' || _userRole === 'manager') return true;
-  const email = (_currentUser?.email || '').toLowerCase();
-  return email === 'manager@3imedtech.com';
+  return _userRole === 'admin' || _userRole === 'manager';
+}
+
+// ── Phase 2 Track B: Install Base lifecycle UI ─────────────────────────
+// Add Asset workflow. Edit / De-install / History viewer / Renew arrive
+// in subsequent stop points. canManagePM() above is the gate.
+
+// Strict code format: AN followed by exactly 3 digits (e.g. AN026). New
+// asset codes must conform; existing codes stay immutable on edit (B5.2).
+const ASSET_CODE_RE = /^AN\d{3}$/;
+
+function _aaShowError(msg){
+  const el = document.getElementById('add-asset-error');
+  if(el){ el.textContent = msg; el.style.display = 'block'; }
+}
+
+function _aaClearForm(){
+  ['aa-code','aa-ast-id','aa-name','aa-tesla','aa-model','aa-town','aa-state',
+   'aa-channel','aa-gradient','aa-sw','aa-compressor','aa-coldhead','aa-note']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const errBox = document.getElementById('add-asset-error');
+  if(errBox){ errBox.textContent = ''; errBox.style.display = 'none'; }
+}
+
+function openAddAssetModal(){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  _aaClearForm();
+  openModal('add-asset-modal');
+}
+
+async function submitAddAsset(){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  const v = id => {
+    const el = document.getElementById(id);
+    const s = el ? (el.value || '').trim() : '';
+    return s.length ? s : null;
+  };
+  const code = ((document.getElementById('aa-code')?.value) || '').trim().toUpperCase();
+  const name = ((document.getElementById('aa-name')?.value) || '').trim();
+  if(!ASSET_CODE_RE.test(code)){
+    _aaShowError('Code must match AN followed by exactly 3 digits (e.g. AN026).');
+    return;
+  }
+  if(!name){
+    _aaShowError('Customer / Site Name is required.');
+    return;
+  }
+  if((CONFIG_ASSETS || []).some(a => (a.code || '').toUpperCase() === code)){
+    _aaShowError(`Asset code ${code} already exists in the install base.`);
+    return;
+  }
+  const submitBtn = document.getElementById('aa-submit-btn');
+  if(submitBtn) submitBtn.disabled = true;
+  try {
+    const note = v('aa-note');
+    const row = {
+      code,
+      ast_id: v('aa-ast-id'),
+      name,
+      tesla: v('aa-tesla'),
+      model: v('aa-model'),
+      town: v('aa-town'),
+      state: v('aa-state'),
+      channel: v('aa-channel'),
+      gradient: v('aa-gradient'),
+      sw: v('aa-sw'),
+      compressor: v('aa-compressor'),
+      coldhead: v('aa-coldhead'),
+      status: 'active',
+      created_by: _currentUser ? _currentUser.id : null,
+      note,
+    };
+    suppressRealtimeReload(3000);
+    // Use insert (NOT upsert) — duplicate-code attempts fail at the DB
+    // layer with a unique-violation, surfacing the error to the user.
+    const { data: inserted, error } = await _sb
+      .from('config_assets').insert(row).select().single();
+    if(error){
+      _aaShowError(`Insert failed: ${error.message || error}`);
+      return;
+    }
+    // Append-only lifecycle history. Best-effort: on history insert
+    // failure the asset row is already created; surface a console warning
+    // rather than block the user-facing success.
+    const { error: histErr } = await _sb.from('asset_lifecycle_history').insert({
+      asset_code: code,
+      lifecycle_id: null,
+      event: 'created',
+      before_state: null,
+      after_state: inserted,
+      actor: _currentUser ? _currentUser.id : null,
+      actor_email: _currentUser ? _currentUser.email : null,
+      source: 'app:install_base_form',
+      note,
+    });
+    if(histErr) console.warn('asset_lifecycle_history insert failed:', histErr);
+    closeModal('add-asset-modal');
+    await loadAllFromDB({ silent: true });
+    if(typeof renderAll === 'function') renderAll();
+  } catch(e){
+    _aaShowError(`Insert error: ${(e && e.message) || e}`);
+  } finally {
+    if(submitBtn) submitBtn.disabled = false;
+  }
+}
+
+// ── Edit Asset (Phase 2 B5.2) ──────────────────────────────────────────
+// The selected asset's code is captured at open time and never sent in
+// the update payload — Edit must not change code.
+let _editingAssetCode = null;
+let _editingAssetBefore = null;
+
+function _eaShowError(msg){
+  const el = document.getElementById('edit-asset-error');
+  if(el){ el.textContent = msg; el.style.display = 'block'; }
+}
+
+function _eaClearForm(){
+  ['ea-code','ea-ast-id','ea-name','ea-tesla','ea-model','ea-town','ea-state',
+   'ea-channel','ea-gradient','ea-sw','ea-compressor','ea-coldhead','ea-note']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const errBox = document.getElementById('edit-asset-error');
+  if(errBox){ errBox.textContent = ''; errBox.style.display = 'none'; }
+}
+
+function openEditAssetModal(code){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  const asset = (CONFIG_ASSETS || []).find(a => (a.code || '').toUpperCase() === (code || '').toUpperCase());
+  if(!asset){ alert(`Asset ${code} not found.`); return; }
+  _eaClearForm();
+  _editingAssetCode = asset.code;
+  _editingAssetBefore = { ...asset };
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val ?? ''; };
+  set('ea-code', asset.code);
+  set('ea-ast-id', asset.ast_id);
+  set('ea-name', asset.name);
+  set('ea-tesla', asset.tesla);
+  set('ea-model', asset.model);
+  set('ea-town', asset.town);
+  set('ea-state', asset.state);
+  set('ea-channel', asset.channel);
+  set('ea-gradient', asset.gradient);
+  set('ea-sw', asset.sw);
+  set('ea-compressor', asset.compressor);
+  set('ea-coldhead', asset.coldhead);
+  set('ea-note', asset.note);
+  const ctx = document.getElementById('edit-asset-context');
+  if(ctx) ctx.textContent = `Editing ${asset.code}. Code is read-only.`;
+  openModal('edit-asset-modal');
+}
+
+async function submitEditAsset(){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  if(!_editingAssetCode){ _eaShowError('No asset is selected for editing.'); return; }
+  const v = id => {
+    const el = document.getElementById(id);
+    const s = el ? (el.value || '').trim() : '';
+    return s.length ? s : null;
+  };
+  const name = ((document.getElementById('ea-name')?.value) || '').trim();
+  if(!name){
+    _eaShowError('Customer / Site Name is required.');
+    return;
+  }
+  const submitBtn = document.getElementById('ea-submit-btn');
+  if(submitBtn) submitBtn.disabled = true;
+  try {
+    const note = v('ea-note');
+    // Update payload — explicitly excludes `code` per Phase 2 review §7.2.
+    // Only the safe editable field set is sent.
+    const payload = {
+      ast_id: v('ea-ast-id'),
+      name,
+      tesla: v('ea-tesla'),
+      model: v('ea-model'),
+      town: v('ea-town'),
+      state: v('ea-state'),
+      channel: v('ea-channel'),
+      gradient: v('ea-gradient'),
+      sw: v('ea-sw'),
+      compressor: v('ea-compressor'),
+      coldhead: v('ea-coldhead'),
+      updated_by: _currentUser ? _currentUser.id : null,
+      note,
+    };
+    suppressRealtimeReload(3000);
+    const { data: updated, error } = await _sb
+      .from('config_assets').update(payload).eq('code', _editingAssetCode).select().single();
+    if(error){
+      _eaShowError(`Update failed: ${error.message || error}`);
+      return;
+    }
+    // Append-only history. Best-effort: if the history insert fails the
+    // asset row is already updated; surface a console.warn rather than
+    // attempt a rollback.
+    const { error: histErr } = await _sb.from('asset_lifecycle_history').insert({
+      asset_code: _editingAssetCode,
+      lifecycle_id: null,
+      event: 'updated',
+      before_state: _editingAssetBefore,
+      after_state: updated,
+      actor: _currentUser ? _currentUser.id : null,
+      actor_email: _currentUser ? _currentUser.email : null,
+      source: 'app:install_base_form',
+      note,
+    });
+    if(histErr) console.warn('asset_lifecycle_history insert (event=updated) failed:', histErr);
+    _editingAssetCode = null;
+    _editingAssetBefore = null;
+    closeModal('edit-asset-modal');
+    await loadAllFromDB({ silent: true });
+    if(typeof renderAll === 'function') renderAll();
+  } catch(e){
+    _eaShowError(`Update error: ${(e && e.message) || e}`);
+  } finally {
+    if(submitBtn) submitBtn.disabled = false;
+  }
+}
+
+// ── De-install Asset (Phase 2 B5.3) ────────────────────────────────────
+// Sets config_assets.status = 'de_installed' for the selected asset. The
+// operator must type the exact code to confirm; the submit button is
+// enabled only on match plus a non-empty reason. The existing
+// config_assets.note column is preserved — the de-install reason is
+// captured in the asset_lifecycle_history row so the audit trail is
+// complete without overwriting prior notes.
+let _deinstallAssetCode = null;
+let _deinstallAssetBefore = null;
+
+function _diShowError(msg){
+  const el = document.getElementById('deinstall-asset-error');
+  if(el){ el.textContent = msg; el.style.display = 'block'; }
+}
+
+function _diClearForm(){
+  ['di-confirm','di-reason'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const errBox = document.getElementById('deinstall-asset-error');
+  if(errBox){ errBox.textContent = ''; errBox.style.display = 'none'; }
+  const sub = document.getElementById('di-submit-btn');
+  if(sub) sub.disabled = true;
+}
+
+function _diUpdateSubmitState(){
+  const sub = document.getElementById('di-submit-btn');
+  if(!sub) return;
+  if(!_deinstallAssetCode){ sub.disabled = true; return; }
+  const typed = ((document.getElementById('di-confirm')?.value) || '').trim().toUpperCase();
+  const reason = ((document.getElementById('di-reason')?.value) || '').trim();
+  sub.disabled = !(typed === _deinstallAssetCode && reason.length > 0);
+}
+
+function openDeInstallAssetModal(code){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  const asset = (CONFIG_ASSETS || []).find(a => (a.code || '').toUpperCase() === (code || '').toUpperCase());
+  if(!asset){ alert(`Asset ${code} not found.`); return; }
+  // Phase 2 B5.5: short-circuit if already de-installed so we don't open
+  // the destructive modal or accrue duplicate de_installed history events.
+  if((asset.status || 'active') === 'de_installed'){
+    alert(`Asset ${asset.code} is already de-installed.`);
+    return;
+  }
+  _diClearForm();
+  _deinstallAssetCode = asset.code;
+  _deinstallAssetBefore = { ...asset };
+  const target = document.getElementById('di-target-code');
+  if(target) target.textContent = asset.code;
+  const ctx = document.getElementById('deinstall-asset-context');
+  if(ctx) ctx.textContent = `${asset.code}${asset.name ? ' — ' + asset.name : ''}`;
+  openModal('deinstall-asset-modal');
+}
+
+async function submitDeInstallAsset(){
+  if(!canManagePM()){ alert('This action requires admin or manager access.'); return; }
+  if(!_deinstallAssetCode){ _diShowError('No asset is selected for de-install.'); return; }
+  // Re-validate the confirmation match server-side too — submit may have
+  // been bypassed via DevTools enabling the disabled button.
+  const typed = ((document.getElementById('di-confirm')?.value) || '').trim().toUpperCase();
+  if(typed !== _deinstallAssetCode){
+    _diShowError(`Confirmation code does not match. Type ${_deinstallAssetCode} exactly.`);
+    return;
+  }
+  const reason = ((document.getElementById('di-reason')?.value) || '').trim();
+  if(!reason){
+    _diShowError('Reason is required.');
+    return;
+  }
+  const submitBtn = document.getElementById('di-submit-btn');
+  if(submitBtn) submitBtn.disabled = true;
+  try {
+    // Update payload — does NOT touch `note` so any pre-existing
+    // note value is preserved. The de-install reason is captured in
+    // asset_lifecycle_history.note instead.
+    const payload = {
+      status: 'de_installed',
+      de_installed_at: new Date().toISOString(),
+      de_installed_by: _currentUser ? _currentUser.id : null,
+      updated_by: _currentUser ? _currentUser.id : null,
+    };
+    suppressRealtimeReload(3000);
+    const { data: updated, error } = await _sb
+      .from('config_assets').update(payload).eq('code', _deinstallAssetCode).select().single();
+    if(error){
+      _diShowError(`De-install failed: ${error.message || error}`);
+      return;
+    }
+    // History insert — best-effort. The reason lives here, not on
+    // config_assets, so prior notes are intact.
+    const { error: histErr } = await _sb.from('asset_lifecycle_history').insert({
+      asset_code: _deinstallAssetCode,
+      lifecycle_id: null,
+      event: 'de_installed',
+      before_state: _deinstallAssetBefore,
+      after_state: updated,
+      actor: _currentUser ? _currentUser.id : null,
+      actor_email: _currentUser ? _currentUser.email : null,
+      source: 'app:install_base_form',
+      note: reason,
+    });
+    if(histErr) console.warn('asset_lifecycle_history insert (event=de_installed) failed:', histErr);
+    _deinstallAssetCode = null;
+    _deinstallAssetBefore = null;
+    closeModal('deinstall-asset-modal');
+    await loadAllFromDB({ silent: true });
+    if(typeof renderAll === 'function') renderAll();
+  } catch(e){
+    _diShowError(`De-install error: ${(e && e.message) || e}`);
+  } finally {
+    if(submitBtn) submitBtn.disabled = false;
+  }
+}
+
+// ── History viewer (Phase 2 B5.4) ─────────────────────────────────────
+// Read-only modal showing asset_lifecycle_history rows for the selected
+// asset. Open to ALL authenticated roles — no canManagePM gate. The
+// v141_history_select_authenticated policy (Phase 1 / 0003) permits any
+// authenticated session to read; no write paths exist in this code.
+
+const _HIST_EVENT_STYLE = {
+  created:      { bg: 'rgba(16,185,129,.15)',  fg: '#6ee7b7' },
+  updated:      { bg: 'rgba(59,130,246,.15)',  fg: '#93c5fd' },
+  renewed:      { bg: 'rgba(245,158,11,.15)',  fg: '#fcd34d' },
+  de_installed: { bg: 'rgba(239,68,68,.15)',   fg: '#fca5a5' },
+  reactivated:  { bg: 'rgba(16,185,129,.15)',  fg: '#6ee7b7' },
+  cancelled:    { bg: 'rgba(148,163,184,.15)', fg: '#cbd5e1' },
+  backfill:     { bg: 'rgba(148,163,184,.15)', fg: '#cbd5e1' },
+};
+
+function _hvFormatTimestamp(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  if(isNaN(d)) return String(ts);
+  // Compact UTC display: "2026-05-10 09:36:55 UTC".
+  const iso = d.toISOString();
+  return iso.slice(0, 10) + ' ' + iso.slice(11, 19) + ' UTC';
+}
+
+function _hvRenderEntry(row){
+  const style = _HIST_EVENT_STYLE[row.event] || _HIST_EVENT_STYLE.backfill;
+  const beforeJson = JSON.stringify(row.before_state ?? null, null, 2);
+  const afterJson  = JSON.stringify(row.after_state ?? null, null, 2);
+  const noteHtml = row.note
+    ? `<div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.5">${esc(row.note)}</div>`
+    : '';
+  const actorBits = [];
+  if(row.actor_email) actorBits.push(esc(row.actor_email));
+  if(row.source) actorBits.push(esc(row.source));
+  const actorLine = actorBits.length ? actorBits.join(' · ') : '—';
+  return `<div style="border-left:3px solid ${style.fg};padding:10px 12px;margin-bottom:10px;background:var(--surface2);border-radius:6px">
+    <div style="display:flex;align-items:center;gap:10px;font-size:11px;flex-wrap:wrap">
+      <span style="background:${style.bg};color:${style.fg};padding:2px 8px;border-radius:4px;font-family:var(--mono);font-weight:600;font-size:10px">${esc(row.event || '—')}</span>
+      <span style="color:var(--text-dim);font-family:var(--mono);font-size:11px">${esc(_hvFormatTimestamp(row.occurred_at))}</span>
+      <span style="margin-left:auto;color:var(--text-faint);font-size:10px;font-family:var(--mono)">${actorLine}</span>
+    </div>
+    ${noteHtml}
+    <details style="margin-top:8px;font-size:11px">
+      <summary style="cursor:pointer;color:var(--text-dim);user-select:none">Before / after</summary>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div>
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Before</div>
+          <pre style="background:var(--surface);padding:8px 10px;border-radius:4px;font-family:var(--mono);font-size:10px;color:var(--text-dim);overflow:auto;margin:0;white-space:pre-wrap;max-height:240px">${esc(beforeJson)}</pre>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">After</div>
+          <pre style="background:var(--surface);padding:8px 10px;border-radius:4px;font-family:var(--mono);font-size:10px;color:var(--text-dim);overflow:auto;margin:0;white-space:pre-wrap;max-height:240px">${esc(afterJson)}</pre>
+        </div>
+      </div>
+    </details>
+  </div>`;
+}
+
+async function openHistoryModal(code){
+  const targetCode = ((code || '') + '').toUpperCase();
+  if(!targetCode){ alert('No asset code provided.'); return; }
+  const ctx = document.getElementById('history-modal-context');
+  if(ctx) ctx.textContent = targetCode;
+  const body = document.getElementById('history-modal-body');
+  if(body) body.innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:12px;padding:30px 0">Loading…</div>';
+  openModal('history-modal');
+  try {
+    const { data, error } = await _sb
+      .from('asset_lifecycle_history')
+      .select('*')
+      .eq('asset_code', targetCode)
+      .order('occurred_at', { ascending: false });
+    if(error) throw error;
+    const rows = data || [];
+    if(!body) return;
+    if(rows.length === 0){
+      body.innerHTML = `<div style="text-align:center;color:var(--text-dim);font-size:12px;padding:30px 0">
+        <div style="font-size:14px;color:var(--text-dim);margin-bottom:6px">No lifecycle history recorded for ${esc(targetCode)} yet.</div>
+        <div style="font-size:11px;color:var(--text-faint)">Events appear here when an asset is created, updated, de-installed, or renewed via the install base UI.</div>
+      </div>`;
+    } else {
+      body.innerHTML = `<div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">${rows.length} event${rows.length === 1 ? '' : 's'} · most recent first</div>` + rows.map(_hvRenderEntry).join('');
+    }
+    if(window.refreshIcons) window.refreshIcons();
+  } catch(e){
+    if(body){
+      body.innerHTML = `<div role="alert" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:10px 12px;font-size:12px;color:#fca5a5">
+        <strong>Failed to load history.</strong>
+        <div style="margin-top:6px;font-family:var(--mono);font-size:11px">${esc((e && e.message) || String(e))}</div>
+      </div>`;
+    }
+  }
 }
 
 // Holds the PM id while the completion modal is open.
@@ -5920,16 +6622,16 @@ const _ASSETS_SORT_COLS = [
   { key:'state',      label:'STATE',      accessor: a => (a.state||'').toLowerCase() },
   { key:'model',      label:'MODEL',      accessor: a => (a.model||'').toLowerCase() },
   { key:'modality',   label:'MODALITY',   accessor: a => getAssetModality(a) },
+  { key:'status',     label:'STATUS',     accessor: a => (a.status || 'active') },
   { key:'channel',    label:'CHANNEL',    accessor: a => (a.channel||'').toLowerCase() },
   { key:'gradient',   label:'GRADIENT',   accessor: a => (a.gradient||'').toLowerCase() },
   { key:'sw',         label:'SW VER',     accessor: a => (a.sw||'').toLowerCase() },
   { key:'compressor', label:'COMPRESSOR', accessor: a => (a.compressor||'').toLowerCase() },
   { key:'coldhead',   label:'COLDHEAD',   accessor: a => (a.coldhead||'').toLowerCase() },
-  { key:'contract',   label:'CONTRACT',   accessor: a => (findCmcForAsset(a)?.contract || '').toLowerCase() },
-  { key:'cmc_start',  label:'CMC START',  accessor: a => parseFlexDate(findCmcForAsset(a)?.start)?.getTime() ?? null, defaultDir:'desc' },
-  { key:'cmc_end',    label:'CMC END',    accessor: a => parseFlexDate(findCmcForAsset(a)?.end)?.getTime() ?? null },
-  { key:'total_calls',label:'TOTAL CALLS',accessor: a => RAW_TICKETS.filter(t => t.asset_code === a.code).length, defaultDir:'desc' },
-  { key:'open_calls', label:'OPEN CALLS', accessor: a => RAW_TICKETS.filter(t => t.asset_code === a.code && isOpen(t)).length, defaultDir:'desc' },
+  // Phase 2 B5.6: contract/CMC dates moved to Contracts tab; total/open calls
+  // moved to Service History tab. Install Base is now asset-master-focused.
+  { key:'history',    label:'',           sortable: false, thAttrs: 'style="width:50px"' },
+  { key:'actions',    label:'',           sortable: false, thAttrs: 'class="mgr-plus" style="width:60px"' },
 ];
 let _assetsSortInited = false;
 function _initAssetsSort(){
@@ -5956,35 +6658,34 @@ function renderAssets(search=''){
   }
 
   document.getElementById('asset-body').innerHTML=rows.map(a=>{
-    // Strict asset_code matching for ticket counts
-    const assetTickets=RAW_TICKETS.filter(t=>t.asset_code&&t.asset_code===a.code);
-    const openAssetTickets=assetTickets.filter(isOpen);
-    const cmc=findCmcForAsset(a);
+    // Phase 2 B5.6: Install Base is the asset-master view. Contract/CMC info
+    // lives on the Contracts tab; call counts live on Service History.
     const modality=getAssetModality(a);
-    return `<tr>
+    return `<tr${a.status === 'de_installed' ? ' style="opacity:0.55"' : ''}>
       <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(a.code)}</td>
       <td style="font-weight:500">${esc(a.name)}</td>
       <td style="color:var(--text-dim)">${esc(a.town)}</td>
       <td style="color:var(--text-dim)">${esc(a.state)}</td>
       <td style="font-size:11px">${esc(a.model)}</td>
       <td style="font-family:var(--mono);font-size:10px"><span class="badge ${modality==='PET-CT'?'pms':modality==='DR'?'installation':'medium'}">${modality}</span></td>
+      <td>${a.status === 'de_installed' ? '<span class="badge" style="background:rgba(239,68,68,.18);color:#fca5a5">DE-INSTALLED</span>' : '<span class="badge" style="background:rgba(16,185,129,.18);color:#6ee7b7">ACTIVE</span>'}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.channel)}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.gradient)}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.sw)}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.compressor)}</td>
       <td style="font-family:var(--mono);font-size:10px">${esc(a.coldhead)}</td>
-      <td>${cmc?`<span class="badge cmc">${esc(cmc.contract)}</span>`:'<span style="color:var(--text-faint)">—</span>'}</td>
-      <td style="font-family:var(--mono);font-size:10px">${cmc?esc(cmc.start):'—'}</td>
-      <td style="font-family:var(--mono);font-size:10px">${cmc?esc(cmc.end):'—'}</td>
-      <td style="font-family:var(--mono);text-align:center;color:var(--brand)">${assetTickets.length}</td>
-      <td style="font-family:var(--mono);text-align:center;color:${openAssetTickets.length>0?'var(--red)':'var(--green)'}">${openAssetTickets.length}</td>
+      <td style="text-align:center;white-space:nowrap"><button class="btn btn-ghost" type="button" onclick="openHistoryModal('${esc(a.code)}')" title="History for ${esc(a.code)}" style="font-size:10px;padding:3px 8px;color:var(--text-dim)"><i data-lucide="history"></i></button></td>
+      <td class="mgr-plus" style="text-align:right;white-space:nowrap">
+        <button class="btn btn-ghost" type="button" onclick="openEditAssetModal('${esc(a.code)}')" title="Edit ${esc(a.code)}" style="font-size:10px;padding:3px 8px"><i data-lucide="edit-2"></i></button>
+        <button class="btn btn-ghost" type="button" onclick="openDeInstallAssetModal('${esc(a.code)}')" title="De-install ${esc(a.code)}" style="font-size:10px;padding:3px 8px;color:var(--red);margin-left:4px"><i data-lucide="archive"></i></button>
+      </td>
     </tr>`;
   }).join('');
 
   // v1.2.0 2e — empty state when search matches nothing.
   if(rows.length === 0){
     document.getElementById('asset-body').innerHTML = _emptyStateHtml({
-      icon:'search-x', headline:'No assets match your search', colspan:16,
+      icon:'search-x', headline:'No assets match your search', colspan:14,
       secondary: search
         ? `Nothing found for "${search}". Check spelling or clear the search.`
         : 'No assets are configured.',
@@ -5996,7 +6697,7 @@ function renderAssets(search=''){
   if(unmatchedTickets.length>0){
     const tbody=document.getElementById('asset-body');
     tbody.innerHTML+=`<tr class="admin-only" style="background:rgba(245,158,11,.06)">
-      <td colspan="16" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
+      <td colspan="14" style="color:var(--amber);font-family:var(--mono);font-size:11px;padding:10px 12px">
         ⚠ ${unmatchedTickets.length} ticket${unmatchedTickets.length>1?'s':''} could not be matched to a known asset — review Flags &amp; Ambiguities
       </td>
     </tr>`;
@@ -8068,7 +8769,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let _sb = null;            // Supabase client
 let _currentUser = null;   // logged-in user
-let _userRole = 'viewer';  // 'admin' | 'viewer'
+let _userRole = 'viewer';  // 'admin' | 'manager' | 'viewer'
 
 // ───────────────────────────────────────────────────────────────
 // PROFILE DISPLAY — per-email name, title, and avatar initials
@@ -8093,20 +8794,35 @@ function getProfileDisplay(email){
   };
 }
 
-function applyRoleRestrictions(){
+// Phase 2 (B1): role is resolved from public.user_roles via SECURITY DEFINER
+// RPC `app_user_role`. Falls back to the JWT app_metadata.role path if the
+// RPC errors. Default is 'viewer' — never silently grants admin.
+async function applyRoleRestrictions(){
   const metaRole = _currentUser?.app_metadata?.role;
-  _userRole = metaRole === 'admin' ? 'admin'
-            : metaRole === 'manager' ? 'manager'
-            : 'viewer';
+  const jwtRole = metaRole === 'admin' ? 'admin'
+                : metaRole === 'manager' ? 'manager'
+                : 'viewer';
+  let resolvedRole = 'viewer';
+  try {
+    const { data, error } = await _sb.rpc('app_user_role');
+    if(!error && (data === 'admin' || data === 'manager' || data === 'viewer')){
+      resolvedRole = data;
+    } else {
+      if(error) console.warn('app_user_role RPC failed; falling back to JWT', error);
+      resolvedRole = jwtRole;
+    }
+  } catch(e){
+    console.warn('app_user_role RPC threw; falling back to JWT', e);
+    resolvedRole = jwtRole;
+  }
+  _userRole = resolvedRole;
   // Manager is viewer-mode + manager-mode — sits above engineer but below admin.
   const isViewer = _userRole !== 'admin';
   document.body.classList.toggle('viewer-mode', isViewer);
   // Superadmin gate — specifically abhijit.s@, not all admins
   const email = (_currentUser?.email || '').toLowerCase();
   document.body.classList.toggle('superadmin-mode', email === SUPERADMIN_EMAIL);
-  // Manager gate — prefers the `manager` role in app_metadata; keeps the email
-  // allowlist as a safety fallback so nothing breaks if the role isn't set yet.
-  const isManager = _userRole === 'manager' || email === 'manager@3imedtech.com';
+  const isManager = _userRole === 'manager';
   document.body.classList.toggle('manager-mode', isManager);
   const badge = document.getElementById('user-role-badge');
   if(badge){
@@ -8195,6 +8911,14 @@ async function loadAllFromDB(opts = {}){
     town: r.town, state: r.state, channel: r.channel, gradient: r.gradient,
     sw: r.sw, compressor: r.compressor, coldhead: r.coldhead,
     _alias_of: r.alias_of,
+    // Phase 2 B5.5: carry Phase 1 lifecycle + audit fields so consumers can
+    // distinguish active vs de-installed rows and filter active workflows.
+    status: r.status || 'active',
+    de_installed_at: r.de_installed_at,
+    de_installed_by: r.de_installed_by,
+    note: r.note,
+    created_at: r.created_at, created_by: r.created_by,
+    updated_at: r.updated_at, updated_by: r.updated_by,
     open_calls: 0, total_calls: 0, // recomputed below
   }));
   // Replace whatever the DB returned with the 24-row xlsx source of truth
@@ -8663,7 +9387,7 @@ async function bootApp(){
     // Show logged-in user in topbar
     const ue = document.getElementById('user-email');
     if(ue && _currentUser) ue.textContent = _currentUser.email || '';
-    applyRoleRestrictions();
+    await applyRoleRestrictions();
     await doFirstPaint();
     // v1.1.0 1c: respect a deep-link hash on first paint so a bookmarked
     // /#/pm or /#/tickets?status=open lands the user on that view.
@@ -8825,6 +9549,8 @@ function detachRealtime(){
     // blocking subscription renewals, which looks like a random disconnect.
     if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && session.access_token){
       try { _sb.realtime.setAuth(session.access_token); } catch(_){}
+      // Re-resolve role so Admin promotes/demotes propagate on next token refresh.
+      void applyRoleRestrictions();
     }
   });
 
