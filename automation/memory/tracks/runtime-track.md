@@ -174,6 +174,21 @@
 - **Linked entries:** `L-RTI-002` (original auth-fallback / never-default-admin rule), `L-RTI-007` (B6 Session F staging evidence).
 - **Linked files:** `index.html` (`applyRoleRestrictions`), `docs/v1.4.1_phase2_production_apply_runbook.md` §12.5.
 
+### L-RTI-011 — Tag gate metadata-only change preserves prior production smoke evidence
+
+- **Date:** 2026-05-13
+- **Commit / PR:** Release commit `905ac6f`; tag `v1.4.1`
+- **Agent:** Runtime Integration
+- **Event:** The v1.4.1 release commit modified `index.html` ONLY in version-metadata literals (`window.APP_VERSION`, `window.APP_BUILD.version/released/tag`, `const APP_VERSION`, `const APP_RELEASE_DATE`). Net delta: 4 lines changed, 7 bytes shorter (629,540 → 629,533). NO runtime logic edits — no role-resolution change, no RPC handling change, no XLSX upload change, no lifecycle UI change, no `.mgr-plus` CSS change, no route-gate change. The production smoke PASS from 2026-05-12 (Admin/Manager/Engineer/RPC failure path per `L-RTI-009` / `L-RTI-010`) therefore remains binding for the post-tag deploy — no fresh smoke required to certify the v1.4.1 tag.
+- **Mistake or discovery:** the byte-equality acceptance check (`L-RPM-006`) provides production-side proof that the deployed bundle equals the repo's snapshot. Combined with the diff-only-version-metadata constraint, this means the pre-tag smoke evidence carries forward without re-execution.
+- **Root cause:** disciplined separation of "ship the runtime" (PR #27 merge, 2026-05-12) from "tag the release" (`905ac6f`, 2026-05-13). The runtime smoke ran on the runtime bytes; the tag gate only touches version label bytes; the label change cannot regress runtime behavior.
+- **Prevention rule:** for any v1.4.x tag gate where `git diff <pre-tag-base>..<release-commit> -- index.html` is **strictly** version-metadata literals (the four constants: `window.APP_VERSION`, `window.APP_BUILD`, `const APP_VERSION`, `const APP_RELEASE_DATE`), the pre-tag production smoke is sufficient. If any other line of `index.html` changes between smoke PASS and tag, a fresh post-tag smoke is mandatory. Verify by inspecting the actual diff before claiming pre-tag smoke carries.
+- **Applies to:** every v1.4.x tag gate. Category: release/deploy traps; runtime/UI traps.
+- **Staleness risk:** invariant pattern.
+- **Action added:** the "version-metadata diff check" is part of the tag gate template — if the diff is broader than version metadata, treat as a runtime change and run fresh post-tag smoke per `L-RPM-003`.
+- **Linked entries:** `L-RTI-009` (production three-layer defense smoke), `L-RTI-010` (RPC failure path security), `L-RPM-005` (APP_VERSION lag is acceptable pre-tag), `L-RPM-006` (tag gate four-artifact alignment + byte-equality), `L-RPM-003` (post-deploy smoke mandatory).
+- **Linked files:** `index.html` (version metadata constants only), `releases/v1.4.1/MANIFEST.txt`, `automation/STATE.md`.
+
 ---
 
 ## fieldops-qa-test-automation-agent

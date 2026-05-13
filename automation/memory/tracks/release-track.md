@@ -79,6 +79,21 @@
 - **Linked entries:** `L-RPM-002` (VERSION+APP_VERSION+CHANGELOG+snapshot align before tag).
 - **Linked files:** `docs/v1.4.1_phase2_production_apply_runbook.md` §12.2, `automation/STATE.md`.
 
+### L-RPM-006 — Canonical tag gate: VERSION + index.html metadata + CHANGELOG + releases/<tag>/MANIFEST + production sha256 byte-equality
+
+- **Date:** 2026-05-13
+- **Commit / PR:** Release commit `905ac6f`; tag `v1.4.1` (object `59a5da6`)
+- **Agent:** Release PM
+- **Event:** v1.4.1 tag gate executed end-to-end with all four artifacts aligned per `L-RPM-002` plus an explicit **production-side byte-equality check**. The chain: (1) `VERSION` bumped `1.4.0.1` → `1.4.1`. (2) `index.html` metadata constants updated (`window.APP_VERSION`, `window.APP_BUILD` { version + released + tag }, `const APP_VERSION`, `const APP_RELEASE_DATE`) — **NO runtime logic edits**. (3) `CHANGELOG.md` new `## [1.4.1] — 2026-05-13` entry. (4) `scripts/release.sh 1.4.1` validated VERSION ↔ CHANGELOG heading ↔ `window.APP_VERSION = '1.4.1'` and produced `releases/v1.4.1/MANIFEST.txt` (sha256 `58118b41…`, size_bytes 629533) + `releases/v1.4.1/index.html` snapshot. (5) Commit `905ac6f`, push to main → `pages-deploy.yml` run 25776828153 succeeded in 30s. (6) Annotated tag `v1.4.1` on `905ac6f`, pushed. (7) **Byte-equality verification:** `curl -s prod/index.html | shasum -a 256` returned `58118b41…` exactly — match to MANIFEST sha256. The deployed bundle IS the repo's snapshot bit-for-bit.
+- **Mistake or discovery:** the UTC-date pitfall. `release.sh` auto-stamps `date: $(date -u +%Y-%m-%d)` into MANIFEST.txt, which can disagree with operator-context dates if the tag gate fires near a UTC day boundary. First snapshot wrote `date: 2026-05-13` while CHANGELOG/index.html had `2026-05-12`; reconciled by updating CHANGELOG header + `released: '2026-05-13'` + `'13 May 2026'` and re-running release.sh after a `rm -rf releases/v1.4.1`. **Always reconcile after the first `release.sh` run if dates differ.**
+- **Root cause:** UTC vs. local-time mismatch when working across the midnight boundary. `release.sh` is correct to use UTC for canonical date.
+- **Prevention rule:** for future tag gates: (a) before running `release.sh`, confirm the current UTC date with `date -u +%Y-%m-%d` and use that date in CHANGELOG header + `window.APP_BUILD.released` + `const APP_RELEASE_DATE`. (b) If `release.sh` writes a different date than what you used, `rm -rf releases/v<tag>`, update CHANGELOG + index.html dates to match MANIFEST, re-run. (c) **After `pages-deploy.yml` completes, run `curl -s <prod-url>/index.html | shasum -a 256` and assert byte-equality with `grep ^sha256 releases/v<tag>/MANIFEST.txt`** — this is the canonical byte-equality acceptance check and is stronger than any single DevTools eval.
+- **Applies to:** every tag gate. Category: release/deploy traps; recurring errors.
+- **Staleness risk:** invariant pattern.
+- **Action added:** the byte-equality check is added to the post-tag smoke checklist for v1.4.x and later. Future production runbooks must include the curl-sha256 verification step.
+- **Linked entries:** `L-RPM-002` (four-artifact alignment baseline), `L-RPM-003` (post-deploy smoke mandatory), `L-RPM-005` (APP_VERSION label lag pre-tag), `L-RA-001` (hotfix `vMAJOR.MINOR.PATCH(.HOTFIX)?` accepted by release.sh).
+- **Linked files:** `scripts/release.sh`, `releases/v1.4.1/MANIFEST.txt`, `releases/v1.4.1/index.html`, `CHANGELOG.md`, `VERSION`, `index.html`.
+
 ---
 
 ## fieldops-release-agent (legacy)

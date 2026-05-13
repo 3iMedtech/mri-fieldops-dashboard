@@ -92,6 +92,21 @@
 - **Action added:** Phase 2 production gate set is the canonical template for v1.4.x and later production phase work. The browser-driven §12 smoke (Admin + Manager + Engineer + RPC failure path) is the canonical post-deploy regression.
 - **Linked files:** `docs/v1.4.1_phase2_production_apply_runbook.md`, `automation/STATE.md`, `.claude/agents/fieldops-delivery-orchestrator.md`.
 
+### L-DO-007 — Production release closes with a STATE/memory refresh AFTER the tag, never bundled with the release commit
+
+- **Date:** 2026-05-13
+- **Commit / PR:** v1.4.1 tag (`59a5da6` → `905ac6f`); this doc-memory commit
+- **Agent:** Delivery Orchestrator
+- **Event:** Phase 2 v1.4.1 closes with a 4-step post-acceptance documentation cycle: (1) `commit STATE.md + memory updates after B6` (`5cde80b`, 2026-05-11) — staging acceptance. (2) `commit STATE.md + memory updates after production smoke PASS` (`cd7ec6c`, 2026-05-12) — post-deploy but pre-tag. (3) `release: v1.4.1` (`905ac6f`, 2026-05-13) — tag gate; touches ONLY VERSION + CHANGELOG.md + index.html metadata + releases/v1.4.1/. (4) `commit STATE.md + memory updates after v1.4.1 tag` (this commit) — closes the loop. STATE.md is refreshed AFTER each verified gate, never before, and never bundled with the release commit.
+- **Mistake or discovery:** the STATE.md "Gate F PENDING" line correctly persisted through the release commit `905ac6f` and is only being updated to "CONSUMED" now via a separately-authorized doc gate. Splitting the tag from the STATE refresh keeps the audit chain clean: diffing `cd7ec6c..905ac6f` shows only version artifacts; diffing `905ac6f..<this commit>` shows only documentation. No mixing.
+- **Root cause:** good operator discipline + separate gate phrases.
+- **Prevention rule:** after every release tag, the next gate is a doc-memory-refresh gate (separate phrase: `commit STATE.md + memory updates after v<X.Y.Z> tag`). Do NOT bundle STATE.md / memory edits into the release commit itself — keep release commits version-only. The doc-memory commit captures the tag/release in STATE.md, proposes new memory entries, and explicitly marks the prior gate set CONSUMED.
+- **Applies to:** every release tag in v1.4.x and later. Category: release/deploy traps; documentation traps.
+- **Staleness risk:** invariant pattern.
+- **Action added:** the 4-step post-acceptance cycle (staging doc → production smoke doc → release commit + tag → post-tag doc) is the canonical close-out template for phase-level work.
+- **Linked entries:** `L-DO-005` (multi-stop-point staging acceptance), `L-DO-006` (production 7-gate sequence), `L-RPM-006` (tag gate four-artifact alignment + byte-equality), `L-AM-001` (agent drafts, operator commits).
+- **Linked files:** `automation/STATE.md`, `automation/memory/tracks/release-track.md`, `automation/memory/tracks/delivery-orchestrator.md`.
+
 ---
 
 ## fieldops-automation-memory-agent
