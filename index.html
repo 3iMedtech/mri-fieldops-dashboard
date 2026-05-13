@@ -5662,7 +5662,7 @@ const _PM_SORT_COLS = [
   { key:'window',     label:'WINDOW',    sortable:false },
   { key:'engineers',  label:'ENGINEERS', sortable:false },
   { key:'status',     label:'STATUS',    accessor: r => r.st ? r.st.priority : 99 },
-  { key:'match',      label:'MATCH',     accessor: r => ({exact:0,fuzzy:1,town_model:2,none:3}[r.tier] ?? 9) },
+  { key:'match',      label:'MATCH',     accessor: r => ({exact:0,fuzzy:1,town_model:2,none:3}[r.tier] ?? 9), thAttrs:'class="superadmin-only"' },
   { key:'action',     label:'ACTION',    sortable:false, thAttrs:'class="pm-action-col"' },
 ];
 let _pmSortInited = false;
@@ -5770,7 +5770,7 @@ function renderPM(){
         <td style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">—</td>
         <td style="font-size:10px;color:var(--text-faint)">—</td>
         <td><span class="badge unknown">NO PM ROW</span></td>
-        <td>${matchCell}</td>
+        <td class="superadmin-only">${matchCell}</td>
         <td class="pm-action-col"><span style="color:var(--text-faint);font-size:10px">—</span></td>
       </tr>`;
     }
@@ -5801,7 +5801,7 @@ function renderPM(){
       <td style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">${windowStr}</td>
       <td style="font-size:10px">${engNames}</td>
       <td><span class="badge ${st.cls}">${st.label}</span>${st.daysText?`<div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:2px">${st.daysText}</div>`:''}</td>
-      <td>${matchCell}</td>
+      <td class="superadmin-only">${matchCell}</td>
       <td class="pm-action-col">${emailAction}</td>
     </tr>`;
   }).join('');
@@ -5959,31 +5959,40 @@ function composePMEmail(pmId){
   const engineers = getEngineersForRegion(pm.region);
   const toEmails = engineers.map(e=>e.email).join(',');
   const ccEmails = encodeURIComponent(PM_REMINDER_CC.join(','));
-  const urgency = st.code==='overdue' ? 'OVERDUE' : 'Due Soon';
-  const subject = encodeURIComponent(`[PM ${urgency}] ${pm.customer} — ${pm.model} (${pm.town}) — Due ${pm.nextPMS||'TBD'}`);
+  // v1.4.2 Track F — Status labelling: explicit OVERDUE vs DUE SOON in the
+  // subject; the opening sentence uses "overdue" only when status code is
+  // overdue, otherwise "due". Subject uses en dash (–) per service-desk style.
+  const isOverdue = (st && st.code === 'overdue');
+  const statusToken = isOverdue ? 'OVERDUE' : 'DUE SOON';
+  const dueWord = isOverdue ? 'overdue' : 'due';
+  const subject = encodeURIComponent(`[PM ${statusToken}] ${pm.customer} – ${pm.model} (${pm.town}) – Due ${pm.nextPMS||'TBD'}`);
   const dueDate = pm.nextPMS || 'TBD';
   const windowStart = pm.nextPMS ? (()=>{ const d=parseFlexDate(pm.nextPMS); if(!d) return 'TBD'; d.setDate(d.getDate()-15); return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); })() : 'TBD';
   const windowEnd = pm.nextPMS ? (()=>{ const d=parseFlexDate(pm.nextPMS); if(!d) return 'TBD'; d.setDate(d.getDate()+15); return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); })() : 'TBD';
-  const body = encodeURIComponent(
-`Dear Team,
-
-This is a reminder for the Preventive Maintenance Service (PMS) for the following machine:
-
-Customer: ${pm.customer}
-Location: ${pm.town}
-Model: ${pm.model}
-Contract: ${pm.contract}
-
-PM Due Date: ${dueDate}
-PM Window: ${windowStart} to ${windowEnd} (±15 days)
-Status: ${st.label}
-Last PM Done: ${pm.lastPMS || 'N/A'}
-PM Frequency: ${pm.freq}x per year
-
-Please schedule and complete the PM within the window. Confirm completion by replying to this email with the PM report.
-
-Regards,
-Service desk`);
+  // v1.4.2 Track F — body uses CRLF (\r\n -> %0D%0A) so Zoho / mailto
+  // handlers render hard line breaks. Plain \n encodes to %0A which some
+  // clients render as soft-wrap (whole email collapses to one paragraph).
+  const bodyLines = [
+    'Dear Team,',
+    '',
+    `This is a reminder that the Preventive Maintenance Service is ${dueWord} for the following machine:`,
+    '',
+    `Customer: ${pm.customer}`,
+    `Location: ${pm.town}`,
+    `Model: ${pm.model}`,
+    `Contract Type: ${pm.contract}`,
+    `PM Due Date: ${dueDate}`,
+    `PM Window: ${windowStart} to ${windowEnd}`,
+    `Status: ${st.label}`,
+    `Last PM Done: ${pm.lastPMS || 'N/A'}`,
+    `PM Frequency: ${pm.freq}x per year`,
+    '',
+    'Please schedule and complete the PM within the window. Once completed, kindly confirm by replying to this email with the PM report.',
+    '',
+    'Regards,',
+    'Service Desk'
+  ];
+  const body = encodeURIComponent(bodyLines.join('\r\n'));
   const mailtoUrl = `mailto:${toEmails}?cc=${ccEmails}&subject=${subject}&body=${body}`;
   window.open(mailtoUrl, '_blank');
 }
