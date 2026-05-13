@@ -7,6 +7,42 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.4.1] — 2026-05-13
+
+Phase 2 lifecycle write paths, RPC-resolved role gating, and Install Base master-source backfill. Closes the Phase 1.5 manager-role gap and operationalizes Install Base as the canonical asset registry. Ships the runtime + SQL artifacts together: production SQL `0004` + `0005` applied 2026-05-12; production runtime smoke PASS across Admin / Manager / Engineer + RPC failure path; tag created after production verification.
+
+### Added
+- **Manager UX via `_sb.rpc('app_user_role')`** — `applyRoleRestrictions()` rewritten async to call the Phase 1 `app_user_role()` SECURITY DEFINER helper and resolve `_userRole` from the DB-side `user_roles` seed. Manager users now resolve to `_userRole === 'manager'` and pick up the `manager-mode` body class, unlocking `.mgr-plus` cells (Add Asset, per-row Edit / De-install, PM Remind buttons). Replaces the legacy email allowlist branch.
+- **JWT fallback path** — RPC failure (network, schema, missing seed) is caught and `_userRole` defaults to `'viewer'`. Admin retains admin via JWT `app_metadata.role='admin'`; non-admin NEVER escalates to admin under any RPC failure mode.
+- **Install Base lifecycle UI (Admin + Manager)** — Add Asset, Edit Asset, De-install Asset, and read-only History viewer modals. De-install requires typing the asset code literally as confirmation. Edit excludes the immutable `code` column from the update payload. History viewer is visible and functional for all roles (engineer/viewer included), read-only.
+- **`auth.onAuthStateChange` re-resolves role** — sign-in / sign-out / JWT-refresh events re-run `applyRoleRestrictions()` so a role change takes effect without a hard reload.
+- **`asset_lifecycle_history` writes** — Add / Edit / De-install each append a `created` / `updated` / `de_installed` history row with `before_state` / `after_state` JSON snapshots, `actor`, `actor_email`, and `source='app:install_base_form'`. History inserts are best-effort; a failed history insert is logged via `console.warn` and does not roll back the asset write.
+
+### Changed
+- **XLSX upload — safe upsert (`applyUploadedData` → `config_assets`)** — replaced the prior `delete().neq(...) + insert()` pattern with `_sb.from('config_assets').upsert(deduped, { onConflict: 'code' })` over an explicit `xlsxOwnedConfigCols` whitelist that excludes lifecycle fields (`status`, `de_installed_at`, `de_installed_by`, etc.). App-created `config_assets` rows whose codes are NOT in the XLSX are preserved across upload. The function-level Admin gate at the top of `applyUploadedData` remains in force; `cmc_contracts` retains its admin-only inner guard until a separate UNIQUE-constraint migration ships (Manager XLSX permission deferred to v1.4.2).
+- **Install Base — `STATUS` column (B5.5)** — sortable badge column inserted after MODALITY. `ACTIVE` (green) / `DE-INSTALLED` (red). De-installed rows render with inline `opacity: 0.55` so they remain visible for audit but are visually de-emphasised. History column is visible to all roles; Actions column carries `.mgr-plus` and is hidden from engineer/viewer via CSS.
+- **Active-workflow filtering (B5.5)** — PM Calendar (`renderPM` → `ibAssets`), Contracts page (`_aggregateContracts`), and Dashboard "Install Base Covered" KPI all exclude de-installed assets from the active-asset count, PM scheduling, and contract aggregation. Install Base table itself preserves the full roster (active + de-installed) for audit visibility.
+- **`loadAllFromDB` config_assets mapper** — projects the full lifecycle / audit field set (`status`, `de_installed_at`, `de_installed_by`, `note`, `created_at` / `by`, `updated_at` / `by`) so every downstream consumer reacts to status changes. `applyInstallBaseOverlay` carries these fields through both V2-canonical and DB-only branches (B5.0 overlay fix).
+- **Install Base — column simplification (B5.6)** — visible columns reduced from 19 to 14. Removed CONTRACT, CMC START, CMC END, TOTAL CALLS, OPEN CALLS from the rendered table (underlying CONFIG_ASSETS computations for `total_calls` / `open_calls` retained for downstream consumers).
+- **Contracts — column simplification (B5.6)** — visible columns reduced from 11 to 9. Removed PM Next / Status and Town / Region from the rendered table. **The CSV export (`exportContractsCSV`) preserves the full 13-field audit export — visual simplification only; full audit trail data is unchanged.**
+- **De-install guard** — `openDeInstallAssetModal` rejects an already-de-installed asset with an inline alert; prevents duplicate `de_installed` history events.
+
+### Database
+- **`0004_v141_phase2_additive_write_policies_REVIEW_ONLY.sql`** — additive RLS write policies on `config_assets` / `pm_schedule` / `cmc_contracts`. Six policies (3 INSERT + 3 UPDATE) keyed on `app_can_write()` (admin OR manager). Legacy `admin_*` policies are untouched and remain in force as a backstop. Applied to staging 2026-05-10; applied to production 2026-05-12.
+- **`0005_v141_phase2_install_base_master_backfill_REVIEW_ONLY.sql`** — one-time backfill of any `INSTALL_BASE_V2` codes missing from `config_assets`. Transaction-wrapped with three invariants (arithmetic, marker codes ⊇ expected, hard floor ≥ 25). On staging: 1 row inserted (`AN025`). On production: 1 row inserted (`AN025` / KVC Diagnostics / Mysore). Rollback files (`*_ROLLBACK_REVIEW_ONLY.sql`) included.
+
+### Verification
+- **Staging acceptance (cb6fa19)** — B5.6 interactive PASS + B6 manual role matrix PASS across 6 sessions (C/D/F/O/X/I). Session X confirmed the XLSX safe-upsert preserves a synthetic `TEST-IB-AAA` row under a real 402-ticket production-shape upload.
+- **Production acceptance (2026-05-12)** — Browser-driven §A–§E smoke PASS across Admin / Manager / Engineer + RPC failure path. Manager resolved to `_userRole='manager'` via RPC 200 — Phase 1.5 gap CLOSED on production. Engineer per-row Edit / De-install hidden via `.mgr-plus` CSS (DOM-present for defense-in-depth). Manager Audit Log gated at two layers (nav-hidden + direct `#/auditlog` route-redirected to Dashboard without rendering the audit table). Manager XLSX upload hidden per the function-level admin gate. **RPC failure path: Manager safely degrades to viewer; `superadmin_mode` stays false; non-admin NEVER resolves to admin.**
+
+### Safety
+- No new schema migrations beyond `0004` + `0005`. No new Supabase reads on dashboard render. Auth, audit, role-based access logic protected. Legacy `admin_*` policies remain in force alongside the new `v141_*_app_can_write` policies (defense-in-depth at the DB layer).
+- Rollback path: tag-based `git revert -m 1 <merge-commit>` (`ROLLBACK.md` + `L-G-005`) plus optional SQL rollback in reverse-apply order (`0005_*_ROLLBACK_REVIEW_ONLY.sql` first, then `0004_*_ROLLBACK_REVIEW_ONLY.sql`).
+- Renew workflow + `0006_*` RPC deferred to a separate PR.
+- `cmc_contracts` safe-upsert + Manager XLSX permission deferred to v1.4.2 pending a UNIQUE constraint on `cmc_contracts.sn`.
+
+---
+
 ## [1.4.0.1] — 2026-05-08
 
 Hotfix. Dashboard "Upcoming Contract Renewals" panel now uses Install-Base-anchored aggregation, eliminating duplicate/mismatched customer rows caused by name variants (e.g., "Isha Diagnostics" vs "Isha Diagnostics Centre", "Ruby Medical Services" vs "Ruby Medical Services (Chiplun)", "OAKTree" vs "Oaktree"). v1.4.0 migrated Contracts and PM Calendar to IB anchoring but missed this dashboard panel.
