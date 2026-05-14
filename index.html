@@ -1592,6 +1592,7 @@ button,input,select,textarea{font-family:inherit;}
         <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:3px">RENEW CONTRACT</div>
         <div id="rc-title" style="font-family:var(--display);font-weight:700;font-size:15px">—</div>
         <div id="rc-subtitle" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
+      <div id="rc-current-end-hint" style="display:none;margin-top:6px;font-size:11px;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:5px 9px;font-family:var(--mono)"></div>
       </div>
       <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('renew-contract-modal')"><i data-lucide="x"></i></button>
     </div>
@@ -5526,7 +5527,7 @@ function renderContracts(){
           <td><span class="badge low" style="background:${(_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8')}1a;color:${_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8'}">${esc(r.statusLabel)}</span></td>
           <td>${r.status !== 'no_contract' && canManagePM()
             ? `<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px"
-                 onclick='openRenewModal(${JSON.stringify(r.code)},${JSON.stringify(r.customer)},${JSON.stringify(r.contract)})'>Renew</button>`
+                 onclick='openRenewModal(${JSON.stringify(r.code)},${JSON.stringify(r.customer)},${JSON.stringify(r.contract)},${JSON.stringify(_contractsFmtDate(r._end))})'>Renew</button>`
             : ''}</td>
         </tr>`).join('')
     : `<tr><td colspan="9"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
@@ -5612,10 +5613,17 @@ const _CONTRACT_TYPE_MAP = {
 // Types where PM visits are required.
 const _PM_REQUIRED_TYPES = new Set(['warranty','extended_warranty','cmc','amc']);
 
-function openRenewModal(assetCode, customer, contractType){
+function openRenewModal(assetCode, customer, contractType, currentEnd){
   document.getElementById('rc-title').textContent = assetCode;
   document.getElementById('rc-subtitle').textContent = customer || '—';
   document.getElementById('rc-asset-code').value = assetCode;
+
+  const hintEl = document.getElementById('rc-current-end-hint');
+  if(hintEl){
+    const endText = currentEnd && currentEnd !== '—' ? currentEnd : null;
+    hintEl.textContent = endText ? `Current contract ends: ${endText}` : '';
+    hintEl.style.display = endText ? 'block' : 'none';
+  }
 
   const mapped = _CONTRACT_TYPE_MAP[(contractType || '').toLowerCase()] || 'cmc';
   document.getElementById('rc-contract-type').value = mapped;
@@ -9063,6 +9071,7 @@ function hideLogin(){ document.getElementById('login-overlay').style.display = '
 
 // ── v1.4.2 Toast notification system (replaces alert() for feedback) ──
 function showToast(message, type='info', duration=4000){
+  if(duration === 4000 && type === 'error') duration = 8000;
   let container = document.getElementById('toast-container');
   if(!container){
     container = document.createElement('div');

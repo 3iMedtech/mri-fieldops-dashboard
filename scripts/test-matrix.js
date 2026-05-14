@@ -172,8 +172,55 @@ async function testRole(page, user, envUrl) {
   if (ticketRows > 0) ok(`Service History loaded (${ticketRows} rows visible)`);
   else w('Service History table empty or not loaded');
 
-  // ── Console errors check ───────────────────────────────────
-  // (We capture errors via page.on — but for a static check, look for error indicators)
+  // ── PM Schedules tab (PD-006) ──────────────────────────────
+  await page.evaluate(() => { if (typeof navigate === 'function') navigate('pm'); });
+  await sleep(2500);
+  const pmHash = await page.evaluate(() => location.hash);
+  if (user.role === 'Engineer') {
+    // Engineers can access PM Schedules (read-only) — check they land on it
+    const pmRows = await page.$$eval('table tbody tr', rs => rs.length);
+    if (pmRows > 0) ok(`PM Schedules loaded for Engineer (${pmRows} rows, read-only)`);
+    else w('PM Schedules: no rows visible for Engineer');
+    const pmActionCol = await page.evaluate(() => {
+      const col = document.querySelector('.pm-action-col');
+      return col ? window.getComputedStyle(col).display : 'no action col found';
+    });
+    if (pmActionCol === 'none' || pmActionCol === 'no action col found') ok('PM action column hidden for Engineer');
+    else bad(`PM action column visible for Engineer (display: ${pmActionCol})`);
+  } else {
+    const pmRows = await page.$$eval('table tbody tr', rs => rs.length);
+    if (pmRows > 0) ok(`PM Schedules loaded (${pmRows} rows)`);
+    else w('PM Schedules: no rows visible');
+    const pmActionCol = await page.evaluate(() => {
+      const col = document.querySelector('.pm-action-col');
+      return col ? window.getComputedStyle(col).display : 'none';
+    });
+    if (pmActionCol !== 'none') ok('PM action column visible for Admin/Manager');
+    else bad('PM action column hidden for Admin/Manager');
+  }
+
+  // ── Engineer Performance tab (PD-006) ─────────────────────
+  await page.evaluate(() => { if (typeof navigate === 'function') navigate('engperf'); });
+  await sleep(2000);
+  const engperfHash = await page.evaluate(() => location.hash);
+  if (user.role === 'Engineer') {
+    // Engineers should be blocked — navigate() redirects them
+    if (!engperfHash.includes('engperf')) ok('Engineer Performance blocked for Engineer (redirected)');
+    else bad('Engineer Performance accessible for Engineer (should be blocked)');
+  } else {
+    const engperfVisible = await page.evaluate(() => {
+      const page = document.querySelector('#engperf-section, [id*="engperf"]');
+      return !!page;
+    });
+    if (engperfHash.includes('engperf') || engperfVisible) ok('Engineer Performance accessible for Admin/Manager');
+    else w('Engineer Performance: could not confirm — hash=' + engperfHash);
+  }
+
+  // ── Console errors (PD-007) — fail if any JS errors on page ──
+  // (consoleErrors is populated via page.on listener set in testEnv)
+  // Check is deferred to testEnv where we have access to the array
+
+  // ── Page title clean ───────────────────────────────────────
   const pageTitle = await page.title();
   if (!pageTitle.includes('error') && !pageTitle.includes('Error')) ok('Page title clean');
 
@@ -208,7 +255,15 @@ async function testEnv(envKey) {
       pass: [], fail: [`FATAL: ${err.message}`], warn: []
     }));
 
-    r.consoleErrors = consoleErrors.filter(e => !e.includes('favicon') && !e.includes('ERR_BLOCKED'));
+    // PD-007: filter noise, then fail on real JS errors
+    const filtered = consoleErrors.filter(e =>
+      !e.includes('favicon') && !e.includes('ERR_BLOCKED') &&
+      !e.includes('net::ERR') && !e.includes('Non-Error promise rejection')
+    );
+    r.consoleErrors = filtered;
+    if (filtered.length > 0) {
+      r.fail.push(`${filtered.length} JS console error(s) — first: ${filtered[0].substring(0, 120)}`);
+    }
     results.push({ role: user.role, ...r });
 
     r.pass.forEach(m  => console.log(`    ✅ ${m}`));
