@@ -2579,6 +2579,35 @@ function sheetNameToMonth(name){
   return null; // not a service-log sheet
 }
 
+function extractSheetYears(wb){
+  const years = new Set();
+  wb.SheetNames.forEach(n => {
+    const m = n.match(/\b(20\d{2})\b/);
+    if(m) years.add(parseInt(m[1]));
+  });
+  return years;
+}
+
+function validateUploadDates(allTickets, sheetYears){
+  if(!sheetYears || !sheetYears.size) return [];
+  const minYear = Math.min(...sheetYears) - 1; // 1-year back grace
+  const maxYear = Math.max(...sheetYears);      // no forward grace
+  const fields = ['call_date','attended_date','parts_req_date','parts_recv_date','sys_up_date'];
+  const anomalies = [];
+  for(const t of allTickets){
+    for(const f of fields){
+      if(!t[f]) continue;
+      const d = parseFlexDate(t[f], f);
+      if(!d) continue;
+      const yr = d.getFullYear();
+      if(yr < minYear || yr > maxYear){
+        anomalies.push({id: t.id || '?', field: f, raw: t[f], year: yr});
+      }
+    }
+  }
+  return anomalies;
+}
+
 // ── Status normalisation ───────────────────────────────────────────
 function normaliseStatus(raw){
   if(!raw) return '';
@@ -2761,6 +2790,8 @@ async function handleXLSXUpload(event){
     }
     const result = parseUploadedWorkbook(wb);
     result.sourceFile = file.name;
+    result.sheetYears = extractSheetYears(wb);
+    result.dateAnomalies = validateUploadDates(result.allTickets, result.sheetYears);
     _pendingUploadResult = result;
     showUploadPreview(result, file.name);
   } catch(e){
@@ -2831,6 +2862,12 @@ function showUploadPreview(result, fileName){
   ).join('');
   const newCustList = [...result.customerStats.newCustomers].slice(0,15).map(c=>`<span class="badge low" style="margin:2px">${esc(c)}</span>`).join('');
   const moreCustomers = result.customerStats.newCustomers.size > 15 ? `<div style="margin-top:6px;font-size:10px;color:var(--text-faint)">…and ${result.customerStats.newCustomers.size - 15} more</div>` : '';
+  const _anomalies = result.dateAnomalies || [];
+  const _syrs = result.sheetYears ? [...result.sheetYears].sort() : [];
+  const _yrRange = _syrs.length ? (_syrs[0] + (_syrs.length > 1 ? '–' + _syrs[_syrs.length - 1] : '')) : '?';
+  const dateHealthHtml = _anomalies.length === 0
+    ? `<div style="margin-bottom:14px;padding:8px 12px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;font-size:11px;color:#6ee7b7">✓ Date health — all dates within expected range (${_yrRange})</div>`
+    : `<div style="margin-bottom:14px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.4);border-radius:6px"><div style="font-size:11px;color:#f87171;font-weight:600;margin-bottom:8px">❌ Date anomalies — upload will be blocked (${_anomalies.length} issue${_anomalies.length !== 1 ? 's' : ''})</div><div style="font-size:10px;color:var(--text-faint);margin-bottom:8px">Expected year range: ${_yrRange}. Correct the source data and re-upload.</div><div style="overflow-x:auto"><table class="data-table" style="font-size:10px"><thead><tr><th>TICKET</th><th>FIELD</th><th>DETECTED</th></tr></thead><tbody>${_anomalies.slice(0, 15).map(a => `<tr><td style="font-family:var(--mono)">${esc(a.id)}</td><td style="font-family:var(--mono)">${esc(a.field)}</td><td style="font-family:var(--mono);color:#f87171">${esc(String(a.raw))} (year: ${a.year})</td></tr>`).join('')}</tbody></table></div>${_anomalies.length > 15 ? `<div style="font-size:10px;color:var(--text-faint);margin-top:6px">…and ${_anomalies.length - 15} more</div>` : ''}</div>`;
   document.getElementById('upload-modal-body').innerHTML = `
     <div style="margin-bottom:14px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-dim)">
       📄 <strong style="color:var(--text)">${esc(fileName)}</strong> &nbsp;·&nbsp; ${result.sheetCount} sheet${result.sheetCount!==1?'s':''} parsed
@@ -2863,13 +2900,15 @@ function showUploadPreview(result, fileName){
       ${moreCustomers}
     </div>` : ''}
 
+    ${dateHealthHtml}
+
     <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:10px 14px;margin-bottom:18px;font-size:11px;color:#fcd34d">
       ⚠ Applying will REPLACE the current dataset. Roster, ambiguity reviews, and PM completion records are kept.
     </div>
 
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="btn btn-ghost" style="font-size:12px;padding:7px 16px" onclick="closeModal('upload-modal')">Cancel</button>
-      <button class="btn btn-primary" style="font-size:12px;padding:7px 18px" onclick="applyUploadedData()">Apply Changes →</button>
+      <button class="btn btn-primary" style="font-size:12px;padding:7px 18px" onclick="applyUploadedData()" ${_anomalies.length > 0 ? 'disabled title="Fix date anomalies in the source XLSX before applying"' : ''}>Apply Changes →</button>
     </div>
   `;
   openModal('upload-modal');
@@ -3067,6 +3106,13 @@ async function applyUploadedData(){
   const r = _pendingUploadResult;
 
   // Guard: refuse to wipe out dataset if upload has no tickets
+  const _dateAnomalies = r.dateAnomalies || [];
+  if(_dateAnomalies.length > 0){
+    const _syrs = r.sheetYears ? [...r.sheetYears].sort().join('–') : '?';
+    showToast(`Upload blocked: ${_dateAnomalies.length} date anomaly${_dateAnomalies.length !== 1 ? 'ies' : 'y'} outside expected year range (${_syrs}). Fix the source XLSX and re-upload.`, 'error', 8000);
+    _pendingUploadResult = null;
+    return;
+  }
   if(!r.allTickets || r.allTickets.length === 0){
     alert('Upload contains no valid service tickets. The current dataset has been kept unchanged.\n\nThis usually means:\n• The file is not a Service Operations sheet\n• The sheet names don\'t match expected format (e.g. "Oct 2025", "March 2026")\n• The CUSTOMER column is missing from every month sheet');
     closeModal('upload-modal');
