@@ -267,17 +267,36 @@ Use `TEST_MATRIX.md` for detailed role, page, Supabase, UI, accessibility, and p
 
 All runtime changes must go through staging before production.
 
-Production deployment requires:
+### Development branch rule
 
-- clean Git status
-- version impact assessed
-- changelog updated when needed
-- staging validation completed
-- role testing completed where relevant
-- rollback path known
-- explicit human approval
+All code changes (`index.html`, `scripts/`, `docs/`, `.github/workflows/`) must be committed and pushed to the **`staging` branch** — never directly to `main`. Pushing to `staging` auto-triggers `staging-dispatch.yml`, which updates `https://3imedtech.github.io/mri-fieldops-dashboard/staging/`.
 
-Do not deploy production from normal implementation prompts.
+`main` is the production branch. It must never receive a direct push except as part of an approved production deploy.
+
+### Production deploy sequence
+
+Production deploy requires an explicit approval phrase from the user. Accepted phrases:
+
+- "approved for production"
+- "deploy to production"
+- "push to production"
+
+On receiving one of these phrases, and only then:
+
+1. Confirm staging matrix passed (0 failures): `node /tmp/fieldops_matrix.js staging`
+2. Fast-forward main to staging: `git push origin staging:main`
+3. Trigger manual deploy: `gh workflow run pages-deploy.yml --ref main`
+4. Wait for workflow completion, then run matrix on production: `node /tmp/fieldops_matrix.js production`
+
+### Pre-production checklist
+
+- clean Git status on staging branch
+- version bumped if applicable
+- staging matrix: 0 failures, 0 JS errors
+- role testing complete
+- explicit approval phrase received
+
+Do not deploy production from normal implementation prompts. Do not push to `main` without the approval phrase above.
 
 ---
 
