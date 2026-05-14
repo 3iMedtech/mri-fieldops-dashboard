@@ -706,6 +706,75 @@ button,input,select,textarea{font-family:inherit;}
   .dq-table td.dq-bad{color:var(--red);}
   .dq-empty{font-size:12px;color:var(--text-dim);padding:8px 12px;background:var(--surface2);border:1px dashed var(--border);border-radius:6px;}
   /* ── end v1.3.0-1a ────────────────────────────────────────── */
+
+  /* ══════════════════════════════════════════════════════════════
+     v1.4.2 VISUAL POLISH — A–H
+     All rules are additive. No existing rules modified.
+     ══════════════════════════════════════════════════════════════ */
+
+  /* A. Toast notification system */
+  #toast-container{position:fixed;bottom:22px;right:22px;z-index:99990;display:flex;flex-direction:column;gap:10px;pointer-events:none;}
+  .toast{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-radius:var(--radius-lg);border:1px solid;font-size:13px;font-weight:500;min-width:280px;max-width:400px;pointer-events:all;box-shadow:var(--shadow-4);animation:toastIn .25s cubic-bezier(.2,.7,.2,1) both;}
+  .toast.toast-exit{animation:toastOut .2s ease forwards;}
+  .toast-icon{flex-shrink:0;width:16px;height:16px;margin-top:1px;}
+  .toast-msg{flex:1;line-height:1.4;}
+  .toast-close{flex-shrink:0;background:transparent;border:none;cursor:pointer;color:inherit;opacity:.5;padding:0;line-height:1;font-size:16px;margin-top:-1px;}
+  .toast-close:hover{opacity:1;}
+  .toast.info{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:#93c5fd;}
+  .toast.success{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3);color:#6ee7b7;}
+  .toast.warning{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#fcd34d;}
+  .toast.error{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:#fca5a5;}
+  @keyframes toastIn{from{opacity:0;transform:translateX(24px) scale(.97)}to{opacity:1;transform:none}}
+  @keyframes toastOut{from{opacity:1;transform:none}to{opacity:0;transform:translateX(16px) scale(.96)}}
+  @media(max-width:768px){#toast-container{bottom:14px;right:14px;left:14px;}.toast{min-width:0;max-width:100%;}}
+
+  /* B. Richer sidebar active state */
+  .nav-item.active{
+    background: linear-gradient(90deg, rgba(59,130,246,.18), rgba(59,130,246,.06));
+    box-shadow: 0 0 0 1px rgba(59,130,246,.25), inset 0 0 0 1px rgba(59,130,246,.12);
+  }
+
+  /* C. Panel left-accent bar */
+  .panel{border-left:3px solid var(--border);transition:border-left-color .2s;}
+  .panel:hover{border-left-color:rgba(59,130,246,.4);}
+
+  /* D. Better table row hover */
+  .data-table tr:hover td{
+    background: linear-gradient(90deg, rgba(59,130,246,.06), rgba(59,130,246,.03));
+    border-left: 2px solid rgba(59,130,246,.18);
+  }
+
+  /* E. Page-header gradient underline */
+  .page-header{border-bottom:2px solid;border-image:linear-gradient(90deg,var(--brand),var(--accent),transparent) 1;padding-bottom:12px;margin-bottom:18px;}
+
+  /* F. Input focus glow */
+  .search-box:focus{
+    box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+    background: rgba(59,130,246,.04);
+  }
+
+  /* G. Badge borders */
+  .badge.cmc{border:1px solid rgba(59,130,246,.25);}
+  .badge.amc{border:1px solid rgba(245,158,11,.25);}
+  .badge.warranty{border:1px solid rgba(16,185,129,.25);}
+  .badge.critical,.badge.down{border:1px solid rgba(239,68,68,.25);}
+  .badge.high,.badge.partially-working{border:1px solid rgba(245,158,11,.25);}
+  .badge.medium,.badge.incident{border:1px solid rgba(59,130,246,.25);}
+  .badge.open{border:1px solid rgba(239,68,68,.2);}
+  .badge.closed{border:1px solid rgba(16,185,129,.2);}
+  .badge.pms,.badge.installation,.badge.testing{border:1px solid rgba(139,92,246,.25);}
+  .badge.planned{border:1px solid rgba(16,185,129,.2);}
+  .badge.ambiguous{border:1px solid rgba(245,158,11,.25);}
+
+  /* H. KPI card glow on colored variants */
+  .kpi-card.blue{box-shadow:0 0 0 1px rgba(59,130,246,.12),0 2px 8px rgba(59,130,246,.06);}
+  .kpi-card.green{box-shadow:0 0 0 1px rgba(16,185,129,.12),0 2px 8px rgba(16,185,129,.06);}
+  .kpi-card.amber{box-shadow:0 0 0 1px rgba(245,158,11,.12),0 2px 8px rgba(245,158,11,.06);}
+  .kpi-card.red{box-shadow:0 0 0 1px rgba(239,68,68,.12),0 2px 8px rgba(239,68,68,.06);}
+  .kpi-card.purple{box-shadow:0 0 0 1px rgba(139,92,246,.12),0 2px 8px rgba(139,92,246,.06);}
+  .kpi-card.cyan{box-shadow:0 0 0 1px rgba(6,182,212,.12),0 2px 8px rgba(6,182,212,.06);}
+
+  /* ── end v1.4.2 visual polish ──────────────────────────────── */
 </style>
 </head>
 <body>
@@ -3028,14 +3097,16 @@ async function applyUploadedData(){
     const ambMsg = newAmbCount > 0
       ? `\n\n⚠ ${newAmbCount} new data flag${newAmbCount===1?'':'s'} auto-detected — review them in the Ambiguity tab.`
       : '';
-    alert(`Successfully saved ${RAW_TICKETS.length} tickets to the database. All team members will see the updated data on their next refresh.${ambMsg}`);
+    const toastMsg = ambMsg
+      ? `Saved ${RAW_TICKETS.length} tickets. ${newAmbCount} new data flag${newAmbCount===1?'':'s'} — review in Ambiguities tab.`
+      : `Saved ${RAW_TICKETS.length} tickets to the database. All team members will see updated data.`;
+    showToast(toastMsg, ambMsg ? 'warning' : 'success', 6000);
 
   } catch(e){
     hideLoading();
     console.error('Upload save failed:', e);
     logAudit('upload_failed', {reason: 'save_error', message: String(e.message||e).slice(0,200)});
-    alert('Failed to save upload to database:\n\n' + (e.message || e) +
-          '\n\nThe in-memory data has NOT been updated. Please check your connection and try again.');
+    showToast('Failed to save upload: ' + (e.message || e) + ' — in-memory data unchanged, please retry.', 'error', 8000);
     _pendingUploadResult = null;
   }
 }
@@ -3057,7 +3128,7 @@ async function resetToBundledData(){
     renderAll();
   } catch(e){
     hideLoading();
-    alert('Refresh failed: ' + (e.message || e));
+    showToast('Refresh failed: ' + (e.message || e), 'error');
   } finally {
     _refreshInFlight = false;
     if(btn){ btn.disabled = false; btn.style.opacity = ''; }
@@ -5574,7 +5645,7 @@ async function _submitRenewContract(){
   const note         = document.getElementById('rc-note').value.trim() || null;
 
   if(!endVal){
-    alert('End date is required.');
+    showToast('End date is required.', 'warning');
     return;
   }
 
@@ -5604,7 +5675,7 @@ async function _submitRenewContract(){
     closeModal('renew-contract-modal');
     renderContracts();
   } catch(e){
-    alert('Error: ' + (e.message || 'Could not renew contract. Please try again.'));
+    showToast('Renew failed: ' + (e.message || 'Could not renew contract. Please try again.'), 'error');
     btn.disabled = false;
     btn.textContent = 'Renew →';
   }
@@ -8989,6 +9060,34 @@ async function applyRoleRestrictions(){
 
 function showLogin(){ document.getElementById('login-overlay').style.display = 'flex'; }
 function hideLogin(){ document.getElementById('login-overlay').style.display = 'none'; }
+
+// ── v1.4.2 Toast notification system (replaces alert() for feedback) ──
+function showToast(message, type='info', duration=4000){
+  let container = document.getElementById('toast-container');
+  if(!container){
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const icons = {
+    success: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    error:   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    warning: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    info:    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+  };
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span class="toast-icon">${icons[type]||icons.info}</span><span class="toast-msg">${message}</span><button class="toast-close" aria-label="Dismiss">&#x2715;</button>`;
+  const dismiss = () => {
+    toast.classList.add('toast-exit');
+    setTimeout(() => toast.remove(), 220);
+  };
+  toast.querySelector('.toast-close').addEventListener('click', dismiss);
+  container.appendChild(toast);
+  if(duration > 0) setTimeout(dismiss, duration);
+  return toast;
+}
+
 function showLoading(text){
   const o = document.getElementById('loading-overlay');
   const t = document.getElementById('loading-text');
