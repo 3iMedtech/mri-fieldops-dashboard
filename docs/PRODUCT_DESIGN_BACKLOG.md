@@ -28,6 +28,7 @@ Design ideas should be added here before code changes unless the user explicitly
 | PD-S05 | Visual polish | Input focus glow (search boxes) | v1.4.2 |
 | PD-S06 | Visual polish | Badge border outlines — all 11 variants | v1.4.2 |
 | PD-S07 | Visual polish | KPI card colour glow — all 6 variants | v1.4.2 |
+| PD-S08 | Mobile | Contracts table card layout (<768px) — 9-column table replaced with labeled cards | v1.4.3 |
 
 ---
 
@@ -47,7 +48,7 @@ Design ideas should be added here before code changes unless the user explicitly
 | PD-010 | UX | Contracts table — show AMC badge count in expiry filter chips | AMC is a new type; filter counts don't currently show it separately | Low | Low | Proposed |
 | PD-011 | UX | Toast persistence for warnings (currently 4 s) — extend to 8 s for errors | 4 s is too short to read a long error message from an XLSX parse failure | Medium | Low | Proposed |
 | PD-012 | Dashboard | Contract Expiry Overview KPI cards — add Renew button directly on expired card | One-click path from dashboard alert to renewal action | High | Medium | Proposed |
-| PD-013 | Mobile | Contracts table collapses poorly below 768 px — too many columns | Field managers checking status on phones see truncated data | High | Medium | Proposed |
+| PD-013 | Mobile | Contracts table collapses poorly below 768 px — too many columns | Field managers checking status on phones see truncated data | High | Medium | Shipped |
 | PD-014 | Security | Production Engineer password is complex; staging is `Shiva@23S` — unify or document | Credential drift causes login failures in tests and onboarding | Medium | Low | Proposed |
 | PD-015 | Testing | Persist matrix script to `scripts/test-matrix.js` in repo | Currently lives in /tmp and is lost on restart | High | Low | Proposed |
 

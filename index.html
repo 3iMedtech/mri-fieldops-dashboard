@@ -918,10 +918,9 @@ button,input,select,textarea{font-family:inherit;}
     <div class="nav-item" data-page="pm" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
     <div class="nav-section" role="presentation">Assets &amp; team</div>
     <div class="nav-item" data-page="assets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="building-2"></i></span> Install Base</div>
-    <div class="nav-item" data-page="team" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="users"></i></span> Field Team <span class="nav-badge green" id="nb-team" style="display:none"></span></div>
+    <div class="nav-item" data-page="engineers" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="users-round"></i></span> Engineers <span class="nav-badge green" id="nb-engineers" style="display:none"></span></div>
     <div class="nav-section" role="presentation">Analysis</div>
     <div class="nav-item admin-only" data-page="ambiguities" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="alert-triangle"></i></span> Flags &amp; Ambiguities <span class="nav-badge amber" id="nb-amb" style="display:none"></span><span class="nav-badge" id="nb-dq" style="display:none" title="Data quality issues needing review"></span></div>
-    <div class="nav-item mgr-plus" data-page="engperf" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="award"></i></span> Engineer Performance</div>
     <div class="nav-item mgr-plus" data-page="contracts" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="file-text"></i></span> Contracts <span class="nav-badge amber" id="nb-contracts" style="display:none" title="Contracts needing attention"></span></div>
     <!-- v1.2.0 2c — Reports nav-item removed. Reports panels are folded
          into Dashboard as a collapsible. /#/reports still resolves via
@@ -1201,37 +1200,30 @@ button,input,select,textarea{font-family:inherit;}
 </div>
 
 <!-- ██ FIELD TEAM ██ -->
-<div class="page" id="page-team">
-  <div style="padding:0 0 14px">
-    <div class="filter-tabs" id="team-month-tabs"></div>
-  </div>
-  <div class="grid-2 g-1-1" style="margin-bottom:16px">
-    <div class="panel" style="margin-bottom:0">
-      <div class="panel-head">
-        <h2 class="panel-title"><i data-lucide="users"></i>Engineers — Master List</h2>
-        <button class="btn btn-ghost admin-only" style="font-size:10px;padding:4px 10px" onclick="toggleAddEngineerForm()">+ Add</button>
-        <button class="btn btn-ghost admin-only" style="font-size:10px;padding:4px 10px;margin-left:6px" onclick="resetRoster()" title="Reset roster to original list"><i data-lucide="rotate-ccw"></i>Reset</button>
+<!-- ██ ENGINEERS (v1.4.3) — Unified Field Team + Performance ██ -->
+<div class="page" id="page-engineers">
+  <div class="panel">
+    <div class="panel-head" style="flex-wrap:wrap;gap:10px">
+      <h2 class="panel-title"><i data-lucide="users-round"></i>Engineers · <span id="eng-active-count">0</span> Active</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">WINDOW:</span>
+        <select id="eng-window" aria-label="Performance time window" onchange="renderEngineers()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+          <option value="30">Last 30 days</option>
+          <option value="90" selected>Last 90 days</option>
+          <option value="180">Last 6 months</option>
+          <option value="365">Last 12 months</option>
+          <option value="ytd">Year to date</option>
+          <option value="all">All time</option>
+        </select>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">REGION:</span>
+        <select id="eng-region" aria-label="Region filter" onchange="renderEngineers()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+          <option value="all">All regions</option>
+        </select>
+        <button class="btn btn-ghost mgr-plus" style="font-size:11px;padding:5px 12px;margin-left:4px" onclick="openAddEngineerModal()">+ Add Engineer</button>
       </div>
-      <div id="add-eng-form" class="admin-only" style="display:none;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2)">
-        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:10px">ADD ENGINEER</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <input class="search-box" id="new-eng-name" placeholder="Full name (e.g. Rajesh Kumar)" aria-label="Engineer full name" style="padding:6px 10px">
-          <input class="search-box" id="new-eng-region" placeholder="Region (e.g. Chennai)" aria-label="Engineer region" style="padding:6px 10px">
-          <input class="search-box" id="new-eng-email" placeholder="Email" aria-label="Engineer email" style="padding:6px 10px">
-          <input class="search-box" id="new-eng-aliases" placeholder="Aliases, comma-separated (optional)" aria-label="Engineer aliases" style="padding:6px 10px">
-        </div>
-        <div style="font-size:10px;color:var(--text-faint);margin-bottom:10px">Aliases help match the name to how it's written in ticket logs (e.g. "Rajesh", "Raj K"). Leave blank if full name is used consistently.</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary" style="font-size:10px;padding:5px 14px" onclick="addEngineer()">Add to Roster</button>
-          <button class="btn btn-ghost" style="font-size:10px;padding:5px 12px" onclick="toggleAddEngineerForm()">Cancel</button>
-        </div>
-      </div>
-      <div class="panel-body"><div class="eng-list" id="team-eng-list"></div></div>
     </div>
-    <div class="panel" style="margin-bottom:0">
-      <div class="panel-head"><h2 class="panel-title" id="calls-per-eng-title"><i data-lucide="bar-chart-3"></i>Calls per Engineer</h2></div>
-      <div class="panel-body"><div class="bar-chart-wrap" id="bar-eng" style="height:220px"></div></div>
-    </div>
+    <div id="eng-summary" style="padding:12px 18px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border)">—</div>
+    <div id="eng-cards" style="padding:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px"></div>
   </div>
 </div>
 
@@ -1268,31 +1260,6 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-reports" hidden></div>
 
 <!-- ██ AUDIT LOG (superadmin-only) ██ -->
-<!-- ENGINEER PERFORMANCE — admin + manager only -->
-<div class="page" id="page-engperf">
-  <div class="panel">
-    <div class="panel-head">
-      <h2 class="panel-title"><i data-lucide="award"></i>Engineer Performance — <span id="ep-engineer-count">0</span> Engineers</h2>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">WINDOW:</span>
-        <select id="ep-window" aria-label="Engineer performance time window" onchange="renderEngineerPerformance()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
-          <option value="30">Last 30 days</option>
-          <option value="90" selected>Last 90 days</option>
-          <option value="180">Last 6 months</option>
-          <option value="365">Last 12 months</option>
-          <option value="ytd">Year to date</option>
-          <option value="all">All time</option>
-        </select>
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">REGION:</span>
-        <select id="ep-region" aria-label="Engineer performance region filter" onchange="renderEngineerPerformance()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
-          <option value="all">All regions</option>
-        </select>
-      </div>
-    </div>
-    <div id="ep-summary" style="padding:12px 18px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border)">—</div>
-    <div id="ep-cards" style="padding:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px"></div>
-  </div>
-</div>
 
 <!-- ENGINEER DRILL-DOWN MODAL -->
 <div class="modal-overlay" id="ep-detail-modal" role="dialog" aria-modal="true" aria-labelledby="ep-detail-title" aria-hidden="true">
@@ -1306,6 +1273,80 @@ button,input,select,textarea{font-family:inherit;}
       <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('ep-detail-modal')"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body" id="ep-detail-body">—</div>
+  </div>
+</div>
+
+<!-- ADD ENGINEER MODAL (v1.4.3) -->
+<div class="modal-overlay" id="add-engineer-modal" role="dialog" aria-modal="true" aria-labelledby="aem-title" aria-hidden="true">
+  <div class="modal" style="max-width:480px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--brand);margin-bottom:3px">ONBOARD ENGINEER</div>
+        <div id="aem-title" style="font-family:var(--display);font-weight:700;font-size:17px">Add New Engineer</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('add-engineer-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;gap:12px">
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">FULL NAME *</label>
+          <input class="search-box" id="aem-name" placeholder="e.g. Rajesh Kumar" style="width:100%;box-sizing:border-box;padding:8px 12px">
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">REGION *</label>
+          <select id="aem-region" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:13px">
+            <option value="">— Select region —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">EMAIL</label>
+          <input class="search-box" id="aem-email" type="email" placeholder="engineer@3imedtech.com" style="width:100%;box-sizing:border-box;padding:8px 12px">
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">START DATE</label>
+          <input class="search-box" id="aem-start" type="date" style="width:100%;box-sizing:border-box;padding:8px 12px">
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ALIASES <span style="color:var(--text-faint)">(comma-separated, optional)</span></label>
+          <input class="search-box" id="aem-aliases" placeholder='e.g. "Rajesh", "Raj K"' style="width:100%;box-sizing:border-box;padding:8px 12px">
+          <div style="font-size:10px;color:var(--text-faint);margin-top:5px">Aliases help match how the name appears in ticket logs.</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" onclick="closeModal('add-engineer-modal')">Cancel</button>
+      <button class="btn btn-primary" id="aem-submit" onclick="submitAddEngineer()">Add Engineer</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESIGN ENGINEER MODAL (v1.4.3) -->
+<div class="modal-overlay" id="resign-engineer-modal" role="dialog" aria-modal="true" aria-labelledby="rem-title" aria-hidden="true">
+  <div class="modal" style="max-width:420px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--amber);margin-bottom:3px">ENGINEER RESIGNATION</div>
+        <div id="rem-title" style="font-family:var(--display);font-weight:700;font-size:17px">—</div>
+        <div id="rem-sub" style="font-size:11px;color:var(--text-dim);margin-top:4px">—</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('resign-engineer-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rem-id">
+      <div style="display:grid;gap:12px">
+        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:12px;font-size:12px;color:var(--text-dim);line-height:1.5">
+          This engineer will remain active and included in all metric calculations until their last working date. They will be automatically deactivated and hidden from the roster after that date.
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">LAST WORKING DATE *</label>
+          <input class="search-box" id="rem-date" type="date" style="width:100%;box-sizing:border-box;padding:8px 12px">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" onclick="closeModal('resign-engineer-modal')">Cancel</button>
+      <button class="btn btn-ghost" id="rem-submit" style="color:var(--amber);border-color:rgba(245,158,11,.4)" onclick="submitResignEngineer()">Confirm Resignation</button>
+    </div>
   </div>
 </div>
 
@@ -1704,8 +1745,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.4.2';
-window.APP_BUILD   = { version: '1.4.2', released: '2026-05-14', tag: 'v1.4.2' };
+window.APP_VERSION = '1.4.3';
+window.APP_BUILD   = { version: '1.4.3', released: '2026-05-14', tag: 'v1.4.3' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -3216,13 +3257,12 @@ function renderAll(){
   renderOpen();
   renderPM();
   renderAssets();
-  renderTeam();
   renderAmbiguities();
   renderReports();
   // Sync nav badges — route through setNavBadgeCount so they un-hide on first
   // data load (the static HTML starts with display:none to avoid showing
   // stale placeholder counts before real data has arrived).
-  setNavBadgeCount('nb-team', ENGINEERS.length);
+  setNavBadgeCount('nb-engineers', activeRoster().length);
   const urgent = PM_SCHEDULE.filter(pm => {const s=pmStatus(pm); return s.code==='overdue'||s.code==='in-window';}).length;
   setNavBadgeCount('nb-pm', urgent);
   // Hide the nb-open and nb-amb badges when their counts are 0 — an empty-queue
@@ -3679,9 +3719,9 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.4.3';
 const APP_RELEASE_DATE = '14 May 2026';
-const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',team:'Field Team',ambiguities:'Flags & Ambiguities',engperf:'Engineer Performance',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About'};
+const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
 
 // ══════════════════════════════════════════════════════════════════════
@@ -4066,12 +4106,7 @@ function navigate(page, opts = {}){
     logAudit('restricted_access_attempt', {target: page});
     page='dashboard';
   }
-  // Engineer Performance is admin + manager only — bounce engineers back.
-  if(page==='engperf' && !canManagePM()){
-    logAudit('restricted_access_attempt', {target: page});
-    page='dashboard';
-  }
-  // Contracts (v1.4.0) is admin + manager only — same gate as Engineer Performance.
+  // Contracts (v1.4.0) is admin + manager only.
   if(page==='contracts' && !canManagePM()){
     logAudit('restricted_access_attempt', {target: page});
     page='dashboard';
@@ -4107,7 +4142,6 @@ function navigate(page, opts = {}){
     else { _activePage = null; }
     document.getElementById('topbar-title').textContent=PAGE_TITLES[page]||page;
     if(page==='ambiguities') renderAmbiguities();
-    if(page==='engperf') renderEngineerPerformance();
     if(page==='contracts') renderContracts();
     if(page==='auditlog') reloadAuditLog();
   }
@@ -6991,150 +7025,250 @@ function renderAssets(search=''){
 function filterAssets(v){renderAssets(v);}
 
 // ══════════════════════════════════════════
+// ENGINEERS TAB (v1.4.3) — Unified Field Team + Performance
 // ══════════════════════════════════════════
-// RENDER TEAM — roster-only, month-filterable, add/remove
-// ══════════════════════════════════════════
-let teamMonthFilter = 'all';
 
-function renderTeamMonthTabs(){
-  const container = document.getElementById('team-month-tabs');
-  if(!container) return;
-  // Count tickets per month for the label
-  const mc = countByMonth(RAW_TICKETS);
-  let html = `<div class="tab${teamMonthFilter==='all'?' active':''}" onclick="setTeamMonth(this,'all')">All (${RAW_TICKETS.length})</div>`;
-  MONTHS.forEach(m=>{
-    const cnt = mc[m]||0;
-    html += `<div class="tab${teamMonthFilter===m?' active':''}" onclick="setTeamMonth(this,'${esc(m)}')">${esc(m)} (${cnt})</div>`;
+// Return only engineers who are currently active (not inactive, not past last working date).
+function activeRoster(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  return ENGINEERS.filter(e => {
+    if(e.status === 'inactive') return false;
+    if(e.status === 'resigned' && e.last_working_date){
+      return new Date(e.last_working_date) >= today;
+    }
+    return true;
   });
-  container.innerHTML = html;
 }
 
-function setTeamMonth(el, month){
-  teamMonthFilter = month;
-  document.querySelectorAll('#team-month-tabs .tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  renderTeam();
-}
-
-function renderTeam(){
-  renderTeamMonthTabs();
-
-  // Master list — each row gets a remove button and a "calls this month" number
-  const monthLabel = teamMonthFilter==='all' ? 'All months' : teamMonthFilter;
-  const listHtml = ENGINEERS.map((e,i)=>{
-    const status = getEngStatus(e);
-    const {dotCls} = engStatusPill(status);
-    const callsThisFilter = rosterEngCallCount(e, teamMonthFilter);
-    return `<div class="eng-row" style="position:relative">
-      <div class="eng-avatar" style="background:${engColor(i)}25;color:${engColor(i)}">${esc(e.name.slice(0,2).toUpperCase())}</div>
-      <div class="status-dot ${dotCls}"></div>
-      <div style="flex:1;min-width:0">
-        <div class="eng-name">${esc(e.name)}</div>
-        <div class="eng-detail" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.id)} · ${esc(e.region)} · ${esc(e.email)}</div>
-      </div>
-      <div style="text-align:right;margin-right:8px">
-        <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--brand);line-height:1">${callsThisFilter}</div>
-        <div style="font-family:var(--mono);font-size:8px;color:var(--text-faint);letter-spacing:.5px">CALLS</div>
-      </div>
-      <div class="eng-status-pill ${status==='Assigned'?'amber':'available'}" style="margin-right:8px">${status}</div>
-      <button class="btn btn-ghost admin-only" style="font-size:11px;padding:2px 8px;color:var(--text-faint)" onclick="removeEngineer('${esc(e.id)}')" title="Remove from roster">×</button>
-    </div>`;
-  }).join('');
-  const footnote = `<div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);padding:8px 4px;text-align:center">${ENGINEERS.length} engineer${ENGINEERS.length!==1?'s':''} on roster · showing calls for: ${esc(monthLabel)}</div>`;
-  document.getElementById('team-eng-list').innerHTML = listHtml + footnote;
-
-  // Calls-per-engineer chart — ONLY roster engineers, ALL of them, filtered by month
-  document.getElementById('calls-per-eng-title').innerHTML =
-    `<i data-lucide="bar-chart-3"></i>Calls per Engineer — ${monthLabel}`;
-  const rosterCounts = ENGINEERS.map(e => ({
-    name: e.name,
-    count: rosterEngCallCount(e, teamMonthFilter),
-  })).sort((a,b)=>b.count - a.count);
-
-  const maxEc = Math.max(1, ...rosterCounts.map(r=>r.count));
-  const chartEl = document.getElementById('bar-eng');
-  if(rosterCounts.length === 0){
-    chartEl.innerHTML = `<div style="text-align:center;color:var(--text-faint);font-size:12px;padding:40px 0">No engineers on roster — click + Add</div>`;
-  } else {
-    chartEl.innerHTML = rosterCounts.map((r,i)=>`
-      <div class="bar-col" title="${esc(r.name)}: ${r.count} call${r.count!==1?'s':''}">
-        <div class="bar-val">${r.count}</div>
-        <div class="bar" style="height:${Math.max(4,Math.round(r.count/maxEc*160))}px;background:${engColor(i)}30;border:1px solid ${engColor(i)}60"></div>
-        <div class="bar-label" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name.split(' ')[0])}</div>
-      </div>`).join('');
+// Auto-deactivate any resigned engineer whose last working date has passed.
+async function checkAndDeactivateEngineers(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const toDeactivate = ENGINEERS.filter(e =>
+    e.status === 'resigned' &&
+    e.last_working_date &&
+    new Date(e.last_working_date) < today
+  );
+  for(const e of toDeactivate){
+    e.status = 'inactive';
+    await _sb.from('engineers').update({ status: 'inactive' }).eq('id', e.id);
   }
 }
 
-// ── Roster mutation ─────────────────────────────────────────────────
-function toggleAddEngineerForm(){
-  const f = document.getElementById('add-eng-form');
-  if(!f) return;
-  f.style.display = f.style.display === 'none' ? 'block' : 'none';
-  if(f.style.display === 'block'){
-    document.getElementById('new-eng-name').focus();
+async function renderEngineers(){
+  await checkAndDeactivateEngineers();
+
+  // Populate region filter from active roster
+  const engRegionSel = document.getElementById('eng-region');
+  if(engRegionSel){
+    const regions = [...new Set(ENGINEERS.map(e=>e.region).filter(Boolean))].sort();
+    const currentRegion = engRegionSel.value || 'all';
+    engRegionSel.innerHTML = '<option value="all">All regions</option>' +
+      regions.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    engRegionSel.value = regions.includes(currentRegion) ? currentRegion : 'all';
   }
+
+  await loadPMCompletions();
+  backfillPMEngineerIds()
+    .then(() => {
+      if(!_pmSyncDoneThisSession){
+        _pmSyncDoneThisSession = true;
+        return syncPMCompletionsFromTickets();
+      }
+    })
+    .catch(err => console.warn('PM backfill/sync failed:', err));
+
+  const windowVal = document.getElementById('eng-window')?.value || '90';
+  const regionVal = document.getElementById('eng-region')?.value || 'all';
+  const windowStart = epWindowStart(windowVal);
+  const windowLabel = ({'30':'last 30 days','90':'last 90 days','180':'last 6 months','365':'last 12 months','ytd':'year to date','all':'all time'})[windowVal] || 'window';
+
+  const roster = activeRoster().filter(e => regionVal === 'all' || e.region === regionVal);
+  const engActiveCount = document.getElementById('eng-active-count');
+  if(engActiveCount) engActiveCount.textContent = activeRoster().length;
+
+  const metrics = roster.map(e => ({ eng: e, m: computeEngineerMetrics(e, windowStart) }));
+  metrics.sort((a,b) => (b.m.calls - a.m.calls) || a.eng.name.localeCompare(b.eng.name));
+
+  const totalCalls = metrics.reduce((s,x)=>s+x.m.calls,0);
+  const totalOpen  = metrics.reduce((s,x)=>s+x.m.open,0);
+  const totalPMs   = metrics.reduce((s,x)=>s+x.m.pmDone,0);
+  const assignedCount = roster.filter(e => getEngStatus(e) === 'Assigned').length;
+  const engSummary = document.getElementById('eng-summary');
+  if(engSummary) engSummary.innerHTML =
+    `<strong>${roster.length}</strong> engineer${roster.length===1?'':'s'} · `
+    + `<strong>${assignedCount}</strong> assigned now · `
+    + `<strong>${totalCalls}</strong> calls · `
+    + `<strong>${totalOpen}</strong> open · `
+    + `<strong>${totalPMs}</strong> PM${totalPMs===1?'':'s'} done · `
+    + `window: ${windowLabel}${regionVal==='all'?'':' · '+esc(regionVal)}`;
+
+  const engCards = document.getElementById('eng-cards');
+  if(engCards) engCards.innerHTML = metrics.length
+    ? metrics.map(({eng, m}) => engCardHtml(eng, m, windowLabel)).join('')
+    : `<div style="padding:40px;text-align:center;color:var(--text-dim);grid-column:1/-1">No engineers match this filter.</div>`;
+
+  if(window.lucide && typeof lucide.createIcons === 'function'){
+    try { lucide.createIcons(); } catch(_){}
+  }
+
+  setNavBadgeCount('nb-engineers', activeRoster().length);
 }
 
-async function addEngineer(){
-  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
-  const name = document.getElementById('new-eng-name').value.trim();
-  const region = document.getElementById('new-eng-region').value.trim();
-  const email = document.getElementById('new-eng-email').value.trim();
-  const aliasesRaw = document.getElementById('new-eng-aliases').value.trim();
-  if(!name){ alert('Name is required'); return; }
-  // Generate next ID
-  const nums = ENGINEERS
-    .map(e=>parseInt((e.id||'').replace(/\D/g,''),10))
-    .filter(n=>!isNaN(n));
-  const nextNum = (nums.length ? Math.max(...nums) : 0) + 1;
-  const id = 'ENG' + String(nextNum).padStart(3,'0');
-  const aliases = aliasesRaw
-    ? aliasesRaw.split(',').map(s=>s.trim()).filter(Boolean)
-    : [];
-  const newEng = {id, name, region, email, aliases};
-  // Persist to DB first; only update UI if DB write succeeds
-  await dbSaveEngineer(newEng);
-  ENGINEERS.push(newEng);
-  // Clear form
-  ['new-eng-name','new-eng-region','new-eng-email','new-eng-aliases'].forEach(id=>{
+function engCardHtml(eng, m, windowLabel){
+  const tile = (metricKey, label, val, color, sub, clickable=true) =>
+    `<div ${clickable ? `class="ep-tile" role="button" tabindex="0" onclick="openEngineerDetail('${esc(eng.id)}','${metricKey}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEngineerDetail('${esc(eng.id)}','${metricKey}')}"` : 'class="ep-tile ep-tile-disabled"'}>
+       <div class="ep-tile-label">${label}</div>
+       <div class="ep-tile-value" style="color:${color||'var(--text)'}">${val}</div>
+       ${sub ? `<div class="ep-tile-sub">${sub}</div>` : ''}
+     </div>`;
+  const pct = v => v == null ? '—' : `${v}%`;
+
+  const engStatus = getEngStatus(eng);
+  const {dotCls} = engStatusPill(engStatus);
+
+  const fmtDate = d => {
+    if(!d) return null;
+    const dt = new Date(d + 'T00:00:00');
+    const mm = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
+    return `${dt.getDate()} ${mm} ${dt.getFullYear()}`;
+  };
+
+  const joinedStr = eng.joined_date ? `Joined ${fmtDate(eng.joined_date)}` : '';
+  const resigningStr = eng.status === 'resigned' && eng.last_working_date
+    ? `Resigning ${fmtDate(eng.last_working_date)}`
+    : '';
+
+  const resigningBadge = resigningStr
+    ? ` <span style="display:inline-flex;align-items:center;font-size:9px;font-family:var(--mono);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--amber);border-radius:4px;padding:2px 7px;letter-spacing:.3px">${esc(resigningStr)}</span>`
+    : '';
+
+  const canManage = canManagePM();
+  const resignBtn = canManage && eng.status === 'active'
+    ? `<div style="display:flex;justify-content:flex-end;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+         <button class="btn btn-ghost" style="font-size:11px;padding:4px 12px;color:var(--text-faint);border-color:var(--border)" onclick="openResignModal('${esc(eng.id)}')">Mark Resigned</button>
+       </div>`
+    : '';
+
+  return `<div class="panel ep-card" style="padding:14px;margin:0">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">
+      <div style="min-width:0;flex:1">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
+          <div class="status-dot ${dotCls}" style="width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <div style="font-family:var(--display);font-weight:700;font-size:15px">${esc(eng.name)}</div>
+          ${resigningBadge}
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:1px">${esc(eng.region||'Unassigned')}${eng.email ? ' · '+esc(eng.email) : ''}</div>
+        ${joinedStr ? `<div style="font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:2px">${joinedStr}</div>` : ''}
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);flex-shrink:0;margin-left:8px">${esc(eng.id)}</div>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;margin-bottom:10px">WINDOW · ${esc(windowLabel||'')}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      ${tile('calls','CALLS', m.calls, 'var(--brand)', 'open + closed')}
+      ${tile('open','OPEN', m.open, m.open > 3 ? 'var(--amber)' : 'var(--text)', 'backlog (all time)')}
+      ${tile('sites','SITES', m.sites, null, 'customers visited')}
+      ${tile('mttr','MTTR', m.mttrDays == null ? '—' : m.mttrDays + 'd', m.mttrDays != null && m.mttrDays <= SLA_RESPONSE_DAYS ? 'var(--green)' : m.mttrDays != null && m.mttrDays <= 4 ? 'var(--amber)' : m.mttrDays == null ? 'var(--text-dim)' : 'var(--red)', 'avg TAT')}
+      ${tile('sla','SLA%', pct(m.slaPct), epPctColor(m.slaPct), `within ${SLA_RESPONSE_DAYS}d`)}
+      ${tile('ftf','FTF%', pct(m.ftfPct), epPctColor(m.ftfPct, 70, 50), 'one-shot fix')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px">
+      ${tile('pm','PM COMPLIANCE', pct(m.pmOnTimePct), epPctColor(m.pmOnTimePct, 90, 70), `${m.pmDone} done · ${m.pmLate} late`)}
+    </div>
+    ${resignBtn}
+  </div>`;
+}
+
+// ── Lifecycle management ─────────────────────────────────────────────
+
+function openAddEngineerModal(){
+  if(!canManagePM()){ showToast('Admin or Manager access required.', 'error'); return; }
+  const sel = document.getElementById('aem-region');
+  if(sel){
+    const regions = [...new Set(ENGINEERS.map(e=>e.region).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">— Select region —</option>' +
+      regions.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  }
+  const startEl = document.getElementById('aem-start');
+  if(startEl) startEl.value = new Date().toISOString().slice(0,10);
+  ['aem-name','aem-email','aem-aliases'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
   });
-  toggleAddEngineerForm();
-  renderTeam();
-  renderDashEngineers(); // keep dashboard sidebar in sync
-  // Update nav badge
-  const teamBadge = document.getElementById("nb-team");
-  if(teamBadge) teamBadge.textContent = ENGINEERS.length;
+  openModal('add-engineer-modal');
+  setTimeout(() => document.getElementById('aem-name')?.focus(), 80);
 }
 
-async function removeEngineer(id){
-  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
+async function submitAddEngineer(){
+  if(!canManagePM()){ showToast('Admin or Manager access required.', 'error'); return; }
+  const name       = document.getElementById('aem-name')?.value.trim() || '';
+  const region     = document.getElementById('aem-region')?.value || '';
+  const email      = document.getElementById('aem-email')?.value.trim() || '';
+  const startRaw   = document.getElementById('aem-start')?.value || '';
+  const aliasesRaw = document.getElementById('aem-aliases')?.value.trim() || '';
+  if(!name)   { showToast('Name is required.', 'error'); return; }
+  if(!region) { showToast('Region is required.', 'error'); return; }
+
+  const nums = ENGINEERS.map(e=>parseInt((e.id||'').replace(/\D/g,''),10)).filter(n=>!isNaN(n));
+  const nextNum = (nums.length ? Math.max(...nums) : 0) + 1;
+  const id = 'ENG' + String(nextNum).padStart(3,'0');
+  const aliases = aliasesRaw ? aliasesRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+
+  const btn = document.getElementById('aem-submit');
+  if(btn){ btn.disabled = true; btn.textContent = 'Adding…'; }
+
+  const newEng = { id, name, region, email, aliases, status: 'active', joined_date: startRaw || null, last_working_date: null };
+  await dbSaveEngineer(newEng);
+  ENGINEERS.push(newEng);
+
+  closeModal('add-engineer-modal');
+  if(btn){ btn.disabled = false; btn.textContent = 'Add Engineer'; }
+  showToast(`${name} added to the roster.`, 'success');
+  renderEngineers();
+  renderDashEngineers();
+  setNavBadgeCount('nb-engineers', activeRoster().length);
+}
+
+function openResignModal(id){
+  if(!canManagePM()){ showToast('Admin or Manager access required.', 'error'); return; }
   const eng = ENGINEERS.find(e=>e.id===id);
   if(!eng) return;
-  if(!confirm(`Remove "${eng.name}" from the roster? This does not delete any tickets — only the roster entry.`)) return;
-  await dbDeleteEngineer(id);
-  ENGINEERS = ENGINEERS.filter(e=>e.id!==id);
-  renderTeam();
-  renderDashEngineers();
-  const teamBadge = document.getElementById("nb-team");
-  if(teamBadge) teamBadge.textContent = ENGINEERS.length;
+  document.getElementById('rem-id').value = id;
+  document.getElementById('rem-title').textContent = eng.name;
+  document.getElementById('rem-sub').textContent = `${eng.region} · ${eng.id}`;
+  const dateEl = document.getElementById('rem-date');
+  if(dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+  openModal('resign-engineer-modal');
 }
 
-async function resetRoster(){
-  if(_userRole !== 'admin'){ alert('This action requires admin access.'); return; }
-  if(!confirm('Reset the engineer roster to the original default list? Any added engineers will be removed from the database.')) return;
-  // Delete extras from DB, then re-insert defaults
-  const defaultIds = new Set(ENGINEERS_DEFAULT.map(e => e.id));
-  const toRemove = ENGINEERS.filter(e => !defaultIds.has(e.id));
-  for(const e of toRemove) await dbDeleteEngineer(e.id);
-  // Upsert defaults (fixes any drift)
-  for(const e of ENGINEERS_DEFAULT) await dbSaveEngineer(e);
-  ENGINEERS = JSON.parse(JSON.stringify(ENGINEERS_DEFAULT));
-  renderTeam();
+async function submitResignEngineer(){
+  if(!canManagePM()){ showToast('Admin or Manager access required.', 'error'); return; }
+  const id       = document.getElementById('rem-id')?.value || '';
+  const lastDate = document.getElementById('rem-date')?.value || '';
+  if(!id || !lastDate){ showToast('Last working date is required.', 'error'); return; }
+
+  const eng = ENGINEERS.find(e=>e.id===id);
+  if(!eng) return;
+
+  const btn = document.getElementById('rem-submit');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  suppressRealtimeReload(3000);
+  const { error } = await _sb.from('engineers')
+    .update({ status: 'resigned', last_working_date: lastDate })
+    .eq('id', id);
+  if(error){
+    showToast('Save failed: ' + error.message, 'error');
+    if(btn){ btn.disabled = false; btn.textContent = 'Confirm Resignation'; }
+    return;
+  }
+  eng.status = 'resigned';
+  eng.last_working_date = lastDate;
+
+  closeModal('resign-engineer-modal');
+  if(btn){ btn.disabled = false; btn.textContent = 'Confirm Resignation'; }
+  showToast(`${eng.name} marked as resigning on ${lastDate}.`, 'warning');
+  renderEngineers();
   renderDashEngineers();
-  const teamBadge = document.getElementById("nb-team");
-  if(teamBadge) teamBadge.textContent = ENGINEERS.length;
 }
 
 // ══════════════════════════════════════════
@@ -7850,11 +7984,10 @@ function epPctColor(pct, goodAbove=80, okAbove=60){
 
 let _epRegionCacheKey = '';
 function epPopulateRegionFilter(){
-  const sel = document.getElementById('ep-region');
+  const sel = document.getElementById('eng-region') || document.getElementById('ep-region');
   if(!sel) return;
   const regions = [...new Set(ENGINEERS.map(e=>e.region).filter(Boolean))].sort();
   const key = regions.join('|');
-  // Skip DOM work if the region list hasn't changed since last render.
   if(key === _epRegionCacheKey && sel.options.length > 0) return;
   _epRegionCacheKey = key;
   const current = sel.value || 'all';
@@ -7863,88 +7996,6 @@ function epPopulateRegionFilter(){
   sel.value = regions.includes(current) ? current : 'all';
 }
 
-async function renderEngineerPerformance(){
-  if(!canManagePM()) return;
-  epPopulateRegionFilter();
-  await loadPMCompletions();
-  // Fire-and-forget — backfills legacy pm_completions rows with engineer_ids
-  // on an admin's first render per session. Failures are non-fatal; the
-  // page still renders with whatever data we have.
-  backfillPMEngineerIds()
-    .then(() => {
-      // Then sync PMS tickets → pm_completions so tile compliance reflects
-      // work logged via Service Log, not just rows manually marked complete
-      // through the PM modal. Idempotent — dedupes on pm_id ±7d.
-      if(!_pmSyncDoneThisSession){
-        _pmSyncDoneThisSession = true;
-        return syncPMCompletionsFromTickets();
-      }
-    })
-    .catch(err => console.warn('PM backfill/sync failed:', err));
-
-  const windowVal = document.getElementById('ep-window')?.value || '90';
-  const regionVal = document.getElementById('ep-region')?.value || 'all';
-  const windowStart = epWindowStart(windowVal);
-  const windowLabel = ({'30':'last 30 days','90':'last 90 days','180':'last 6 months','365':'last 12 months','ytd':'year to date','all':'all time'})[windowVal] || 'window';
-
-  const roster = ENGINEERS.filter(e => regionVal === 'all' || e.region === regionVal);
-  document.getElementById('ep-engineer-count').textContent = roster.length;
-
-  const metrics = roster.map(e => ({ eng: e, m: computeEngineerMetrics(e, windowStart) }));
-  // Sort by calls attended (most active first) so the busy names surface.
-  metrics.sort((a,b) => (b.m.calls - a.m.calls) || a.eng.name.localeCompare(b.eng.name));
-
-  const totalCalls = metrics.reduce((s,x)=>s+x.m.calls,0);
-  const totalOpen  = metrics.reduce((s,x)=>s+x.m.open,0);
-  const totalPMs   = metrics.reduce((s,x)=>s+x.m.pmDone,0);
-  document.getElementById('ep-summary').innerHTML =
-    `Showing <strong>${roster.length}</strong> engineer${roster.length===1?'':'s'} · `
-    + `<strong>${totalCalls}</strong> calls attended · `
-    + `<strong>${totalOpen}</strong> open now · `
-    + `<strong>${totalPMs}</strong> PM${totalPMs===1?'':'s'} completed · `
-    + `window: ${windowLabel}${regionVal==='all'?'':' · '+esc(regionVal)}`;
-
-  const cards = metrics.map(({eng, m}) => epCardHtml(eng, m, windowLabel)).join('');
-  document.getElementById('ep-cards').innerHTML = cards ||
-    `<div style="padding:40px;text-align:center;color:var(--text-dim);grid-column:1/-1">No engineers match this filter.</div>`;
-}
-
-function epCardHtml(eng, m, windowLabel){
-  // Each tile is a button so the click target is unambiguous and accessible;
-  // passing metric-type lets the drill-down filter records to match the tile.
-  const tile = (metricKey, label, val, color, sub, clickable=true) =>
-    `<div ${clickable?`class="ep-tile" role="button" tabindex="0" onclick="openEngineerDetail('${esc(eng.id)}','${metricKey}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEngineerDetail('${esc(eng.id)}','${metricKey}')}"`:'class="ep-tile ep-tile-disabled"'} >
-       <div class="ep-tile-label">${label}</div>
-       <div class="ep-tile-value" style="color:${color||'var(--text)'}">${val}</div>
-       ${sub ? `<div class="ep-tile-sub">${sub}</div>` : ''}
-     </div>`;
-  const pct = v => v == null ? '—' : `${v}%`;
-  return `<div class="panel ep-card" style="padding:14px;margin:0">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <div>
-        <div style="font-family:var(--display);font-weight:700;font-size:15px">${esc(eng.name)}</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:2px">${esc(eng.region||'Unassigned')}${eng.email?' · '+esc(eng.email):''}</div>
-      </div>
-      <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">${esc(eng.id)}</div>
-    </div>
-    <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:1px;margin-bottom:10px">WINDOW · ${esc(windowLabel||'')}</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-      ${tile('calls','CALLS', m.calls, 'var(--brand)', 'open + closed')}
-      ${tile('open','OPEN', m.open, m.open > 3 ? 'var(--amber)' : 'var(--text)', 'backlog (all time)')}
-      ${tile('sites','SITES', m.sites, null, 'customers visited')}
-      ${tile('mttr','MTTR', m.mttrDays == null ? '—' : m.mttrDays + 'd', m.mttrDays != null && m.mttrDays <= SLA_RESPONSE_DAYS ? 'var(--green)' : m.mttrDays != null && m.mttrDays <= 4 ? 'var(--amber)' : m.mttrDays == null ? 'var(--text-dim)' : 'var(--red)', 'avg TAT')}
-      ${tile('sla','SLA%', pct(m.slaPct), epPctColor(m.slaPct), `within ${SLA_RESPONSE_DAYS}d`)}
-      ${tile('ftf','FTF%', pct(m.ftfPct), epPctColor(m.ftfPct, 70, 50), 'one-shot fix')}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px">
-      ${tile('pm','PM COMPLIANCE', pct(m.pmOnTimePct), epPctColor(m.pmOnTimePct, 90, 70), `${m.pmDone} done · ${m.pmLate} late`)}
-      <!-- REOPEN RATE tile removed in v1.0.2 (audit F-14): the placeholder copy
-           "v2 — not tracked yet" was reaching end users. Reinstate as a real
-           tile once reopen tracking lands; until then PM COMPLIANCE spans
-           the row. -->
-    </div>
-  </div>`;
-}
 
 // metricKey: 'calls' | 'open' | 'sites' | 'mttr' | 'sla' | 'ftf' | 'pm' | 'reopen'
 // The drill-down filters the record set and the column layout to match the
@@ -7957,7 +8008,7 @@ function openEngineerDetail(engId, metricKey){
     // No backing data yet — placeholder tile is unclickable, but guard anyway.
     return;
   }
-  const windowVal = document.getElementById('ep-window')?.value || '90';
+  const windowVal = document.getElementById('eng-window')?.value || '90';
   const windowStart = epWindowStart(windowVal);
   const windowLabel = ({'30':'last 30 days','90':'last 90 days','180':'last 6 months','365':'last 12 months','ytd':'year to date','all':'all time'})[windowVal] || 'window';
   const m = computeEngineerMetrics(eng, windowStart);
@@ -8894,7 +8945,7 @@ const PAGE_RENDERERS={
   open:renderOpen,
   pm:renderPM,
   assets:()=>renderAssets(),
-  team:renderTeam,
+  engineers:renderEngineers,
   ambiguities:renderAmbiguities,
   // 'reports' key omitted — navigate('reports') redirects to 'dashboard'.
 };
@@ -8940,13 +8991,12 @@ async function doFirstPaint(){
   renderOpen();
   renderPM();
   renderAssets();
-  renderTeam();
   renderAmbiguities();
   renderReports();
 
   // Sync dynamic nav badges (all of them — this ran only in renderAll() before,
   // so after a fresh login these badges kept the hardcoded HTML values).
-  setNavBadgeCount('nb-team', ENGINEERS.length);
+  setNavBadgeCount('nb-engineers', activeRoster().length);
   const urgent = PM_SCHEDULE.filter(pm => {const s=pmStatus(pm); return s.code==='overdue'||s.code==='in-window';}).length;
   setNavBadgeCount('nb-pm', urgent);
   const pb = document.getElementById('nb-pm');
@@ -9215,6 +9265,9 @@ async function loadAllFromDB(opts = {}){
   ENGINEERS = engs.map(r => ({
     id: r.id, name: r.name, region: r.region, email: r.email || '',
     aliases: r.aliases || [],
+    status: r.status || 'active',
+    joined_date: r.joined_date || null,
+    last_working_date: r.last_working_date || null,
   }));
 
   setMsg('Loading install base…');
@@ -9355,7 +9408,13 @@ async function loadAllFromDB(opts = {}){
 
 // ── Write helpers ─────────────────────────────────────────────────────
 async function dbSaveEngineer(e){
-  const row = {id: e.id, name: e.name, region: e.region, email: e.email || null, aliases: e.aliases || []};
+  const row = {
+    id: e.id, name: e.name, region: e.region, email: e.email || null,
+    aliases: e.aliases || [],
+    status: e.status || 'active',
+    joined_date: e.joined_date || null,
+    last_working_date: e.last_working_date || null,
+  };
   suppressRealtimeReload(3000);
   const { error } = await _sb.from('engineers').upsert(row);
   if(error){ console.error('Save engineer failed:', error); alert('Save failed: ' + error.message); }

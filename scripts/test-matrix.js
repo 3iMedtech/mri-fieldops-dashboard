@@ -66,8 +66,8 @@ async function testRole(page, user, envUrl) {
 
   // ── APP_VERSION ────────────────────────────────────────────
   const ver = await page.evaluate(() => typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?');
-  if (ver === '1.4.2') ok(`APP_VERSION = ${ver}`);
-  else bad(`APP_VERSION = ${ver}, expected 1.4.2`);
+  if (ver === '1.4.3') ok(`APP_VERSION = ${ver}`);
+  else bad(`APP_VERSION = ${ver}, expected 1.4.3`);
 
   // ── Toast system ───────────────────────────────────────────
   const hasToast = await page.evaluate(() => typeof showToast === 'function');
@@ -199,21 +199,24 @@ async function testRole(page, user, envUrl) {
     else bad('PM action column hidden for Admin/Manager');
   }
 
-  // ── Engineer Performance tab (PD-006) ─────────────────────
-  await page.evaluate(() => { if (typeof navigate === 'function') navigate('engperf'); });
-  await sleep(2000);
-  const engperfHash = await page.evaluate(() => location.hash);
+  // ── Engineers tab (v1.4.3 — all roles) ───────────────────
+  await page.evaluate(() => { if (typeof navigate === 'function') navigate('engineers'); });
+  await sleep(2500);
+  const engHash = await page.evaluate(() => location.hash);
+  const engCards = await page.evaluate(() => document.querySelectorAll('.ep-card').length);
+  if (engHash.includes('engineers') || engCards > 0) ok(`Engineers tab accessible for ${user.role} (${engCards} cards)`);
+  else w(`Engineers tab: could not confirm — hash=${engHash}, cards=${engCards}`);
+  // Lifecycle controls: mgr-plus only
+  const addEngBtn = await page.evaluate(() => {
+    const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === '+ Add Engineer');
+    return btn ? window.getComputedStyle(btn).display : 'not found';
+  });
   if (user.role === 'Engineer') {
-    // Engineers should be blocked — navigate() redirects them
-    if (!engperfHash.includes('engperf')) ok('Engineer Performance blocked for Engineer (redirected)');
-    else bad('Engineer Performance accessible for Engineer (should be blocked)');
+    if (addEngBtn === 'none' || addEngBtn === 'not found') ok('Add Engineer button hidden for Engineer');
+    else bad(`Add Engineer button visible for Engineer (display: ${addEngBtn})`);
   } else {
-    const engperfVisible = await page.evaluate(() => {
-      const page = document.querySelector('#engperf-section, [id*="engperf"]');
-      return !!page;
-    });
-    if (engperfHash.includes('engperf') || engperfVisible) ok('Engineer Performance accessible for Admin/Manager');
-    else w('Engineer Performance: could not confirm — hash=' + engperfHash);
+    if (addEngBtn !== 'none' && addEngBtn !== 'not found') ok('Add Engineer button visible for Admin/Manager');
+    else bad(`Add Engineer button hidden for ${user.role} (display: ${addEngBtn})`);
   }
 
   // ── Console errors (PD-007) — fail if any JS errors on page ──
