@@ -12,12 +12,12 @@ name: Deploy Pages (main + staging)
 # the URL path (and falls back to ?env=staging) and selects the matching
 # Supabase project. No secrets are embedded — only the public anon keys.
 #
-# Triggers: any push to main or staging, or manual run from the Actions tab.
+# PRODUCTION DEPLOY: manual only — trigger from Actions tab after staging sign-off.
+# STAGING DEPLOY: push to the `staging` branch → staging-dispatch.yml fires this
+#                 workflow via workflow_dispatch, updating /staging/ only.
 # GitHub Pages "Source" must be set to "GitHub Actions" in repo Settings → Pages.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
