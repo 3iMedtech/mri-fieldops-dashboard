@@ -50,6 +50,7 @@ The model is documentation + agent definition only. It does not change runtime b
 - `fieldops-supabase-agent` — Supabase reads/writes, RLS-sensitive work, role/data impact
 - `fieldops-test-agent` — verification, role testing, regression review, `TEST_MATRIX.md`
 - `fieldops-release-agent` — VERSION / CHANGELOG / staging-first / rollback / release risk
+- `fieldops-observability-agent` — post-deploy smoke verification; reports to release-pm
 
 ### 3.2 Product design advisory agents (from `AGENTS.md` §4)
 

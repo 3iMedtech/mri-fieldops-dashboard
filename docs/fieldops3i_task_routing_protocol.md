@@ -52,7 +52,7 @@ This document defines (a) how tasks are routed through the agent hierarchy, (b) 
      - fieldops-automation-memory-agent (state persistence: automation/STATE.md)
      - product-design advisory team (advisory-only; see PRODUCT_DESIGN_TEAM.md)
      - fieldops-orchestrator (legacy, module coordination)
-     - fieldops-ui-agent / fieldops-bug-agent / fieldops-supabase-agent (legacy)
+     - fieldops-ui-agent / fieldops-bug-agent / fieldops-supabase-agent / fieldops-observability-agent (legacy/module)
 ```
 
 **Reading the hierarchy:**

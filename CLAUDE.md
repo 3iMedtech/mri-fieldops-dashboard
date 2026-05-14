@@ -161,6 +161,7 @@ Use the FieldOps agent team for structured engineering work. The hierarchy has 4
 - `fieldops-supabase-agent`: Supabase reads/writes within module scope.
 - `fieldops-test-agent`: manual `TEST_MATRIX.md` execution.
 - `fieldops-release-agent`: release readiness specialist (now reports through release-pm).
+- `fieldops-observability-agent`: post-deploy smoke verification (APP_VERSION, Pages headers, console errors, audit_log health). Reports to release-pm.
 
 ### Tier 4 — Product design advisory team
 - `fieldops-product-design-lead`, `fieldops-enterprise-ux-researcher`, `fieldops-dashboard-usability-auditor`, `fieldops-design-system-guardian`, `fieldops-accessibility-reviewer`, `fieldops-microinteraction-designer`. Advisory-only; no implementation without approval.

@@ -196,6 +196,22 @@ Responsibilities:
 
 Recommended model: Claude Opus.
 
+### fieldops-observability-agent
+
+Use for post-deploy verification after any staging or production deploy — APP_VERSION alignment, GitHub Pages header freshness, console error baseline, audit_log write health, PostgREST error rate. Reports to `fieldops-release-pm`.
+
+Responsibilities:
+
+- confirm APP_VERSION on live app matches deployed tag
+- check Pages CDN headers (Last-Modified, ETag) for staleness
+- confirm no new console errors appear on page load across all role flows
+- verify audit_log writes are landing after role-touching changes
+- flag PostgREST 400/500s in the post-deploy window
+
+Recommended model: Claude Sonnet.
+
+Full definition: [`.claude/agents/fieldops-observability-agent.md`](.claude/agents/fieldops-observability-agent.md).
+
 ### fieldops-delivery-orchestrator (NEW — phase-level controller)
 
 Use for phase-level coordination that crosses the SQL ↔ runtime ↔ release boundary. Owns sequencing, stop points, scope control, PR gates, staging/prod separation, and final PASS / HOLD / STOP / ESCALATE authority.
@@ -409,6 +425,7 @@ Recommended model: Claude Sonnet.
 - Supabase/Auth/RLS/data writes (within module scope) → `fieldops-supabase-agent`
 - Manual `TEST_MATRIX.md` verification → `fieldops-test-agent`
 - Release/version/deployment → `fieldops-release-agent`
+- Post-deploy smoke / APP_VERSION / Pages headers / audit_log health → `fieldops-observability-agent`
 
 ### Product design (advisory)
 
