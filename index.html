@@ -634,6 +634,70 @@ button,input,select,textarea{font-family:inherit;}
     .renew-tiles { grid-template-columns: repeat(2, 1fr); }
   }
 
+  /* ── Contracts table — card layout on mobile (<768px) ────────────────── */
+  @media (max-width: 768px) {
+    .contracts-table thead { display: none; }
+    .contracts-table tbody tr {
+      display: block;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .contracts-table tbody td {
+      display: flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px !important;
+      white-space: normal !important;
+      gap: 8px;
+      text-align: left !important;
+    }
+    .contracts-table tbody td[data-label]::before {
+      content: attr(data-label);
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text-faint);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      min-width: 52px;
+      flex-shrink: 0;
+    }
+    .contracts-table tbody td.ct-code {
+      background: var(--surface2);
+      padding: 10px 12px 3px;
+      border-bottom: none;
+      font-size: 13px !important;
+    }
+    .contracts-table tbody td.ct-code::before { display: none; }
+    .contracts-table tbody td.ct-customer {
+      background: var(--surface2);
+      padding: 3px 12px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px !important;
+      font-weight: 600 !important;
+    }
+    .contracts-table tbody td.ct-customer::before { display: none; }
+    .contracts-table tbody td.ct-start { display: none; }
+    .contracts-table tbody td.ct-status { border-bottom: none; }
+    .contracts-table tbody td.ct-action {
+      justify-content: flex-end;
+      border-bottom: none;
+      background: var(--surface2);
+      padding: 8px 12px;
+    }
+    .contracts-table tbody td.ct-action:empty { display: none; }
+    .contracts-table tbody td.ct-action::before { display: none; }
+    .contracts-table tbody tr.ct-empty td {
+      display: block;
+      border-bottom: none;
+      background: transparent;
+    }
+  }
+
   /* ── Print / PDF export ────────────────────────────────────────────── */
   @media print {
     @page { size: A4 landscape; margin: 12mm; }
@@ -5517,20 +5581,20 @@ function renderContracts(){
   const tableRows = pagedRows.length
     ? pagedRows.map(r => `
         <tr>
-          <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(r.code)}</td>
-          <td style="font-weight:500">${esc(r.customer)}</td>
-          <td style="font-size:11px;color:var(--text-dim);font-family:var(--mono)">${esc(r.model)}</td>
-          <td>${_contractsTypePill(r.contract)}</td>
-          <td style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._start))}</td>
-          <td style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._end))}</td>
-          <td style="text-align:right">${_contractsDayBadge(r._days)}</td>
-          <td><span class="badge low" style="background:${(_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8')}1a;color:${_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8'}">${esc(r.statusLabel)}</span></td>
-          <td>${r.status !== 'no_contract' && canManagePM()
+          <td class="ct-code" style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(r.code)}</td>
+          <td class="ct-customer" style="font-weight:500">${esc(r.customer)}</td>
+          <td data-label="Model" style="font-size:11px;color:var(--text-dim);font-family:var(--mono)">${esc(r.model)}</td>
+          <td data-label="Type">${_contractsTypePill(r.contract)}</td>
+          <td class="ct-start" data-label="Start" style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._start))}</td>
+          <td data-label="Ends" style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._end))}</td>
+          <td data-label="Days" style="text-align:right">${_contractsDayBadge(r._days)}</td>
+          <td class="ct-status" data-label="Status"><span class="badge low" style="background:${(_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8')}1a;color:${_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8'}">${esc(r.statusLabel)}</span></td>
+          <td class="ct-action">${r.status !== 'no_contract' && canManagePM()
             ? `<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px"
                  onclick='openRenewModal(${JSON.stringify(r.code)},${JSON.stringify(r.customer)},${JSON.stringify(r.contract)},${JSON.stringify(_contractsFmtDate(r._end))})'>Renew</button>`
             : ''}</td>
         </tr>`).join('')
-    : `<tr><td colspan="9"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
+    : `<tr class="ct-empty"><td colspan="9"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
 
   const pagination = sorted.length > CONTRACTS_PAGE_SIZE ? `
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px">
@@ -5552,7 +5616,7 @@ function renderContracts(){
         ${csvButton}
       </div>
       <div style="overflow-x:auto">
-        <table class="data-table">
+        <table class="data-table contracts-table">
           <thead><tr>
             ${th('code','Code')}
             ${th('customer','Customer')}
