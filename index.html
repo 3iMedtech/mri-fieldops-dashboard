@@ -2513,13 +2513,15 @@ function normaliseCustomer(raw){
 function excelToDateString(v){
   if(v == null || v === '') return '';
   if(v instanceof Date && !isNaN(v)){
-    return v.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+    const y=v.getFullYear(),mo=v.getMonth()+1,d=v.getDate();
+    return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   }
   if(typeof v === 'number'){
     // Excel serial date
-    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
-    if(!isNaN(d) && d.getFullYear() > 1900 && d.getFullYear() < 2100){
-      return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+    const dt = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if(!isNaN(dt) && dt.getFullYear() > 1900 && dt.getFullYear() < 2100){
+      const y=dt.getFullYear(),mo=dt.getMonth()+1,d=dt.getDate();
+      return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     }
     return String(v);
   }
