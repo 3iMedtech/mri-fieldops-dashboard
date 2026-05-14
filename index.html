@@ -1005,7 +1005,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
     </div>
     <div class="panel">
-      <div class="panel-head"><h2 class="panel-title"><i data-lucide="users"></i>Field Team</h2><div class="panel-action" onclick="navigate('team')">All →</div></div>
+      <div class="panel-head"><h2 class="panel-title"><i data-lucide="users-round"></i>Engineers</h2><div class="panel-action" onclick="navigate('engineers')">All →</div></div>
       <div class="panel-body"><div class="eng-list" id="dash-eng-list"></div></div>
     </div>
   </div>
@@ -1223,6 +1223,15 @@ button,input,select,textarea{font-family:inherit;}
       </div>
     </div>
     <div id="eng-summary" style="padding:12px 18px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border)">—</div>
+    <div style="padding:14px 18px 0">
+      <div class="panel" style="margin-bottom:0">
+        <div class="panel-head">
+          <h2 class="panel-title"><i data-lucide="bar-chart-2"></i>Monthly Call Volume</h2>
+          <select id="eng-chart-month" onchange="renderEngineerCallBars()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px"></select>
+        </div>
+        <div class="panel-body" id="eng-call-bars" style="padding:8px 0"></div>
+      </div>
+    </div>
     <div id="eng-cards" style="padding:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px"></div>
   </div>
 </div>
@@ -2138,7 +2147,7 @@ let AMBIGUITIES = [
 // ══════════════════════════════════════════
 // CONSTANTS & COMPUTED STATS (FIX 3, 7, 8)
 // ══════════════════════════════════════════
-const SLA_RESPONSE_DAYS = 2;
+const SLA_RESPONSE_DAYS = 1;  // 24-hour resolution SLA
 
 // ── Central status predicates (single source of truth) ──────────────
 function isOpen(t){ return (t.status||'').trim().toLowerCase()==='open'; }
@@ -4289,14 +4298,12 @@ function setDashMonth(el, month){
   dashMonthFilter = month;
   document.querySelectorAll('#dash-month-tabs .tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
-  // Re-render everything on the dashboard that can filter
   renderKPIGrid();
   renderBarMonthly();
   renderCallTypeChart();
   renderTopCustomers();
   renderKPIBand();
-  // Intentionally NOT re-rendering: renderDashOpen, renderDashEngineers, renderAlertBanner
-  // These are point-in-time or data-quality views and shouldn't filter by month.
+  renderDashEngineers();
 }
 
 // ══════════════════════════════════════════
@@ -4533,19 +4540,17 @@ function renderDashOpen(){
     </tr>`).join('');
 }
 
-// Status computed from open tickets
 function renderDashEngineers(){
-  document.getElementById('dash-eng-list').innerHTML=ENGINEERS.slice(0,8).map((e,i)=>{
-    const status=getEngStatus(e);
-    const {pillCls,dotCls}=engStatusPill(status);
-    return `<div class="eng-row" onclick="navigate('team')">
+  const roster = activeRoster().slice(0, 8);
+  const label = dashMonthFilter === 'all' ? 'total calls' : `calls · ${dashMonthFilter}`;
+  document.getElementById('dash-eng-list').innerHTML = roster.map((e, i) => {
+    const calls = ticketsForEngineer(e, { monthFilter: dashMonthFilter }).length;
+    return `<div class="eng-row" onclick="navigate('engineers')">
       <div class="eng-avatar" style="background:${engColor(i)}25;color:${engColor(i)}">${e.name.slice(0,2).toUpperCase()}</div>
-      <div class="status-dot ${dotCls}"></div>
       <div style="flex:1"><div class="eng-name">${e.name}</div><div class="eng-detail">${e.region}</div></div>
-      <div class="eng-status-pill ${status==='Assigned'?'amber':'available'}">${status}</div>
+      <div style="font-size:11px;color:var(--text-faint);white-space:nowrap"><b style="color:var(--text)">${calls}</b> ${label}</div>
     </div>`;
-  }).join('')+
-  '<div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);padding:6px 0;text-align:center">Status derived from open ticket assignments only</div>';
+  }).join('');
 }
 
 // ── Contract renewals ────────────────────────────────────────────────
@@ -7054,6 +7059,25 @@ async function checkAndDeactivateEngineers(){
   }
 }
 
+function renderEngineerCallBars(){
+  const sel = document.getElementById('eng-chart-month');
+  const bars = document.getElementById('eng-call-bars');
+  if(!sel || !bars) return;
+  const month = sel.value || MONTHS[MONTHS.length-1];
+  const data = activeRoster()
+    .map(e => ({ name: e.name, count: ticketsForEngineer(e, { monthFilter: month }).length }))
+    .sort((a, b) => b.count - a.count);
+  const max = Math.max(...data.map(d => d.count), 1);
+  bars.innerHTML = data.map(d => `
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <div style="width:140px;font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</div>
+      <div style="flex:1;background:var(--surface2);border-radius:3px;height:10px;overflow:hidden">
+        <div style="width:${Math.round((d.count/max)*100)}%;background:var(--brand);height:100%;border-radius:3px;transition:width .3s"></div>
+      </div>
+      <div style="width:28px;text-align:right;font-size:11px;font-family:var(--mono);color:var(--text)">${d.count}</div>
+    </div>`).join('');
+}
+
 async function renderEngineers(){
   await checkAndDeactivateEngineers();
 
@@ -7076,6 +7100,16 @@ async function renderEngineers(){
       }
     })
     .catch(err => console.warn('PM backfill/sync failed:', err));
+
+  // Populate monthly call volume chart month selector
+  const chartSel = document.getElementById('eng-chart-month');
+  if(chartSel && MONTHS.length){
+    const current = chartSel.value;
+    chartSel.innerHTML = MONTHS.slice().reverse()
+      .map(m => `<option value="${m}"${m === (current || MONTHS[MONTHS.length-1]) ? ' selected' : ''}>${m}</option>`)
+      .join('');
+    renderEngineerCallBars();
+  }
 
   const windowVal = document.getElementById('eng-window')?.value || '90';
   const regionVal = document.getElementById('eng-region')?.value || 'all';
@@ -7454,11 +7488,19 @@ function computeEngineerMetrics(eng, windowStart){
           if(d <= SLA_RESPONSE_DAYS) slaOk += 1;
         }
       }
-      // FTF approximation: closed without any parts request = one-shot fix.
-      ftfN += 1;
-      const parts = (t.parts||'').trim().toUpperCase();
-      const hasParts = parts && parts !== 'NA' && parts !== 'N/A' && parts !== '-';
-      if(!hasParts) ftfOk += 1;
+      // FTF: no repeat visit to same customer within 30 days of closure
+      if(up){
+        ftfN += 1;
+        const custKey = customerKey(t.customer);
+        const deadline = new Date(up);
+        deadline.setDate(deadline.getDate() + 30);
+        const hasRepeat = RAW_TICKETS.some(r =>
+          r !== t &&
+          customerKey(r.customer) === custKey &&
+          r._callDate && r._callDate > up && r._callDate <= deadline
+        );
+        if(!hasRepeat) ftfOk += 1;
+      }
     }
   });
 
