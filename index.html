@@ -1223,15 +1223,6 @@ button,input,select,textarea{font-family:inherit;}
       </div>
     </div>
     <div id="eng-summary" style="padding:12px 18px;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border)">—</div>
-    <div style="padding:14px 18px 0">
-      <div class="panel" style="margin-bottom:0">
-        <div class="panel-head">
-          <h2 class="panel-title"><i data-lucide="bar-chart-2"></i>Monthly Call Volume</h2>
-          <select id="eng-chart-month" onchange="renderEngineerCallBars()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px"></select>
-        </div>
-        <div class="panel-body" id="eng-call-bars" style="padding:8px 0"></div>
-      </div>
-    </div>
     <div id="eng-cards" style="padding:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px"></div>
   </div>
 </div>
@@ -3185,7 +3176,28 @@ async function applyUploadedData(){
       a.open_calls = RAW_TICKETS.filter(t => t.asset_code === a.code && isOpen(t)).length;
     });
 
-    // 5b. Scan ingested tickets for data-quality issues and push any new
+    // 5b. Reload PM schedule from DB so dates rolled forward by previous syncs
+    //     are reflected in memory — prevents completed PMs from reappearing as pending.
+    try {
+      const { data: freshPMs } = await _sb.from('pm_schedule').select('*');
+      if(freshPMs){
+        PM_SCHEDULE = freshPMs.map(r => ({
+          id: r.id, customer: r.customer, model: r.model, contract: r.contract,
+          town: r.town, region: r.region, freq: r.freq,
+          contractStart: dbDateToDisplay(r.contract_start),
+          contractEnd: dbDateToDisplay(r.contract_end),
+          lastPMS: dbDateToDisplay(r.last_pms),
+          nextPMS: dbDateToDisplay(r.next_pms),
+          status: r.status || 'active',
+        }));
+        _indexPMSchedule();
+      }
+    } catch(e){ console.warn('PM schedule reload after upload failed:', e); }
+    // Invalidate completion cache and allow sync to run with new tickets.
+    invalidatePMCompletionsCache();
+    _pmSyncDoneThisSession = false;
+
+    // 5c. Scan ingested tickets for data-quality issues and push any new
     //     findings into the Ambiguity queue. Silent on failure — we don't
     //     want a soft detector error to undo a successful upload.
     let newAmbCount = 0;
@@ -4541,16 +4553,18 @@ function renderDashOpen(){
 }
 
 function renderDashEngineers(){
-  const roster = activeRoster().slice(0, 8);
   const label = dashMonthFilter === 'all' ? 'total calls' : `calls · ${dashMonthFilter}`;
-  document.getElementById('dash-eng-list').innerHTML = roster.map((e, i) => {
-    const calls = ticketsForEngineer(e, { monthFilter: dashMonthFilter }).length;
-    return `<div class="eng-row" onclick="navigate('engineers')">
+  const sorted = activeRoster()
+    .map((e, i) => ({ e, i, calls: ticketsForEngineer(e, { monthFilter: dashMonthFilter }).length }))
+    .sort((a, b) => b.calls - a.calls)
+    .slice(0, 8);
+  document.getElementById('dash-eng-list').innerHTML = sorted.map(({ e, i, calls }) =>
+    `<div class="eng-row" onclick="navigate('engineers')">
       <div class="eng-avatar" style="background:${engColor(i)}25;color:${engColor(i)}">${e.name.slice(0,2).toUpperCase()}</div>
       <div style="flex:1"><div class="eng-name">${e.name}</div><div class="eng-detail">${e.region}</div></div>
       <div style="font-size:11px;color:var(--text-faint);white-space:nowrap"><b style="color:var(--text)">${calls}</b> ${label}</div>
-    </div>`;
-  }).join('');
+    </div>`
+  ).join('');
 }
 
 // ── Contract renewals ────────────────────────────────────────────────
@@ -7059,24 +7073,6 @@ async function checkAndDeactivateEngineers(){
   }
 }
 
-function renderEngineerCallBars(){
-  const sel = document.getElementById('eng-chart-month');
-  const bars = document.getElementById('eng-call-bars');
-  if(!sel || !bars) return;
-  const month = sel.value || MONTHS[MONTHS.length-1];
-  const data = activeRoster()
-    .map(e => ({ name: e.name, count: ticketsForEngineer(e, { monthFilter: month }).length }))
-    .sort((a, b) => b.count - a.count);
-  const max = Math.max(...data.map(d => d.count), 1);
-  bars.innerHTML = data.map(d => `
-    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
-      <div style="width:140px;font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</div>
-      <div style="flex:1;background:var(--surface2);border-radius:3px;height:10px;overflow:hidden">
-        <div style="width:${Math.round((d.count/max)*100)}%;background:var(--brand);height:100%;border-radius:3px;transition:width .3s"></div>
-      </div>
-      <div style="width:28px;text-align:right;font-size:11px;font-family:var(--mono);color:var(--text)">${d.count}</div>
-    </div>`).join('');
-}
 
 async function renderEngineers(){
   await checkAndDeactivateEngineers();
@@ -7100,16 +7096,6 @@ async function renderEngineers(){
       }
     })
     .catch(err => console.warn('PM backfill/sync failed:', err));
-
-  // Populate monthly call volume chart month selector
-  const chartSel = document.getElementById('eng-chart-month');
-  if(chartSel && MONTHS.length){
-    const current = chartSel.value;
-    chartSel.innerHTML = MONTHS.slice().reverse()
-      .map(m => `<option value="${m}"${m === (current || MONTHS[MONTHS.length-1]) ? ' selected' : ''}>${m}</option>`)
-      .join('');
-    renderEngineerCallBars();
-  }
 
   const windowVal = document.getElementById('eng-window')?.value || '90';
   const regionVal = document.getElementById('eng-region')?.value || 'all';
