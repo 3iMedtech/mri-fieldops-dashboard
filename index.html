@@ -828,7 +828,7 @@ button,input,select,textarea{font-family:inherit;}
   <div id="global-search-results" class="global-search-results" role="listbox" aria-label="Search results" hidden></div>
   <div id="env-pill" style="display:none;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;padding:4px 10px;border-radius:4px;background:#f59e0b;color:#000;box-shadow:0 0 0 1px #b45309 inset" title="You are on the STAGING environment. Data here is isolated from production.">STAGING</div>
   <div class="static-dataset-label" id="dataset-label">DATASET · OCT 2025 – MAR 2026</div>
-  <input type="file" id="xlsx-upload" accept=".xlsx" aria-label="Upload service operations XLSX file" style="display:none" class="mgr-plus" onchange="handleXLSXUpload(event)">
+  <input type="file" id="xlsx-upload" accept=".xlsx" aria-label="Upload service operations XLSX file" style="display:none" onchange="handleXLSXUpload(event)">
   <button class="btn btn-ghost mgr-plus" style="font-size:11px;padding:6px 12px" onclick="document.getElementById('xlsx-upload').click()" title="Upload service operations Excel file"><i data-lucide="upload"></i>Upload XLSX</button>
   <button class="btn btn-ghost" id="reset-data-btn" style="font-size:11px;padding:6px 12px" onclick="resetToBundledData()" title="Refresh data from database"><i data-lucide="rotate-cw"></i>Refresh</button>
   <div class="clock" id="clock">—</div>
@@ -5455,7 +5455,7 @@ function renderContracts(){
           <td><span class="badge low" style="background:${(_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8')}1a;color:${_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8'}">${esc(r.statusLabel)}</span></td>
           <td>${r.status !== 'no_contract' && canManagePM()
             ? `<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px"
-                 onclick="openRenewModal(${JSON.stringify(r.code)},${JSON.stringify(r.customer)},${JSON.stringify(r.contract)})">Renew</button>`
+                 onclick='openRenewModal(${JSON.stringify(r.code)},${JSON.stringify(r.customer)},${JSON.stringify(r.contract)})'>Renew</button>`
             : ''}</td>
         </tr>`).join('')
     : `<tr><td colspan="9"><div class="dq-empty" role="status" aria-live="polite" style="text-align:center;color:var(--text-faint);padding:24px">No contracts in this filter${_contractsSearch ? ' or search' : ''}.</div></td></tr>`;
