@@ -5589,7 +5589,7 @@ function renderContracts(){
           <td data-label="Ends" style="font-family:var(--mono);font-size:11px">${esc(_contractsFmtDate(r._end))}</td>
           <td data-label="Days" style="text-align:right">${_contractsDayBadge(r._days)}</td>
           <td class="ct-status" data-label="Status"><span class="badge low" style="background:${(_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8')}1a;color:${_CONTRACT_BUCKET_COLOR[r.status] || '#94a3b8'}">${esc(r.statusLabel)}</span></td>
-          <td class="ct-action">${r.status !== 'no_contract' && canManagePM()
+          <td class="ct-action">${['expired','no_contract','unknown'].includes(r.status) && canManagePM()
             ? `<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px"
                  onclick='openRenewModal(${JSON.stringify(r.code)},${JSON.stringify(r.customer)},${JSON.stringify(r.contract)},${JSON.stringify(_contractsFmtDate(r._end))})'>Renew</button>`
             : ''}</td>
