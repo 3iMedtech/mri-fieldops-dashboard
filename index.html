@@ -3620,13 +3620,26 @@ function parseFlexDate(s, ctx){
     if(m) d=new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3])); }
   // DD/MM/YYYY or DD-MM-YYYY
   if(!d){ m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-    if(m) d=new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1])); }
+    if(m){
+      const _day=parseInt(m[1]),_mon=parseInt(m[2]),_yr=parseInt(m[3]);
+      if(_mon>=1&&_mon<=12&&_day>=1&&_day<=31){
+        const _t=new Date(_yr,_mon-1,_day);
+        // Guard: if month overflows (e.g. "12-29-2025" read as day=12, mon=29) discard
+        if(_t.getMonth()===_mon-1) d=_t;
+      }
+    }
+  }
   // DD.MM.YY — common in this dataset
   if(!d){ m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
     if(m){
-      const yr=m[3].length===2?2000+parseInt(m[3]):parseInt(m[3]);
-      d=new Date(yr,parseInt(m[2])-1,parseInt(m[1]));
-    } }
+      const _day=parseInt(m[1]),_mon=parseInt(m[2]);
+      const _yr=m[3].length===2?2000+parseInt(m[3]):parseInt(m[3]);
+      if(_mon>=1&&_mon<=12&&_day>=1&&_day<=31){
+        const _t=new Date(_yr,_mon-1,_day);
+        if(_t.getMonth()===_mon-1) d=_t;
+      }
+    }
+  }
   // Last-resort fallback
   if(!d){
     const tryD=new Date(s);
