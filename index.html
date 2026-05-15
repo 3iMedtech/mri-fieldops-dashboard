@@ -916,6 +916,7 @@ button,input,select,textarea{font-family:inherit;}
     <div class="nav-item active" data-page="dashboard" role="button" tabindex="0" aria-current="page"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Dashboard</div>
     <div class="nav-item" data-page="tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket"></i></span> Service History <span class="nav-badge" id="nb-open" style="display:none" title="Open tickets"></span></div>
     <div class="nav-item" data-page="pm" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
+    <div class="nav-item" data-page="app-tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket-check"></i></span> Work Orders <span class="nav-badge" id="nb-app-tickets" style="display:none" title="Open work orders"></span></div>
     <div class="nav-section" role="presentation">Assets &amp; team</div>
     <div class="nav-item" data-page="assets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="building-2"></i></span> Install Base</div>
     <div class="nav-item" data-page="engineers" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="users-round"></i></span> Engineers <span class="nav-badge green" id="nb-engineers" style="display:none"></span></div>
@@ -1386,6 +1387,47 @@ button,input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+<!-- ██ WORK ORDERS (app-tickets) ██ -->
+<div class="page" id="page-app-tickets">
+  <div class="panel">
+    <div class="panel-head" style="flex-wrap:wrap;gap:8px">
+      <h2 class="panel-title"><i data-lucide="ticket-check"></i>Work Orders</h2>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">STATUS:</span>
+        <select id="at-status" aria-label="Status filter" onchange="renderAppTickets()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+          <option value="open">Open</option>
+          <option value="all">All</option>
+          <option value="closed">Closed / Done</option>
+        </select>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">REGION:</span>
+        <select id="at-region" aria-label="Region filter" onchange="renderAppTickets()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+          <option value="all">All regions</option>
+        </select>
+        <input class="search-box" id="at-eng-search" type="search" placeholder="Engineer name…" aria-label="Filter by engineer" oninput="renderAppTickets()" style="width:150px;padding:5px 10px">
+        <button class="btn btn-primary mgr-plus" style="font-size:11px;padding:6px 14px" onclick="openNewTicketModal()"><i data-lucide="plus"></i>New Ticket</button>
+      </div>
+    </div>
+    <div style="padding:6px 18px 8px">
+      <span id="at-summary" style="font-size:11px;color:var(--text-dim)"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr>
+          <th style="font-size:10px">TICKET ID</th>
+          <th style="font-size:10px">CUSTOMER</th>
+          <th style="font-size:10px">ASSET</th>
+          <th style="font-size:10px">REGION</th>
+          <th style="font-size:10px">CALL DATE</th>
+          <th style="font-size:10px">STATUS</th>
+          <th style="font-size:10px">SLA DUE</th>
+          <th style="font-size:10px">ENGINEERS</th>
+        </tr></thead>
+        <tbody id="at-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="page" id="page-about">
   <div class="panel">
     <div class="panel-head">
@@ -1742,6 +1784,91 @@ button,input,select,textarea{font-family:inherit;}
           <button class="btn btn-primary" type="button" id="rc-submit-btn" onclick="_submitRenewContract()" style="font-size:12px;padding:8px 18px">Renew →</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── NEW TICKET MODAL ── -->
+<div class="modal-overlay" id="new-ticket-modal" role="dialog" aria-modal="true" aria-labelledby="nt-title" aria-hidden="true">
+  <div class="modal" style="max-width:580px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--brand);margin-bottom:3px">NEW SERVICE TICKET</div>
+        <div id="nt-title" style="font-family:var(--display);font-weight:700;font-size:17px">Create Work Order</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('new-ticket-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;gap:13px">
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ASSET <span style="color:var(--text-faint)">(optional — auto-fills fields)</span></label>
+          <select id="nt-asset" onchange="_ntOnAssetChange()" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px"></select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">CUSTOMER *</label>
+            <input class="search-box" id="nt-customer" placeholder="Customer / hospital name" style="width:100%;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ASSET CODE</label>
+            <input class="search-box" id="nt-asset-code" placeholder="e.g. AN001" style="width:100%;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">REGION *</label>
+            <select id="nt-region" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px"></select>
+          </div>
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">TOWN</label>
+            <input class="search-box" id="nt-town" placeholder="City / town" style="width:100%;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">CALL DATE *</label>
+            <input class="search-box" id="nt-call-date" type="date" style="width:100%;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">CALL TYPE</label>
+            <select id="nt-call-type" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px">
+              <option value="">—</option>
+              <option value="Breakdown">Breakdown</option>
+              <option value="Incident">Incident</option>
+              <option value="PM">PM</option>
+              <option value="Installation">Installation</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">PRIORITY</label>
+            <select id="nt-priority" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px">
+              <option value="normal" selected>Normal</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ISSUE / COMPLAINT *</label>
+          <textarea id="nt-issue" rows="3" placeholder="Describe the issue or reason for this call…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;outline:none"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ENGINEER 1</label>
+            <select id="nt-eng1" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px"></select>
+          </div>
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ENGINEER 2 <span style="color:var(--text-faint)">(optional)</span></label>
+            <select id="nt-eng2" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" onclick="closeModal('new-ticket-modal')">Cancel</button>
+      <button class="btn btn-primary" id="nt-submit" onclick="submitNewTicket()">Create Ticket</button>
     </div>
   </div>
 </div>
@@ -2122,6 +2249,9 @@ let ENGINEERS = JSON.parse(JSON.stringify(ENGINEERS_DEFAULT));
 // saveRoster is now a no-op; individual engineer writes go through
 // dbSaveEngineer/dbDeleteEngineer at the call sites.
 function saveRoster(){ /* moved to Supabase — see dbSaveEngineer */ }
+
+let APP_TICKETS = [];     // in-app created tickets from app_tickets table
+let ALL_TICKETS = [];     // merged: [...RAW_TICKETS, ...APP_TICKETS]
 
 let AMBIGUITIES = [
 {month:'—',row:0,id:'⚠FLAG-01',customer:'Premier Trichy = Anderson Diagnostic Centre?',issue:'Log uses "Premier Trichy" in Oct 2025 rows 20,21. Config has "Anderson diagnostic centre, Trichy, AN011". No asset named Premier in config. Assumed same site — CONFIRM before accepting.',status:'Review Required',sys_status:'—',flags:['Log uses "Premier Trichy" in Oct 2025 rows 20,21. Config has "Anderson diagnostic centre, Trichy, AN011". No asset named Premier in config. Assumed same site — CONFIRM before accepting.'],suggestion:'Action required — do not close until confirmed.'},
@@ -9047,6 +9177,7 @@ const PAGE_RENDERERS={
   engineers:renderEngineers,
   ambiguities:renderAmbiguities,
   // 'reports' key omitted — navigate('reports') redirects to 'dashboard'.
+  'app-tickets': renderAppTickets,
 };
 // Patch navigate() to call the page renderer each time. The wrapper must
 // forward ALL arguments — v1.1.0 1c added opts={fromHash,query} which
@@ -9475,6 +9606,34 @@ async function loadAllFromDB(opts = {}){
   INCIDENT_TICKETS = RAW_TICKETS.filter(isIncident);
   PM_CALLS = RAW_TICKETS.filter(isPM);
 
+  // Load app_tickets (in-app created work orders)
+  setMsg('Loading work orders…');
+  const { data: appTkts, error: eAt } = await _sb
+    .from('app_tickets').select('*').order('created_at', { ascending: false });
+  if(eAt) throw eAt;
+  APP_TICKETS = appTkts.map(r => ({
+    id: r.id, ticket_type: r.ticket_type, status: r.status,
+    asset_code: r.asset_code || '', customer: r.customer || '',
+    town: r.town || '', state: r.state || '', region: r.region || '',
+    model: r.model || '', contract: r.contract || '',
+    pm_id: r.pm_id || null, pm_cycle_key: r.pm_cycle_key || null,
+    call_date: r.call_date || null, call_type: r.call_type || '',
+    issue_description: r.issue_description || '',
+    parts: r.parts || '', parts_req_date: r.parts_req_date || null,
+    parts_recv_date: r.parts_recv_date || null, parts_status: r.parts_status || '',
+    resolution: r.resolution || '', sys_up_date: r.sys_up_date || null,
+    resolved_at: r.resolved_at || null, closed_at: r.closed_at || null,
+    priority: r.priority || 'normal', sla_due_at: r.sla_due_at || null,
+    assigned_engineer_ids: r.assigned_engineer_ids || [],
+    assigned_engineer_names: r.assigned_engineer_names || [],
+    pm_completion_engineer_id: r.pm_completion_engineer_id || null,
+    pm_completion_engineer_name: r.pm_completion_engineer_name || null,
+    visit_log: r.visit_log || [], deleted_at: r.deleted_at || null,
+    created_by: r.created_by || null,
+    created_at: r.created_at || null, updated_at: r.updated_at || null,
+  }));
+  ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+
   // Rebuild MONTHS from freshly-loaded tickets. Without this, MONTHS stays
   // as the empty array computed at file-load time, which causes:
   //   • countByMonth() → {} (all month-tab counts show 0)
@@ -9518,6 +9677,256 @@ async function dbSaveEngineer(e){
   const { error } = await _sb.from('engineers').upsert(row);
   if(error){ console.error('Save engineer failed:', error); alert('Save failed: ' + error.message); }
 }
+// ══════════════════════════════════════════════════════════════════
+// WORK ORDERS (app-tickets) — Phase B
+// ══════════════════════════════════════════════════════════════════
+
+const _AT_OPEN_STATUSES   = ['new','assigned','in_progress','on_hold','parts_pending','upcoming','due'];
+const _AT_CLOSED_STATUSES = ['closed','cancelled','completed','missed'];
+
+function _atStatusBadge(status){
+  const cfg = {
+    new:           ['#6b7280','New'],
+    assigned:      ['#3b82f6','Assigned'],
+    in_progress:   ['#f59e0b','In Progress'],
+    on_hold:       ['#f97316','On Hold'],
+    parts_pending: ['#8b5cf6','Parts Pending'],
+    resolved:      ['#10b981','Resolved'],
+    closed:        ['#6b7280','Closed'],
+    cancelled:     ['#ef4444','Cancelled'],
+    upcoming:      ['#94a3b8','Upcoming'],
+    due:           ['#f59e0b','Due'],
+    completed:     ['#10b981','Completed'],
+    missed:        ['#ef4444','Missed'],
+    deferred:      ['#8b5cf6','Deferred'],
+  };
+  const [color, label] = cfg[status] || ['#6b7280', status];
+  return `<span style="display:inline-flex;align-items:center;font-size:10px;font-family:var(--mono);background:${color}20;border:1px solid ${color}40;color:${color};border-radius:4px;padding:2px 7px;letter-spacing:.3px;white-space:nowrap">${esc(label)}</span>`;
+}
+
+function renderAppTickets(){
+  // Populate region filter from loaded tickets
+  const regionSel = document.getElementById('at-region');
+  if(regionSel){
+    const regions = [...new Set(APP_TICKETS.map(t => t.region).filter(Boolean))].sort();
+    const cur = regionSel.value || 'all';
+    regionSel.innerHTML = '<option value="all">All regions</option>' +
+      regions.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    regionSel.value = regions.includes(cur) ? cur : 'all';
+  }
+
+  const statusVal = document.getElementById('at-status')?.value || 'open';
+  const regionVal = document.getElementById('at-region')?.value || 'all';
+  const engSearch = (document.getElementById('at-eng-search')?.value || '').trim().toLowerCase();
+
+  let rows = APP_TICKETS.filter(t => {
+    if(statusVal === 'open')   return _AT_OPEN_STATUSES.includes(t.status);
+    if(statusVal === 'closed') return _AT_CLOSED_STATUSES.includes(t.status);
+    return true;
+  });
+  if(regionVal !== 'all') rows = rows.filter(t => t.region === regionVal);
+  if(engSearch) rows = rows.filter(t =>
+    t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch))
+  );
+
+  // Summary line
+  const summaryEl = document.getElementById('at-summary');
+  if(summaryEl){
+    const openCount = APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status)).length;
+    summaryEl.textContent = `${rows.length} ticket${rows.length===1?'':'s'} shown · ${openCount} open total`;
+  }
+
+  // Nav badge
+  const openCount = APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status)).length;
+  setNavBadgeCount('nb-app-tickets', openCount);
+
+  const tbody = document.getElementById('at-tbody');
+  if(!tbody) return;
+
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-dim)">No tickets match this filter.</td></tr>`;
+    return;
+  }
+
+  const now = new Date();
+  tbody.innerHTML = rows.map(t => {
+    const engCell = t.assigned_engineer_names.length
+      ? t.assigned_engineer_names.map(n => esc(n)).join(', ')
+      : `<span style="color:var(--text-faint)">—</span>`;
+    const callDateStr = t.call_date
+      ? new Date(t.call_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+      : '—';
+    let slaStr = '—', slaStyle = '';
+    if(t.sla_due_at){
+      const slaDate = new Date(t.sla_due_at);
+      slaStr = slaDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+      if(_AT_OPEN_STATUSES.includes(t.status) && slaDate < now)
+        slaStyle = 'color:#ef4444;font-weight:600';
+    }
+    return `<tr style="cursor:pointer" onclick="_openTicketDetail('${esc(t.id)}')">
+      <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(t.id)}</td>
+      <td>${esc(t.customer || '—')}</td>
+      <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code || '—')}</td>
+      <td>${esc(t.region || '—')}</td>
+      <td style="font-size:11px">${callDateStr}</td>
+      <td>${_atStatusBadge(t.status)}</td>
+      <td style="font-size:11px;${slaStyle}">${slaStr}</td>
+      <td style="font-size:11px">${engCell}</td>
+    </tr>`;
+  }).join('');
+
+  if(window.lucide && typeof lucide.createIcons === 'function'){
+    try{ lucide.createIcons(); }catch(_){}
+  }
+}
+
+function _openTicketDetail(id){
+  const t = APP_TICKETS.find(x => x.id === id);
+  if(!t) return;
+  showToast(`${t.id} — detail view coming in Phase C.`, 'info');
+}
+
+function openNewTicketModal(){
+  if(!canManagePM()){ showToast('Admin or Manager access required.', 'error'); return; }
+
+  // Asset select
+  const assetSel = document.getElementById('nt-asset');
+  if(assetSel){
+    const active = CONFIG_ASSETS.filter(a => !a.de_installed_at && a.status !== 'de_installed');
+    assetSel.innerHTML = '<option value="">— Select asset or fill manually —</option>' +
+      active
+        .sort((a,b) => (a.name||a.code||'').localeCompare(b.name||b.code||''))
+        .map(a => `<option value="${esc(a.code)}" data-customer="${esc(a.name||'')}" data-town="${esc(a.town||'')}" data-model="${esc(a.model||'')}">${esc(a.code)} — ${esc(a.name||'')} (${esc(a.town||'')})</option>`)
+        .join('');
+    assetSel.value = '';
+  }
+
+  // Region select from engineer regions
+  const regionSel = document.getElementById('nt-region');
+  if(regionSel){
+    const regions = [...new Set(ENGINEERS.map(e => e.region).filter(Boolean))].sort();
+    regionSel.innerHTML = '<option value="">— Select region —</option>' +
+      regions.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  }
+
+  // Engineer selects (active roster only)
+  const engOpts = '<option value="">— None —</option>' +
+    activeRoster().map(e => `<option value="${esc(e.id)}" data-name="${esc(e.name)}">${esc(e.name)} (${esc(e.region)})</option>`).join('');
+  ['nt-eng1','nt-eng2'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = engOpts;
+  });
+
+  // Reset text fields
+  ['nt-customer','nt-asset-code','nt-town'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const issueEl = document.getElementById('nt-issue');
+  if(issueEl) issueEl.value = '';
+  const callDateEl = document.getElementById('nt-call-date');
+  if(callDateEl) callDateEl.value = new Date().toISOString().slice(0,10);
+  const callTypeEl = document.getElementById('nt-call-type');
+  if(callTypeEl) callTypeEl.value = '';
+  const priorityEl = document.getElementById('nt-priority');
+  if(priorityEl) priorityEl.value = 'normal';
+
+  openModal('new-ticket-modal');
+  setTimeout(() => document.getElementById('nt-asset')?.focus(), 80);
+}
+
+function _ntOnAssetChange(){
+  const sel = document.getElementById('nt-asset');
+  if(!sel || !sel.value) return;
+  const opt = sel.options[sel.selectedIndex];
+  const set = (id, val) => { if(!val) return; const el = document.getElementById(id); if(el) el.value = val; };
+  set('nt-customer',   opt.dataset.customer);
+  set('nt-asset-code', sel.value);
+  set('nt-town',       opt.dataset.town);
+}
+
+async function submitNewTicket(){
+  if(!canManagePM()){ showToast('Admin or Manager access required.', 'error'); return; }
+
+  const customer  = document.getElementById('nt-customer')?.value.trim() || '';
+  const assetCode = document.getElementById('nt-asset-code')?.value.trim() || '';
+  const region    = document.getElementById('nt-region')?.value || '';
+  const town      = document.getElementById('nt-town')?.value.trim() || '';
+  const callDate  = document.getElementById('nt-call-date')?.value || '';
+  const callType  = document.getElementById('nt-call-type')?.value || '';
+  const priority  = document.getElementById('nt-priority')?.value || 'normal';
+  const issue     = document.getElementById('nt-issue')?.value.trim() || '';
+
+  if(!customer){ showToast('Customer is required.', 'error'); return; }
+  if(!region)  { showToast('Region is required.', 'error'); return; }
+  if(!callDate){ showToast('Call date is required.', 'error'); return; }
+  if(!issue)   { showToast('Issue / complaint is required.', 'error'); return; }
+
+  // Collect up to 2 unique engineers
+  const engIds = [], engNames = [];
+  ['nt-eng1','nt-eng2'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if(!sel || !sel.value || engIds.includes(sel.value)) return;
+    const eng = ENGINEERS.find(e => e.id === sel.value);
+    if(eng){ engIds.push(eng.id); engNames.push(eng.name); }
+  });
+
+  const btn = document.getElementById('nt-submit');
+  if(btn){ btn.disabled = true; btn.textContent = 'Creating…'; }
+
+  const ticket = await dbSaveAppTicket({
+    ticket_type: 'service',
+    status: engIds.length ? 'assigned' : 'new',
+    customer,
+    asset_code:           assetCode || null,
+    region,
+    town:                 town || null,
+    call_date:            callDate,
+    call_type:            callType || null,
+    issue_description:    issue,
+    priority,
+    assigned_engineer_ids:   engIds,
+    assigned_engineer_names: engNames,
+  });
+
+  if(btn){ btn.disabled = false; btn.textContent = 'Create Ticket'; }
+
+  if(ticket){
+    APP_TICKETS.unshift(ticket);
+    ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+    closeModal('new-ticket-modal');
+    showToast(`Ticket ${ticket.id} created.`, 'success');
+    renderAppTickets();
+  }
+}
+
+async function dbSaveAppTicket(fields){
+  suppressRealtimeReload(3000);
+  const { data, error } = await _sb.from('app_tickets').insert(fields).select().single();
+  if(error){
+    console.error('dbSaveAppTicket failed:', error);
+    showToast('Failed to create ticket: ' + (error.message || 'unknown error'), 'error');
+    return null;
+  }
+  return {
+    id: data.id, ticket_type: data.ticket_type, status: data.status,
+    asset_code: data.asset_code || '', customer: data.customer || '',
+    town: data.town || '', state: data.state || '', region: data.region || '',
+    model: data.model || '', contract: data.contract || '',
+    pm_id: null, pm_cycle_key: null,
+    call_date: data.call_date || null, call_type: data.call_type || '',
+    issue_description: data.issue_description || '',
+    parts: '', parts_req_date: null, parts_recv_date: null, parts_status: '',
+    resolution: '', sys_up_date: null, resolved_at: null, closed_at: null,
+    priority: data.priority || 'normal', sla_due_at: data.sla_due_at || null,
+    assigned_engineer_ids:   data.assigned_engineer_ids   || [],
+    assigned_engineer_names: data.assigned_engineer_names || [],
+    pm_completion_engineer_id: null, pm_completion_engineer_name: null,
+    visit_log: [], deleted_at: null,
+    created_at: data.created_at, updated_at: data.updated_at,
+  };
+}
+
 async function dbDeleteEngineer(id){
   suppressRealtimeReload(3000);
   const { error } = await _sb.from('engineers').delete().eq('id', id);
