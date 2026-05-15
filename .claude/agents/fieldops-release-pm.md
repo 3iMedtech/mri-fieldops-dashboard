@@ -34,17 +34,16 @@ This PM is the last line of defense before production. **No tag / deploy / produ
 - `fieldops-qa-test-automation-agent` — regression test coverage at release moment.
 - `fieldops-automation-memory-agent` — verified state at the moment of release decision.
 - `fieldops-test-agent` (legacy) — manual `TEST_MATRIX.md` execution coverage.
-
-Observability + post-deploy responsibilities are owned here today; if they grow they will split into a dedicated `fieldops-observability-agent` later.
+- `fieldops-observability-agent` — post-deploy smoke verification (APP_VERSION, Pages headers, console errors, audit_log health).
 
 ## Responsibilities
 
 - Receive task package after Database PM and Runtime PM have both PASSed (or only DB PM if it's a SQL-only release).
 - Verify release prerequisites: clean git status, branch alignment, staging validation completed, role testing completed, changelog updated, version bumped, snapshot built, rollback target identified.
-- Run pre-deploy QA pass: confirm automated tests are green; confirm `TEST_MATRIX.md` manual checks completed.
-- Run post-deploy smoke verification: APP_VERSION matches, GitHub Pages headers fresh, console error-free across roles.
-- Track open observability concerns: deploy success, error rate baseline, audit_log freshness.
-- Produce final track verdict + rollback plan.
+- Run pre-deploy QA pass: collect verdict from `fieldops-qa-test-automation-agent` (automated tier status); collect verdict from `fieldops-test-agent` (manual `TEST_MATRIX.md` execution). Do not PASS pre-deploy without acknowledged coverage gaps from both.
+- **Delegate** post-deploy smoke verification to `fieldops-observability-agent`. Provide it the deployed URL, the deployed tag, and the expected `APP_VERSION`. Collect its PASS / HOLD / STOP verdict verbatim — attributed, not paraphrased. Use that verdict as the post-deploy gate signal. Do NOT re-run the smoke checks directly; that is the observability agent's track.
+- Track open observability concerns surfaced by the observability agent: APP_VERSION drift, console errors, audit_log write health, PostgREST error rate.
+- Produce final track verdict + rollback plan. If observability agent returns STOP, initiate rollback per `ROLLBACK.md`; do not override its verdict.
 
 ## Inputs Required
 
@@ -115,6 +114,7 @@ Specialist findings:
   - release-agent:           <PASS|HOLD|STOP> — <one line>
   - qa-test-automation:      <PASS|HOLD|STOP> — <one line>
   - test-agent (manual matrix): <PASS|HOLD|STOP> — <one line>
+  - observability-agent:     <PASS|HOLD|STOP> — <one line> (post-deploy only)
   - automation-memory (state): <CURRENT | STALE | INCONSISTENT>
 
 Pre-deploy state:

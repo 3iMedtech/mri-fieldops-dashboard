@@ -1,6 +1,14 @@
 /**
  * FieldOps3i — Full post-deploy test matrix
- * Run: NODE_PATH=/Users/abhijit/.npm/_npx/e41f203b7505f1fb/node_modules node /tmp/fieldops_matrix.js [staging|production|both]
+ *
+ * Usage:
+ *   node scripts/test-matrix.js [staging|production|both] [expected-version]
+ *
+ * Examples:
+ *   node scripts/test-matrix.js staging             — run staging, report actual APP_VERSION
+ *   node scripts/test-matrix.js staging 1.4.3       — run staging, assert APP_VERSION === 1.4.3
+ *   node scripts/test-matrix.js both 1.4.3          — run both envs, assert version on each
+ *   NODE_PATH=/Users/abhijit/.npm/_npx/e41f203b7505f1fb/node_modules node scripts/test-matrix.js staging
  */
 const { chromium } = require('playwright');
 
@@ -33,7 +41,7 @@ async function waitForRole(page, max = 14000) {
   return '';
 }
 
-async function testRole(page, user, envUrl) {
+async function testRole(page, user, envUrl, expectedVersion) {
   const pass = [], fail = [], warn = [];
   const ok  = m => pass.push(m);
   const bad = m => fail.push(m);
@@ -66,8 +74,14 @@ async function testRole(page, user, envUrl) {
 
   // ── APP_VERSION ────────────────────────────────────────────
   const ver = await page.evaluate(() => typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?');
-  if (ver === '1.4.3') ok(`APP_VERSION = ${ver}`);
-  else bad(`APP_VERSION = ${ver}, expected 1.4.3`);
+  if (ver === '?') {
+    bad('APP_VERSION undefined — variable not found on page');
+  } else if (expectedVersion) {
+    if (ver === expectedVersion) ok(`APP_VERSION = ${ver}`);
+    else bad(`APP_VERSION = ${ver}, expected ${expectedVersion}`);
+  } else {
+    ok(`APP_VERSION = ${ver}`);
+  }
 
   // ── Toast system ───────────────────────────────────────────
   const hasToast = await page.evaluate(() => typeof showToast === 'function');
@@ -175,7 +189,6 @@ async function testRole(page, user, envUrl) {
   // ── PM Schedules tab (PD-006) ──────────────────────────────
   await page.evaluate(() => { if (typeof navigate === 'function') navigate('pm'); });
   await sleep(2500);
-  const pmHash = await page.evaluate(() => location.hash);
   if (user.role === 'Engineer') {
     // Engineers can access PM Schedules (read-only) — check they land on it
     const pmRows = await page.$$eval('table tbody tr', rs => rs.length);
@@ -234,7 +247,7 @@ async function testRole(page, user, envUrl) {
   return { pass, fail, warn, screenshot: ssPath };
 }
 
-async function testEnv(envKey) {
+async function testEnv(envKey, expectedVersion) {
   const env = ENVS[envKey];
   const users = USERS[envKey];
   const browser = await chromium.launch({ headless: true });
@@ -254,14 +267,25 @@ async function testEnv(envKey) {
     page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
     page.on('pageerror', err => consoleErrors.push(err.message));
 
-    const r = await testRole(page, user, env.url).catch(err => ({
+    const r = await testRole(page, user, env.url, expectedVersion).catch(err => ({
       pass: [], fail: [`FATAL: ${err.message}`], warn: []
     }));
 
-    // PD-007: filter noise, then fail on real JS errors
+    // PD-007: filter known-noise, then fail on real app-code JS errors.
+    // Headless runs have no extensions; this filter guards non-headless runs and future CI use.
     const filtered = consoleErrors.filter(e =>
-      !e.includes('favicon') && !e.includes('ERR_BLOCKED') &&
-      !e.includes('net::ERR') && !e.includes('Non-Error promise rejection')
+      !e.includes('favicon') &&
+      !e.includes('ERR_BLOCKED') &&
+      !e.includes('net::ERR') &&
+      !e.includes('Non-Error promise rejection') &&
+      !e.includes('chrome-extension://') &&
+      !e.includes('moz-extension://') &&
+      !e.includes('Autofill.enable') &&
+      !e.includes('Autofill.setAddresses') &&
+      !e.includes('ResizeObserver loop') &&
+      !e.includes('back/forward cache') &&
+      !e.includes('message channel closed') &&
+      !e.includes('Receiving end does not exist')
     );
     r.consoleErrors = filtered;
     if (filtered.length > 0) {
@@ -283,13 +307,17 @@ async function testEnv(envKey) {
 }
 
 (async () => {
-  const target = process.argv[2] || 'both';
-  const envKeys = target === 'both' ? ['staging', 'production'] : [target];
+  const args = process.argv.slice(2);
+  const target = args[0] || 'both';
+  const expectedVersion = args[1] || null;  // optional: assert APP_VERSION matches this
+  const envKeys = (target === 'both') ? ['staging', 'production'] : [target];
   const allResults = {};
 
-  // Run environments sequentially (parallel would need 2 browsers + more RAM)
+  if (expectedVersion) console.log(`  Asserting APP_VERSION === ${expectedVersion}`);
+  else console.log('  APP_VERSION: reporting actual value (pass --version to assert)');
+
   for (const key of envKeys) {
-    allResults[key] = await testEnv(key);
+    allResults[key] = await testEnv(key, expectedVersion);
   }
 
   // ── Summary ───────────────────────────────────────────────

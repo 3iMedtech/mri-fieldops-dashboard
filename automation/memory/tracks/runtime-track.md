@@ -220,3 +220,17 @@
 - **Staleness risk:** invariant.
 - **Action added:** Release PM hard stop checks for matching test (or a planned-test note for non-existent tiers).
 - **Linked files:** `.claude/agents/fieldops-qa-test-automation-agent.md`.
+
+### L-QA-003 — Tier 5 post-deploy smoke script: PD-015 SHIPPED at scripts/test-matrix.js
+
+- **Date:** 2026-05-15
+- **Commit / PR:** v1.4.2 agent definition + script fix
+- **Agent:** QA test automation
+- **Event:** `scripts/test-matrix.js` is committed and git-tracked (since commit `dacbbe9`). PD-015 is shipped. The script covers login, APP_VERSION, dashboard, contracts, role-gating, and console errors for Admin / Manager / Engineer across staging and production. Fixed in 2026-05-15: (1) APP_VERSION check was hardcoded to `'1.4.3'` — now accepts optional `[expected-version]` CLI arg; (2) console error filter expanded to cover extension-origin patterns for future non-headless use.
+- **Mistake or discovery:** The script had a hardcoded `if (ver === '1.4.3')` that would fail every release without a code change. This was silently making every post-v1.4.3 run report a version failure.
+- **Root cause:** Version string baked in at time of initial commit; no mechanism to pass expected version as argument.
+- **Prevention rule:** (1) Run: `node scripts/test-matrix.js <env> <expected-version>` — always pass the version on release gates; (2) Do NOT hardcode the version in the script; (3) `/tmp/fieldops_matrix.js` is a copy of the repo script; after any script update, sync with `cp scripts/test-matrix.js /tmp/fieldops_matrix.js`.
+- **Invocation (canonical):** `NODE_PATH=/Users/abhijit/.npm/_npx/e41f203b7505f1fb/node_modules node scripts/test-matrix.js staging 1.4.3`
+- **Applies to:** every post-deploy verification; every release gate. Category: release/deploy traps; recurring errors.
+- **Staleness risk:** invariant — script is now in repo. Update this entry if Playwright version or Node path changes.
+- **Linked files:** `scripts/test-matrix.js`, `.claude/agents/fieldops-test-agent.md`, `.claude/agents/fieldops-observability-agent.md`, `docs/PRODUCT_DESIGN_BACKLOG.md` (PD-015 closed).

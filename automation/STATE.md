@@ -14,6 +14,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 - **Snapshot timestamp:** 2026-05-13 (Phase 2 v1.4.1 fully shipped — release commit `905ac6f`, annotated tag `v1.4.1` at object `59a5da6`, production byte-equality verified)
 - **Snapshot author:** Claude (acting as Delivery Orchestrator + Release PM + Runtime PM + Database PM + QA + automation-memory)
+- **⚠️ PARTIAL STALE — 2026-05-15:** v1.4.2 work has begun. Staging branch has 5 new commits since `905ac6f` (see "Recent state changes" below). Production and Supabase state remain as last verified 2026-05-13. Staging Pages URL still serves `cb6fa19` runtime; staging branch tip is now `d378c5a`.
 
 ---
 
@@ -21,6 +22,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 - **Canonical branch:** `main`
 - **Latest commit on `main`:** `905ac6f` — `release: v1.4.1`
+- **Latest commit on `staging`:** `d378c5a` — `fix: excelToDateString outputs YYYY-MM-DD to prevent SheetJS format ambiguity`
 - **Latest tag:** `v1.4.1` (annotated, tag object `59a5da621c4b12bc2d7d51c64eac65904bb4898a`, pointing to commit `905ac6f`)
 - **Previous tag:** `v1.4.0.1`
 - **Production-deployed runtime payload:** `index.html` at `905ac6f` content (v1.4.1 version metadata over the `cb6fa19` runtime payload). Net delta vs the prior production deploy `cb6fa19` runtime: 7 bytes (629540 → 629533), all version-metadata literals; **no runtime logic change** (see `L-RTI-011`).
@@ -208,8 +210,15 @@ Aggregate console: zero FieldOps app-code errors. ~40 browser-extension async-li
 - **2026-05-13 03:41:17Z:** Annotated tag `v1.4.1` (object `59a5da6`) created on commit `905ac6f`, pushed to origin. No second Pages workflow fires on tag push (workflow listens on `push: branches: [main]`, not tag refs).
 - **2026-05-13:** Production byte-equality verified per `L-RPM-006`: `curl -s prod/index.html | shasum -a 256` returned `58118b41…`, exact match to `releases/v1.4.1/MANIFEST.txt`. Quadruple alignment (VERSION ↔ APP_VERSION constants ↔ CHANGELOG header ↔ MANIFEST sha256/size_bytes) confirmed.
 - **2026-05-13:** This commit — `docs: record v1.4.1 release acceptance` — refreshes STATE.md to reflect Phase 2 v1.4.1 fully shipped and proposes `L-DO-007`, `L-RPM-006`, `L-RTI-011` (full text in respective track files).
+- **2026-05-13 → 2026-05-15 (v1.4.2 scope — staging branch only):** 5 commits landed on `staging` branch; none yet on `main`:
+  - `a83be6f` — feat: Engineers tab + dashboard fixes
+  - `6e82c6e` — fix: dashboard engineers sorted by call count; remove eng bar chart; PM persistence
+  - `611c841` — fix: block XLSX uploads with out-of-range dates; correct seed data typos
+  - `49dcf29` — fix: parseFlexDate month-overflow bug producing wrong years
+  - `d378c5a` — fix: excelToDateString outputs YYYY-MM-DD to prevent SheetJS format ambiguity (staging tip)
+  - All 5 commits are routine XLSX date-parsing + Engineers tab fixes. No SQL, no RLS, no auth/role-gating changes. No production action taken. Agent definitions also updated (2026-05-15): observability agent wired into release-pm; delivery orchestrator routing updated to PM tier; bug-agent escalation threshold clarified; test/QA agents aware of `/tmp/fieldops_matrix.js`.
 
-**Phase 2 v1.4.1 is closed.** Future work on v1.4.x is v1.4.2 scope.
+**Phase 2 v1.4.1 is closed.** v1.4.2 scope is in progress on the `staging` branch.
 
 ---
 

@@ -23,13 +23,12 @@ Do NOT invoke for single-file UI tweaks, single-bug fixes, or routine documentat
 
 - Read current state via `fieldops-automation-memory-agent` at the start of every task.
 - Sequence apply order across SQL migrations, runtime patches, and deploys.
-- Assign specialist agents based on task scope:
-  - SQL changes → `fieldops-sql-rls-safety-agent`
-  - Runbook changes → `fieldops-migration-runbook-verifier`
-  - Data integrity → `fieldops-data-reconciliation-agent`
-  - App code changes → `fieldops-runtime-integration-agent`
-  - Verification → `fieldops-test-agent`
-  - Release readiness → `fieldops-release-agent`
+- Assign work through the PM tier for multi-specialist tasks:
+  - SQL / schema / data tasks → `fieldops-database-pm` (fans out to sql-rls-safety + runbook-verifier + data-reconciliation)
+  - App code / UI / auth / XLSX tasks → `fieldops-runtime-pm` (fans out to runtime-integration + qa-test-automation)
+  - Tag / deploy / version / post-deploy → `fieldops-release-pm` (fans out to release-agent + qa-test-automation + observability)
+  - Single-specialist tasks (no PM needed): direct to the specialist per `docs/fieldops3i_task_routing_protocol.md` §2.1
+  - State tracking: `fieldops-automation-memory-agent` at the start of every session
 - Enforce stop points. Refuse to advance without an explicit operator approval phrase at every gate.
 - Reconcile specialist findings into a single PASS/STOP per gate.
 - Refuse to overwrite past PASS/STOP findings — they are append-only audit records.
