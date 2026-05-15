@@ -1110,7 +1110,10 @@ button,input,select,textarea{font-family:inherit;}
 <!-- ██ OPEN TICKETS ██ -->
 <div class="page" id="page-open">
   <div class="panel">
-    <div class="panel-head"><h2 class="panel-title" id="open-panel-title"><i data-lucide="alert-circle"></i>Open Tickets</h2></div>
+    <div class="panel-head">
+      <h2 class="panel-title" id="open-panel-title"><i data-lucide="alert-circle"></i>Open Tickets</h2>
+      <button class="btn btn-ghost superadmin-only" style="font-size:11px;padding:5px 12px" onclick="migrateOpenCallsToWOs()" id="migrate-open-btn" title="Import legacy open calls into the Work Orders system"><i data-lucide="archive-restore"></i>Import to Work Orders</button>
+    </div>
     <div id="open-aging-strip" class="aging-strip" role="group" aria-label="Open ticket aging buckets"></div>
     <div style="overflow-x:auto">
       <table class="data-table">
@@ -3623,14 +3626,14 @@ function renderAll(){
   // tab shouldn't advertise a phantom "0". nb-amb uses the PENDING (unreviewed)
   // count, not AMBIGUITIES.length, so it stays consistent with the tab's own
   // rendering and doesn't show stale totals after every flag is resolved.
-  setNavBadgeCount('nb-open', OPEN_TICKETS.length);
+  setNavBadgeCount('nb-open', _unmigratedOpen().length);
   _setAmbBadge(pendingAmbCount());
   setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
   _refreshDQNavBadge();
   if(typeof _refreshContractsNavBadge === 'function') _refreshContractsNavBadge();
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
   try {
-    const openCount = OPEN_TICKETS.length;
+    const openCount = _unmigratedOpen().length;
     document.title = openCount > 0
       ? `● ${openCount} open · FieldOps`
       : 'FieldOps · Medical Imaging';
@@ -4875,10 +4878,96 @@ function renderKPIGrid(){
   grid.style.gridTemplateColumns = 'repeat(3,1fr)';
 }
 
+function _migratedRawIds(){
+  return new Set(APP_TICKETS.map(t => t.legacy_ref).filter(Boolean));
+}
+function _unmigratedOpen(){
+  const migrated = _migratedRawIds();
+  return OPEN_TICKETS.filter(t => !migrated.has(t.id));
+}
+
+function _normalizeCallType(raw){
+  const s = (raw||'').trim();
+  if(s === 'Breakdown') return 'Incident';
+  if(s === 'PM' || s === '') return null;
+  if(['Incident','Installation','Other'].includes(s)) return s;
+  return null;
+}
+
+async function migrateOpenCallsToWOs(){
+  if(_userRole !== 'admin'){
+    showToast('Only admins can run the migration.', 'error');
+    return;
+  }
+  const candidates = _unmigratedOpen();
+  if(!candidates.length){
+    showToast('No unmigrated open calls — nothing to import.', 'info');
+    return;
+  }
+  if(!confirm(`Import ${candidates.length} open call${candidates.length===1?'':'s'} into Work Orders?\n\nThis is safe to re-run — already-migrated tickets are skipped.`)) return;
+
+  const btn = document.getElementById('migrate-open-btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Importing…'; }
+
+  let imported = 0, failed = 0;
+  for(const t of candidates){
+    const names   = splitEngineers(t.engineer);
+    const matched = names
+      .map(n => ENGINEERS.find(e => canonEngName(e.name) === canonEngName(n)))
+      .filter(Boolean);
+    const engIds   = matched.map(e => e.id);
+    const engNames = matched.map(e => e.name);
+    const region   = matched[0]?.region || t.region || '';
+    const callDateRaw = parseFlexDate(t.call_date, `${t.id}:call_date`);
+    const callDate = callDateRaw ? callDateRaw.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+    const callType = _normalizeCallType(t.call_type);
+    const status   = t.attended_date ? 'in_progress' : 'new';
+
+    const ticket = await dbSaveAppTicket({
+      ticket_type:             'service',
+      wo_type:                 'primary',
+      legacy_ref:              t.id,
+      status,
+      customer:                t.customer || '',
+      asset_code:              t.asset_code || null,
+      town:                    t.town || null,
+      state:                   t.state || null,
+      region,
+      model:                   t.model || null,
+      contract:                t.contract || null,
+      call_date:               callDate,
+      call_type:               callType,
+      sys_status:              null,
+      issue_description:       t.issue || '',
+      assigned_engineer_ids:   engIds,
+      assigned_engineer_names: engNames,
+    });
+    if(ticket){
+      APP_TICKETS.push(ticket);
+      imported++;
+    } else {
+      failed++;
+    }
+  }
+
+  ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+  if(btn){ btn.disabled = false; btn.textContent = 'Import to Work Orders'; }
+  renderDashOpen();
+  renderOpen();
+  setNavBadgeCount('nb-open', _unmigratedOpen().length);
+
+  if(failed){
+    showToast(`Imported ${imported}, failed ${failed}. Check console for details.`, 'warn');
+  } else {
+    showToast(`${imported} open call${imported===1?'':'s'} imported as Work Orders.`, 'success');
+  }
+}
+
 function renderDashOpen(){
   // v1.2.0 2e — celebrate the rare zero-open-tickets state with a green
   // empty-state banner instead of a blank table.
-  if(OPEN_TICKETS.length === 0){
+  const visibleOpen = _unmigratedOpen();
+  if(visibleOpen.length === 0){
     document.getElementById('dash-open-body').innerHTML = _emptyStateHtml({
       icon:'check-circle-2', headline:'All clear — no open tickets', variant:'success',
       colspan:7, secondary:'Every ticket in scope is closed. Nothing pending action right now.',
@@ -4886,7 +4975,7 @@ function renderDashOpen(){
     if(window.refreshIcons) window.refreshIcons();
     return;
   }
-  document.getElementById('dash-open-body').innerHTML=OPEN_TICKETS.map(t=>`
+  document.getElementById('dash-open-body').innerHTML=visibleOpen.map(t=>`
     <tr class="clickable" onclick="openDetail('${t.id}')">
       <td><span class="ticket-id">${t.id}</span></td>
       <td style="font-weight:500;max-width:150px">${truncate(t.customer,22)}</td>
@@ -6270,8 +6359,9 @@ function filterHistoryModality(el,m){
 // RENDER OPEN TICKETS
 // ══════════════════════════════════════════
 function renderOpen(){
-  const openCount = OPEN_TICKETS.length;
-  const siteCount = new Set(OPEN_TICKETS.map(t=>t.customer)).size;
+  const visOpen = _unmigratedOpen();
+  const openCount = visOpen.length;
+  const siteCount = new Set(visOpen.map(t=>t.customer)).size;
   const title = document.getElementById('open-panel-title');
   if(title){
     const tail = openCount > 0
@@ -6285,7 +6375,7 @@ function renderOpen(){
     if(openCount === 0){
       agingStrip.innerHTML = '';
     } else {
-      const b = _computeAgingBuckets(OPEN_TICKETS);
+      const b = _computeAgingBuckets(visOpen);
       agingStrip.innerHTML = `
         <div class="aging-tile good"  role="status" aria-label="${b['0-7']} open tickets aged 0 to 7 days"><div class="aging-tile-label">0–7d</div><div class="aging-tile-value">${b['0-7']}</div></div>
         <div class="aging-tile info"  role="status" aria-label="${b['8-30']} open tickets aged 8 to 30 days"><div class="aging-tile-label">8–30d</div><div class="aging-tile-value">${b['8-30']}</div></div>
@@ -6294,7 +6384,7 @@ function renderOpen(){
         <div class="aging-tile muted" role="status" aria-label="${b.undated} open tickets with no parseable call date"><div class="aging-tile-label">Undated</div><div class="aging-tile-value">${b.undated}</div></div>`;
     }
   }
-  document.getElementById('open-body').innerHTML=OPEN_TICKETS.map(t=>`
+  document.getElementById('open-body').innerHTML=visOpen.map(t=>`
     <tr class="clickable" onclick="openDetail('${t.id}')">
       <td><span class="ticket-id">${t.id}</span></td>
       <td><span class="month-pill">${esc(t.month)}</span></td>
@@ -9385,14 +9475,14 @@ async function doFirstPaint(){
   // See setNavBadgeCount comment in the other syncNavBadges copy: hide zero-count
   // action badges, and use PENDING ambiguity count (not total) so the badge stays
   // in sync with renderAmbiguities' own count.
-  setNavBadgeCount('nb-open', OPEN_TICKETS.length);
+  setNavBadgeCount('nb-open', _unmigratedOpen().length);
   _setAmbBadge(pendingAmbCount());
   setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
   _refreshDQNavBadge();
   if(typeof _refreshContractsNavBadge === 'function') _refreshContractsNavBadge();
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
   try {
-    const openCount = OPEN_TICKETS.length;
+    const openCount = _unmigratedOpen().length;
     document.title = openCount > 0
       ? `● ${openCount} open · FieldOps`
       : 'FieldOps · Medical Imaging';
@@ -9772,6 +9862,7 @@ async function loadAllFromDB(opts = {}){
     sys_status: r.sys_status || null,
     wo_type:    r.wo_type    || 'primary',
     parent_id:  r.parent_id  || null,
+    legacy_ref: r.legacy_ref || null,
     issue_description: r.issue_description || '',
     parts: r.parts || '', parts_req_date: r.parts_req_date || null,
     parts_recv_date: r.parts_recv_date || null, parts_status: r.parts_status || '',
@@ -10279,6 +10370,7 @@ async function dbUpdateAppTicket(id, fields){
     sys_status: data.sys_status || null,
     wo_type:    data.wo_type    || 'primary',
     parent_id:  data.parent_id  || null,
+    legacy_ref: data.legacy_ref || null,
     issue_description: data.issue_description || '',
     parts: data.parts || '', parts_req_date: data.parts_req_date || null,
     parts_recv_date: data.parts_recv_date || null, parts_status: data.parts_status || '',
@@ -10376,6 +10468,7 @@ async function ensurePMTickets(){
       sys_status: data.sys_status || null,
       wo_type:    data.wo_type    || 'primary',
       parent_id:  data.parent_id  || null,
+      legacy_ref: data.legacy_ref || null,
       issue_description: data.issue_description || '',
       parts: data.parts || '', parts_req_date: data.parts_req_date || null,
       parts_recv_date: data.parts_recv_date || null, parts_status: data.parts_status || '',
@@ -10703,6 +10796,7 @@ async function dbSaveAppTicket(fields){
     sys_status: data.sys_status || null,
     wo_type:    data.wo_type    || 'primary',
     parent_id:  data.parent_id  || null,
+    legacy_ref: data.legacy_ref || null,
     issue_description: data.issue_description || '',
     parts: '', parts_req_date: null, parts_recv_date: null, parts_status: '',
     resolution: '', sys_up_date: null, resolved_at: null, closed_at: null,
