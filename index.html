@@ -9780,6 +9780,8 @@ async function loadAllFromDB(opts = {}){
     window._lastLoadFingerprint = _loadFingerprint;
     console.log(`Loaded: ${RAW_TICKETS.length} tickets, ${CONFIG_ASSETS.length} assets, ${ENGINEERS.length} engineers, ${PM_SCHEDULE.length} PMs, months: [${MONTHS.join(', ')}]`);
   }
+
+  if(canManagePM()) await ensurePMTickets();
 }
 
 // ── Write helpers ─────────────────────────────────────────────────────
@@ -10050,6 +10052,10 @@ async function _atdTransition(newStatus){
   if(idx !== -1) APP_TICKETS[idx] = updated;
   ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
 
+  if(updated.ticket_type === 'pm' && newStatus === 'closed'){
+    await _createPMCompletionFromAppTicket(updated);
+  }
+
   // Refresh modal in place
   _openTicketDetail(_atdCurrentId);
   // Refresh the list page if visible
@@ -10160,6 +10166,142 @@ function _autoCloseResolvedTickets(){
     if(idx !== -1) APP_TICKETS[idx] = updated;
     ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
   });
+}
+
+// ── Phase D: PM auto-creation ────────────────────────────────────────────────
+
+// Called at end of loadAllFromDB() (admin/manager only).
+// Creates a 'due' app_ticket for every PM_SCHEDULE row where nextPMS <= today
+// and no non-closed/cancelled app ticket already exists for that pm_cycle_key.
+async function ensurePMTickets(){
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const duePMs = PM_SCHEDULE.filter(pm => {
+    if(!pm.nextPMS) return false;
+    if(pm.status === 'not-covered' || pm.status === 'installation-pending') return false;
+    const d = parseFlexDate(pm.nextPMS);
+    return d && d <= today;
+  });
+  if(!duePMs.length) return;
+
+  // Build set of pm_cycle_keys already covered by an open app ticket
+  const activePMKeys = new Set(
+    APP_TICKETS
+      .filter(t => t.ticket_type === 'pm' && t.pm_cycle_key &&
+                   t.status !== 'closed' && t.status !== 'cancelled')
+      .map(t => t.pm_cycle_key)
+  );
+
+  for(const pm of duePMs){
+    const d = parseFlexDate(pm.nextPMS);
+    const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const cycleKey = pm.id + '::' + ym;
+    if(activePMKeys.has(cycleKey)) continue;
+
+    const engs     = getEngineersForRegion(pm.region).slice(0, 2);
+    const engIds   = engs.map(e => e.id);
+    const engNames = engs.map(e => e.name);
+
+    const { data, error } = await _sb.from('app_tickets').insert({
+      ticket_type:             'pm',
+      status:                  'due',
+      pm_id:                   pm.id,
+      pm_cycle_key:            cycleKey,
+      customer:                pm.customer,
+      town:                    pm.town,
+      region:                  pm.region,
+      model:                   pm.model,
+      contract:                pm.contract,
+      assigned_engineer_ids:   engIds,
+      assigned_engineer_names: engNames,
+      created_by:              _currentUser?.id || null,
+    }).select().single();
+
+    if(error){
+      if(error.code === '23505') continue; // race: already created
+      console.error('[ensurePMTickets] insert failed:', pm.id, error);
+      continue;
+    }
+
+    const newTicket = {
+      id: data.id, ticket_type: data.ticket_type, status: data.status,
+      asset_code: data.asset_code || '', customer: data.customer || '',
+      town: data.town || '', state: data.state || '', region: data.region || '',
+      model: data.model || '', contract: data.contract || '',
+      pm_id: data.pm_id || null, pm_cycle_key: data.pm_cycle_key || null,
+      call_date: data.call_date || null, call_type: data.call_type || '',
+      issue_description: data.issue_description || '',
+      parts: data.parts || '', parts_req_date: data.parts_req_date || null,
+      parts_recv_date: data.parts_recv_date || null, parts_status: data.parts_status || '',
+      resolution: data.resolution || '', sys_up_date: data.sys_up_date || null,
+      resolved_at: data.resolved_at || null, closed_at: data.closed_at || null,
+      priority: data.priority || 'normal', sla_due_at: data.sla_due_at || null,
+      assigned_engineer_ids:   data.assigned_engineer_ids   || [],
+      assigned_engineer_names: data.assigned_engineer_names || [],
+      pm_completion_engineer_id:   data.pm_completion_engineer_id   || null,
+      pm_completion_engineer_name: data.pm_completion_engineer_name || null,
+      visit_log: data.visit_log || [], deleted_at: data.deleted_at || null,
+      created_at: data.created_at, updated_at: data.updated_at,
+    };
+    APP_TICKETS.push(newTicket);
+    activePMKeys.add(cycleKey); // prevent double-create within same loop pass
+    console.log(`[ensurePMTickets] created ${data.id} for ${pm.id} (${cycleKey})`);
+  }
+
+  ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+}
+
+// Called when a PM app_ticket transitions to 'closed'.
+// Inserts a pm_completions row with source='app-ticket'.
+// Q1:C: credit goes to the closer (last visit_log entry by ts).
+async function _createPMCompletionFromAppTicket(ticket){
+  if(!ticket.pm_id) return;
+
+  // Closer = last visit_log entry sorted by ts
+  let closerEntry = null;
+  if(ticket.visit_log && ticket.visit_log.length){
+    closerEntry = ticket.visit_log.slice().sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
+  }
+  const closerId   = closerEntry?.eng_id   || ticket.pm_completion_engineer_id || (ticket.assigned_engineer_ids?.[0]   || null);
+  const closerName = closerEntry?.eng_name || ticket.pm_completion_engineer_name || (ticket.assigned_engineer_names?.[0] || null);
+  if(!closerId) return;
+
+  // All unique engineer ids from visit_log + assigned list
+  const allEngIds = [...new Set([
+    ...(ticket.visit_log || []).map(e => e.eng_id),
+    ...(ticket.assigned_engineer_ids || []),
+  ].filter(Boolean))];
+
+  const engNamesStr = [...new Set([
+    ...(ticket.visit_log || []).map(e => e.eng_name),
+    ...(ticket.assigned_engineer_names || []),
+  ].filter(Boolean))].join(' & ') || closerName;
+
+  const now = new Date();
+  const completionDate = now.getFullYear() + '-'
+    + String(now.getMonth() + 1).padStart(2, '0') + '-'
+    + String(now.getDate()).padStart(2, '0');
+
+  const { error } = await _sb.from('pm_completions').insert({
+    pm_id:           ticket.pm_id,
+    completion_date: completionDate,
+    engineer_id:     closerId,
+    engineer_ids:    allEngIds,
+    engineer_name:   engNamesStr,
+    remarks:         ticket.resolution || null,
+    created_by:      _currentUser?.id || null,
+    app_ticket_id:   ticket.id,
+    source:          'app-ticket',
+  });
+
+  if(error){
+    console.error('[PM completion] insert failed:', ticket.id, error);
+    showToast('PM completion record failed: ' + (error.message || 'unknown'), 'error');
+    return;
+  }
+  invalidatePMCompletionsCache();
+  console.log(`[PM completion] created for ${ticket.pm_id} via app ticket ${ticket.id}`);
 }
 
 function renderMyWork(){
