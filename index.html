@@ -1901,6 +1901,49 @@ button,input,select,textarea{font-family:inherit;}
         <div id="atd-log-btn-wrap"></div>
       </div>
 
+      <!-- §5 Sub Work Orders -->
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)" id="atd-sub-wo-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1.5px">SUB WORK ORDERS</div>
+          <button class="btn btn-ghost" id="atd-create-sub-btn" style="font-size:11px;display:none" onclick="openSubWOModal()"><i data-lucide="plus"></i>Create Sub Work Order</button>
+        </div>
+        <div id="atd-sub-wo-list" style="display:grid;gap:6px"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── SUB WORK ORDER MODAL ── -->
+<div class="modal-overlay" id="sub-wo-modal" role="dialog" aria-modal="true" aria-labelledby="swo-title" aria-hidden="true">
+  <div class="modal" style="max-width:480px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--brand);margin-bottom:3px">NEW SUB WORK ORDER</div>
+        <div id="swo-title" style="font-family:var(--display);font-weight:700;font-size:16px">Create Sub Work Order</div>
+        <div id="swo-parent-label" style="font-size:11px;color:var(--text-dim);margin-top:3px"></div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('sub-wo-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;gap:13px">
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ASSIGNED TO *</label>
+          <select id="swo-assigned-to" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px"></select>
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">NATURE OF WORK *</label>
+          <textarea id="swo-nature" rows="3" placeholder="Describe the work this engineer will perform…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;outline:none"></textarea>
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ESTIMATED VISIT DATE <span style="color:var(--text-faint)">(optional)</span></label>
+          <input class="search-box" id="swo-visit-date" type="date" style="width:100%;box-sizing:border-box">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" onclick="closeModal('sub-wo-modal')">Cancel</button>
+      <button class="btn btn-primary" id="swo-submit" onclick="submitSubWO()">Create Sub Work Order</button>
     </div>
   </div>
 </div>
@@ -9726,6 +9769,8 @@ async function loadAllFromDB(opts = {}){
     pm_id: r.pm_id || null, pm_cycle_key: r.pm_cycle_key || null,
     call_date: r.call_date || null, call_type: r.call_type || '',
     sys_status: r.sys_status || null,
+    wo_type:    r.wo_type    || 'primary',
+    parent_id:  r.parent_id  || null,
     issue_description: r.issue_description || '',
     parts: r.parts || '', parts_req_date: r.parts_req_date || null,
     parts_recv_date: r.parts_recv_date || null, parts_status: r.parts_status || '',
@@ -9835,6 +9880,7 @@ function renderAppTickets(){
     if(statusVal === 'closed') return _AT_CLOSED_STATUSES.includes(t.status);
     return true;
   });
+  rows = rows.filter(t => t.wo_type !== 'sub');
   if(regionVal !== 'all') rows = rows.filter(t => t.region === regionVal);
   if(engSearch) rows = rows.filter(t =>
     t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch))
@@ -9843,12 +9889,12 @@ function renderAppTickets(){
   // Summary line
   const summaryEl = document.getElementById('at-summary');
   if(summaryEl){
-    const openCount = APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status)).length;
-    summaryEl.textContent = `${rows.length} ticket${rows.length===1?'':'s'} shown · ${openCount} open total`;
+    const openCount = APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status) && t.wo_type !== 'sub').length;
+    summaryEl.textContent = `${rows.length} work order${rows.length===1?'':'s'} shown · ${openCount} open total`;
   }
 
   // Nav badge
-  const openCount = APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status)).length;
+  const openCount = APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status) && t.wo_type !== 'sub').length;
   setNavBadgeCount('nb-app-tickets', openCount);
 
   const tbody = document.getElementById('at-tbody');
@@ -9905,6 +9951,7 @@ function _openTicketDetail(id){
   document.getElementById('atd-badges').innerHTML  =
     _atStatusBadge(t.status) + ' ' +
     (t.sys_status ? sysStatusBadge(t.sys_status) + ' ' : '') +
+    (t.wo_type === 'sub' ? '<span style="font-size:10px;font-family:var(--mono);color:var(--text-dim)">SUB</span> ' : '') +
     (t.ticket_type === 'pm' ? '<span style="font-size:10px;font-family:var(--mono);color:var(--accent)">PM</span>' : '');
 
   // §1 Status transitions
@@ -9926,7 +9973,8 @@ function _openTicketDetail(id){
     <div class="detail-field"><label>Call Type</label><span>${esc(t.call_type||'—')}</span></div>
     <div class="detail-field"><label>System Status</label><span>${t.sys_status ? sysStatusBadge(t.sys_status) : '<span style="color:var(--text-faint)">—</span>'}</span></div>
     <div class="detail-field"><label>SLA Due</label><span style="font-family:var(--mono);${t.sla_due_at&&new Date(t.sla_due_at)<new Date()&&_AT_OPEN_STATUSES.includes(t.status)?'color:#ef4444':''}">${slaStr}</span></div>
-    <div class="detail-field"><label>Assigned Engineers</label><span>${t.assigned_engineer_names.length?t.assigned_engineer_names.map(n=>esc(n)).join(', '):'<span style="color:var(--text-faint)">Unassigned</span>'}</span></div>`;
+    <div class="detail-field"><label>Assigned Engineers</label><span>${t.assigned_engineer_names.length?t.assigned_engineer_names.map(n=>esc(n)).join(', '):'<span style="color:var(--text-faint)">Unassigned</span>'}</span></div>
+    ${t.wo_type === 'sub' && t.parent_id ? `<div class="detail-field"><label>Parent WO</label><span style="font-family:var(--mono);cursor:pointer;color:var(--brand)" onclick="closeModal('at-detail-modal');setTimeout(()=>_openTicketDetail('${esc(t.parent_id)}'),80)">${esc(t.parent_id)}</span></div>` : ''}`;
   document.getElementById('atd-issue-box').textContent = t.issue_description || '—';
 
   // §3 Work fields — populate, gate editability
@@ -9952,6 +10000,9 @@ function _openTicketDetail(id){
   }
   document.getElementById('atd-log-form').style.display = 'none';
 
+  // §5 Sub Work Orders
+  _atdRenderSubWOs(t);
+
   openModal('at-detail-modal');
   if(window.lucide) try{ lucide.createIcons(); }catch(_){}
 }
@@ -9962,6 +10013,97 @@ function _isCurrentEngineerAssigned(t){
   const eng = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
   return eng ? (t.assigned_engineer_ids || []).includes(eng.id) : false;
 }
+
+// ── Sub Work Order UI ─────────────────────────────────────────────────────────
+let _swoParentId = null;
+
+function _atdRenderSubWOs(t){
+  const section = document.getElementById('atd-sub-wo-section');
+  if(!section) return;
+  if(t.ticket_type !== 'service' || t.wo_type !== 'primary'){
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  const subWOs = APP_TICKETS.filter(s => s.parent_id === t.id && s.wo_type === 'sub');
+  const listEl = document.getElementById('atd-sub-wo-list');
+  if(listEl){
+    if(!subWOs.length){
+      listEl.innerHTML = '<div style="color:var(--text-faint);font-size:12px">No sub work orders yet.</div>';
+    } else {
+      listEl.innerHTML = subWOs.map(s =>
+        `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface2);border-radius:6px;font-size:12px;cursor:pointer" onclick="_openTicketDetail('${esc(s.id)}')">` +
+        `<span style="font-family:var(--mono);color:var(--brand);flex-shrink:0">${esc(s.id)}</span>` +
+        `${_atStatusBadge(s.status)}` +
+        `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.issue_description||'—')}</span>` +
+        `<span style="color:var(--text-dim);flex-shrink:0">${s.assigned_engineer_names.length ? esc(s.assigned_engineer_names[0]) : '—'}</span>` +
+        `</div>`
+      ).join('');
+    }
+  }
+  const createBtn = document.getElementById('atd-create-sub-btn');
+  if(createBtn) createBtn.style.display = _AT_OPEN_STATUSES.includes(t.status) ? '' : 'none';
+}
+
+function openSubWOModal(){
+  const parent = APP_TICKETS.find(t => t.id === _atdCurrentId);
+  if(!parent) return;
+  _swoParentId = parent.id;
+  const labelEl = document.getElementById('swo-parent-label');
+  if(labelEl) labelEl.textContent = `Parent: ${parent.id} — ${parent.customer}`;
+  const assignedEl = document.getElementById('swo-assigned-to');
+  if(assignedEl){
+    assignedEl.innerHTML = '<option value="">— Select engineer —</option>' +
+      activeRoster().map(e => `<option value="${esc(e.id)}" data-name="${esc(e.name)}">${esc(e.name)} (${esc(e.region)})</option>`).join('');
+    assignedEl.value = '';
+  }
+  const natureEl = document.getElementById('swo-nature');
+  if(natureEl) natureEl.value = '';
+  const dateEl = document.getElementById('swo-visit-date');
+  if(dateEl) dateEl.value = '';
+  openModal('sub-wo-modal');
+  setTimeout(() => document.getElementById('swo-assigned-to')?.focus(), 80);
+}
+
+async function submitSubWO(){
+  const parent = APP_TICKETS.find(t => t.id === _swoParentId);
+  if(!parent){ showToast('Parent work order not found.', 'error'); return; }
+  const assignedSel = document.getElementById('swo-assigned-to');
+  const assignedId  = assignedSel?.value || '';
+  const nature      = document.getElementById('swo-nature')?.value.trim() || '';
+  const visitDate   = document.getElementById('swo-visit-date')?.value || null;
+  if(!assignedId){ showToast('Assigned engineer is required.', 'error'); return; }
+  if(!nature)    { showToast('Nature of work is required.', 'error'); return; }
+  const eng = ENGINEERS.find(e => e.id === assignedId);
+  const btn = document.getElementById('swo-submit');
+  if(btn){ btn.disabled = true; btn.textContent = 'Creating…'; }
+  const ticket = await dbSaveAppTicket({
+    ticket_type:             'service',
+    wo_type:                 'sub',
+    parent_id:               parent.id,
+    status:                  'new',
+    customer:                parent.customer,
+    asset_code:              parent.asset_code || null,
+    region:                  parent.region,
+    town:                    parent.town || null,
+    model:                   parent.model || null,
+    contract:                parent.contract || null,
+    call_date:               visitDate || new Date().toISOString().slice(0,10),
+    issue_description:       nature,
+    assigned_engineer_ids:   eng ? [eng.id]   : [],
+    assigned_engineer_names: eng ? [eng.name] : [],
+  });
+  if(btn){ btn.disabled = false; btn.textContent = 'Create Sub Work Order'; }
+  if(ticket){
+    APP_TICKETS.push(ticket);
+    ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+    closeModal('sub-wo-modal');
+    showToast(`Sub Work Order ${ticket.id} created.`, 'success');
+    const parentTicket = APP_TICKETS.find(t => t.id === _atdCurrentId);
+    if(parentTicket) _atdRenderSubWOs(parentTicket);
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function _atdRenderTransitions(t){
   const wrap = document.getElementById('atd-transitions');
@@ -10129,6 +10271,8 @@ async function dbUpdateAppTicket(id, fields){
     pm_id: data.pm_id || null, pm_cycle_key: data.pm_cycle_key || null,
     call_date: data.call_date || null, call_type: data.call_type || '',
     sys_status: data.sys_status || null,
+    wo_type:    data.wo_type    || 'primary',
+    parent_id:  data.parent_id  || null,
     issue_description: data.issue_description || '',
     parts: data.parts || '', parts_req_date: data.parts_req_date || null,
     parts_recv_date: data.parts_recv_date || null, parts_status: data.parts_status || '',
@@ -10224,6 +10368,8 @@ async function ensurePMTickets(){
       pm_id: data.pm_id || null, pm_cycle_key: data.pm_cycle_key || null,
       call_date: data.call_date || null, call_type: data.call_type || '',
       sys_status: data.sys_status || null,
+      wo_type:    data.wo_type    || 'primary',
+      parent_id:  data.parent_id  || null,
       issue_description: data.issue_description || '',
       parts: data.parts || '', parts_req_date: data.parts_req_date || null,
       parts_recv_date: data.parts_recv_date || null, parts_status: data.parts_status || '',
@@ -10314,6 +10460,7 @@ function renderMyWork(){
   const engSearch = (searchEl?.value || '').trim().toLowerCase();
 
   let rows = APP_TICKETS.filter(t => {
+    if(t.wo_type === 'sub') return false;
     if(statusVal === 'open') return _AT_OPEN_STATUSES.includes(t.status);
     return true;
   });
@@ -10322,6 +10469,7 @@ function renderMyWork(){
   );
 
   const myCount = APP_TICKETS.filter(t =>
+    t.wo_type !== 'sub' &&
     _AT_OPEN_STATUSES.includes(t.status) &&
     (engSearch ? t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch)) : true)
   ).length;
@@ -10530,6 +10678,8 @@ async function dbSaveAppTicket(fields){
     pm_id: null, pm_cycle_key: null,
     call_date: data.call_date || null, call_type: data.call_type || '',
     sys_status: data.sys_status || null,
+    wo_type:    data.wo_type    || 'primary',
+    parent_id:  data.parent_id  || null,
     issue_description: data.issue_description || '',
     parts: '', parts_req_date: null, parts_recv_date: null, parts_status: '',
     resolution: '', sys_up_date: null, resolved_at: null, closed_at: null,
