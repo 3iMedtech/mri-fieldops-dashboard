@@ -917,6 +917,7 @@ button,input,select,textarea{font-family:inherit;}
     <div class="nav-item" data-page="tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket"></i></span> Service History <span class="nav-badge" id="nb-open" style="display:none" title="Open tickets"></span></div>
     <div class="nav-item" data-page="pm" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
     <div class="nav-item" data-page="app-tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket-check"></i></span> Work Orders <span class="nav-badge" id="nb-app-tickets" style="display:none" title="Open work orders"></span></div>
+    <div class="nav-item" data-page="my-work" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="wrench"></i></span> My Work <span class="nav-badge green" id="nb-my-work" style="display:none" title="My assigned tickets"></span></div>
     <div class="nav-section" role="presentation">Assets &amp; team</div>
     <div class="nav-item" data-page="assets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="building-2"></i></span> Install Base</div>
     <div class="nav-item" data-page="engineers" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="users-round"></i></span> Engineers <span class="nav-badge green" id="nb-engineers" style="display:none"></span></div>
@@ -1387,6 +1388,40 @@ button,input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+<!-- ██ MY WORK (engineer queue) ██ -->
+<div class="page" id="page-my-work">
+  <div class="panel">
+    <div class="panel-head" style="flex-wrap:wrap;gap:8px">
+      <h2 class="panel-title"><i data-lucide="wrench"></i><span id="mw-heading">My Assigned Work</span></h2>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <select id="mw-status" aria-label="Status filter" onchange="renderMyWork()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+          <option value="open">Open</option>
+          <option value="all">All</option>
+        </select>
+        <input class="search-box" id="mw-eng-search" type="search" placeholder="Engineer name…" aria-label="Filter by engineer" oninput="renderMyWork()" style="width:150px;padding:5px 10px">
+      </div>
+    </div>
+    <div style="padding:6px 18px 8px">
+      <span id="mw-summary" style="font-size:11px;color:var(--text-dim)"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr>
+          <th style="font-size:10px">TICKET ID</th>
+          <th style="font-size:10px">CUSTOMER</th>
+          <th style="font-size:10px">ASSET</th>
+          <th style="font-size:10px">REGION</th>
+          <th style="font-size:10px">CALL DATE</th>
+          <th style="font-size:10px">STATUS</th>
+          <th style="font-size:10px">SLA DUE</th>
+          <th style="font-size:10px">ENGINEERS</th>
+        </tr></thead>
+        <tbody id="mw-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- ██ WORK ORDERS (app-tickets) ██ -->
 <div class="page" id="page-app-tickets">
   <div class="panel">
@@ -1784,6 +1819,88 @@ button,input,select,textarea{font-family:inherit;}
           <button class="btn btn-primary" type="button" id="rc-submit-btn" onclick="_submitRenewContract()" style="font-size:12px;padding:8px 18px">Renew →</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── WORK ORDER DETAIL / EDIT MODAL ── -->
+<div class="modal-overlay" id="at-detail-modal" role="dialog" aria-modal="true" aria-labelledby="atd-title" aria-hidden="true">
+  <div class="modal" style="max-width:680px" tabindex="-1">
+    <div class="modal-head">
+      <div style="min-width:0">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--brand);margin-bottom:3px" id="atd-id">—</div>
+        <div style="font-family:var(--display);font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="atd-title">—</div>
+        <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap" id="atd-badges"></div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('at-detail-modal')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body" style="padding-top:0">
+
+      <!-- §1 Status actions -->
+      <div id="atd-transitions" style="padding:12px 0 14px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1px">MOVE TO:</span>
+      </div>
+
+      <!-- §2 Info grid -->
+      <div style="margin-top:16px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1.5px;margin-bottom:8px">DETAILS</div>
+        <div class="detail-grid" id="atd-info-grid"></div>
+        <div style="margin-top:8px">
+          <div class="detail-field full">
+            <label>Issue / Complaint</label>
+            <div class="resolution-box" id="atd-issue-box"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- §3 Work fields (editable by assigned engineer or admin/mgr) -->
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)" id="atd-work-section">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1.5px;margin-bottom:12px">WORK RECORD</div>
+        <div style="display:grid;gap:11px">
+          <div>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">RESOLUTION NOTES</label>
+            <textarea id="atd-resolution" rows="3" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;outline:none" placeholder="Steps taken, findings, outcome…"></textarea>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <div>
+              <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">SYSTEM UP DATE</label>
+              <input class="search-box" id="atd-sys-up-date" type="date" style="width:100%;box-sizing:border-box">
+            </div>
+            <div>
+              <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">PARTS</label>
+              <input class="search-box" id="atd-parts" type="text" placeholder="Part names / NA" style="width:100%;box-sizing:border-box">
+            </div>
+            <div>
+              <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">PARTS STATUS</label>
+              <select id="atd-parts-status" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px">
+                <option value="">—</option>
+                <option value="Not Required">Not Required</option>
+                <option value="Parts Awaited">Parts Awaited</option>
+                <option value="Parts Received">Parts Received</option>
+                <option value="Parts Ordered">Parts Ordered</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-primary" id="atd-save-btn" style="font-size:12px" onclick="_atdSaveWork()">Save Changes</button>
+        </div>
+      </div>
+
+      <!-- §4 Visit log -->
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1.5px;margin-bottom:10px">VISIT LOG</div>
+        <div id="atd-visit-list" style="display:grid;gap:6px;margin-bottom:12px"></div>
+        <div id="atd-log-form" style="display:none">
+          <textarea id="atd-log-note" rows="2" placeholder="Brief note about this visit (optional)…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:none;outline:none;margin-bottom:8px"></textarea>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="font-size:12px" onclick="_atdSubmitVisit()">Log Visit</button>
+            <button class="btn btn-ghost" style="font-size:12px" onclick="document.getElementById('atd-log-form').style.display='none'">Cancel</button>
+          </div>
+        </div>
+        <div id="atd-log-btn-wrap"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -9178,6 +9295,7 @@ const PAGE_RENDERERS={
   ambiguities:renderAmbiguities,
   // 'reports' key omitted — navigate('reports') redirects to 'dashboard'.
   'app-tickets': renderAppTickets,
+  'my-work':     renderMyWork,
 };
 // Patch navigate() to call the page renderer each time. The wrapper must
 // forward ALL arguments — v1.1.0 1c added opts={fromHash,query} which
@@ -9705,6 +9823,7 @@ function _atStatusBadge(status){
 }
 
 function renderAppTickets(){
+  _autoCloseResolvedTickets(); // silent: advances resolved tickets past 2-day threshold
   // Populate region filter from loaded tickets
   const regionSel = document.getElementById('at-region');
   if(regionSel){
@@ -9780,10 +9899,334 @@ function renderAppTickets(){
   }
 }
 
+// ── current ticket tracked in detail modal ───────────────────────
+let _atdCurrentId = null;
+
 function _openTicketDetail(id){
   const t = APP_TICKETS.find(x => x.id === id);
   if(!t) return;
-  showToast(`${t.id} — detail view coming in Phase C.`, 'info');
+  _atdCurrentId = id;
+
+  // Head
+  document.getElementById('atd-id').textContent    = t.id;
+  document.getElementById('atd-title').textContent = t.customer + (t.model ? ' — ' + t.model : '');
+  document.getElementById('atd-badges').innerHTML  =
+    _atStatusBadge(t.status) + ' ' +
+    `<span style="font-size:10px;font-family:var(--mono);color:var(--text-dim);letter-spacing:.5px">${esc((t.priority||'normal').toUpperCase())}</span>` +
+    (t.ticket_type === 'pm' ? ' <span style="font-size:10px;font-family:var(--mono);color:var(--accent)">PM</span>' : '');
+
+  // §1 Status transitions
+  _atdRenderTransitions(t);
+
+  // §2 Info grid
+  const slaStr = t.sla_due_at
+    ? new Date(t.sla_due_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
+    : '—';
+  const callDateStr = t.call_date
+    ? new Date(t.call_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+    : '—';
+  document.getElementById('atd-info-grid').innerHTML = `
+    <div class="detail-field"><label>Customer</label><span>${esc(t.customer||'—')}</span></div>
+    <div class="detail-field"><label>Asset Code</label><span style="font-family:var(--mono)">${esc(t.asset_code||'—')}</span></div>
+    <div class="detail-field"><label>Region</label><span>${esc(t.region||'—')}</span></div>
+    <div class="detail-field"><label>Town</label><span>${esc(t.town||'—')}</span></div>
+    <div class="detail-field"><label>Call Date</label><span style="font-family:var(--mono)">${callDateStr}</span></div>
+    <div class="detail-field"><label>Call Type</label><span>${esc(t.call_type||'—')}</span></div>
+    <div class="detail-field"><label>SLA Due</label><span style="font-family:var(--mono);${t.sla_due_at&&new Date(t.sla_due_at)<new Date()&&_AT_OPEN_STATUSES.includes(t.status)?'color:#ef4444':'''}">${slaStr}</span></div>
+    <div class="detail-field"><label>Assigned Engineers</label><span>${t.assigned_engineer_names.length?t.assigned_engineer_names.map(n=>esc(n)).join(', '):'<span style="color:var(--text-faint)">Unassigned</span>'}</span></div>`;
+  document.getElementById('atd-issue-box').textContent = t.issue_description || '—';
+
+  // §3 Work fields — populate, gate editability
+  const canEdit = canManagePM() || _isCurrentEngineerAssigned(t);
+  document.getElementById('atd-resolution').value    = t.resolution || '';
+  document.getElementById('atd-sys-up-date').value   = t.sys_up_date || '';
+  document.getElementById('atd-parts').value         = t.parts || '';
+  document.getElementById('atd-parts-status').value  = t.parts_status || '';
+  ['atd-resolution','atd-sys-up-date','atd-parts','atd-parts-status'].forEach(elId => {
+    const el = document.getElementById(elId);
+    if(el) el.disabled = !canEdit;
+  });
+  const saveBtn = document.getElementById('atd-save-btn');
+  if(saveBtn) saveBtn.style.display = canEdit ? '' : 'none';
+
+  // §4 Visit log
+  _atdRenderVisitLog(t);
+  const logBtnWrap = document.getElementById('atd-log-btn-wrap');
+  if(logBtnWrap){
+    logBtnWrap.innerHTML = canEdit
+      ? `<button class="btn btn-ghost" style="font-size:12px" onclick="document.getElementById('atd-log-form').style.display='';document.getElementById('atd-log-note').focus()"><i data-lucide="plus"></i>Log Visit</button>`
+      : '';
+  }
+  document.getElementById('atd-log-form').style.display = 'none';
+
+  openModal('at-detail-modal');
+  if(window.lucide) try{ lucide.createIcons(); }catch(_){}
+}
+
+function _isCurrentEngineerAssigned(t){
+  if(!_currentUser?.email) return false;
+  const email = _currentUser.email.toLowerCase();
+  const eng = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
+  return eng ? (t.assigned_engineer_ids || []).includes(eng.id) : false;
+}
+
+function _atdRenderTransitions(t){
+  const wrap = document.getElementById('atd-transitions');
+  if(!wrap) return;
+
+  // Allowed next statuses from state machine (mirrors DB trigger)
+  const SVC = {
+    new:           [{s:'assigned',    label:'Assign',       cls:'btn-ghost'}],
+    assigned:      [{s:'in_progress', label:'Start Work',   cls:'btn-primary'},{s:'new',label:'Unassign',cls:'btn-ghost'}],
+    in_progress:   [{s:'resolved',    label:'Mark Resolved',cls:'btn-primary'},{s:'on_hold',label:'On Hold',cls:'btn-ghost'},{s:'parts_pending',label:'Parts Needed',cls:'btn-ghost'},{s:'cancelled',label:'Cancel',cls:'btn-ghost'}],
+    on_hold:       [{s:'in_progress', label:'Resume',       cls:'btn-primary'},{s:'cancelled',label:'Cancel',cls:'btn-ghost'}],
+    parts_pending: [{s:'in_progress', label:'Parts Received / Resume',cls:'btn-primary'},{s:'cancelled',label:'Cancel',cls:'btn-ghost'}],
+    resolved:      [{s:'closed',      label:'Close',        cls:'btn-primary'},{s:'in_progress',label:'Reopen',cls:'btn-ghost'}],
+    cancelled:     [{s:'new',         label:'Reopen',       cls:'btn-ghost'}],
+    closed:        [{s:'in_progress', label:'Reopen',       cls:'btn-ghost'}],
+  };
+  const PM = {
+    upcoming:    [{s:'due',          label:'Mark Due',      cls:'btn-primary'},{s:'deferred',label:'Defer',cls:'btn-ghost'},{s:'cancelled',label:'Cancel',cls:'btn-ghost'}],
+    due:         [{s:'in_progress',  label:'Start Work',    cls:'btn-primary'},{s:'missed',label:'Mark Missed',cls:'btn-ghost'},{s:'deferred',label:'Defer',cls:'btn-ghost'}],
+    in_progress: [{s:'completed',    label:'Mark Completed',cls:'btn-primary'},{s:'deferred',label:'Defer',cls:'btn-ghost'}],
+    completed:   [{s:'closed',       label:'Close',         cls:'btn-primary'}],
+    missed:      [{s:'in_progress',  label:'Resume',        cls:'btn-primary'},{s:'deferred',label:'Defer',cls:'btn-ghost'}],
+    deferred:    [{s:'due',          label:'Reschedule Due',cls:'btn-primary'},{s:'cancelled',label:'Cancel',cls:'btn-ghost'}],
+    cancelled:   [{s:'upcoming',     label:'Reopen',        cls:'btn-ghost'}],
+    closed:      [],
+  };
+
+  const map = t.ticket_type === 'pm' ? PM : SVC;
+  const transitions = map[t.status] || [];
+
+  // Engineers can only do forward operational moves; admin/mgr get all
+  const isEng = !canManagePM();
+  const engAllowed = ['in_progress','resolved','on_hold','parts_pending','completed'];
+  const visible = isEng
+    ? transitions.filter(tr => engAllowed.includes(tr.s))
+    : transitions;
+
+  wrap.innerHTML = `<span style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1px">MOVE TO:</span>` +
+    (visible.length
+      ? visible.map(tr =>
+          `<button class="btn ${tr.cls}" style="font-size:11px;padding:5px 12px" onclick="_atdTransition('${esc(tr.s)}')">${esc(tr.label)}</button>`
+        ).join('')
+      : `<span style="font-size:11px;color:var(--text-faint)">No transitions available</span>`);
+  if(window.lucide) try{ lucide.createIcons(); }catch(_){}
+}
+
+function _atdRenderVisitLog(t){
+  const list = document.getElementById('atd-visit-list');
+  if(!list) return;
+  const entries = t.visit_log || [];
+  if(!entries.length){
+    list.innerHTML = `<div style="font-size:11px;color:var(--text-faint);font-style:italic">No visits logged yet.</div>`;
+    return;
+  }
+  list.innerHTML = entries.map(e => {
+    const ts = e.ts ? new Date(e.ts).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span style="font-size:11px;font-weight:600">${esc(e.eng_name||'Unknown')}</span>
+        <span style="font-size:10px;font-family:var(--mono);color:var(--text-dim)">${ts}</span>
+      </div>
+      ${e.note ? `<div style="font-size:11px;color:var(--text-dim)">${esc(e.note)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function _atdTransition(newStatus){
+  if(!_atdCurrentId) return;
+  const t = APP_TICKETS.find(x => x.id === _atdCurrentId);
+  if(!t) return;
+  const btn = event?.target;
+  if(btn){ btn.disabled = true; }
+
+  const updated = await dbUpdateAppTicket(_atdCurrentId, { status: newStatus });
+  if(btn){ btn.disabled = false; }
+  if(!updated) return;
+
+  const idx = APP_TICKETS.findIndex(x => x.id === _atdCurrentId);
+  if(idx !== -1) APP_TICKETS[idx] = updated;
+  ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+
+  // Refresh modal in place
+  _openTicketDetail(_atdCurrentId);
+  // Refresh the list page if visible
+  if(document.getElementById('page-app-tickets')?.classList.contains('active')) renderAppTickets();
+  if(document.getElementById('page-my-work')?.classList.contains('active')) renderMyWork();
+}
+
+async function _atdSaveWork(){
+  if(!_atdCurrentId) return;
+  const resolution  = document.getElementById('atd-resolution')?.value.trim() || null;
+  const sysUpDate   = document.getElementById('atd-sys-up-date')?.value || null;
+  const parts       = document.getElementById('atd-parts')?.value.trim() || null;
+  const partsStatus = document.getElementById('atd-parts-status')?.value || null;
+
+  const btn = document.getElementById('atd-save-btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  const updated = await dbUpdateAppTicket(_atdCurrentId, {
+    resolution:   resolution,
+    sys_up_date:  sysUpDate  || null,
+    parts:        parts      || null,
+    parts_status: partsStatus || null,
+    updated_by:   _currentUser?.id || null,
+  });
+
+  if(btn){ btn.disabled = false; btn.textContent = 'Save Changes'; }
+  if(!updated) return;
+
+  const idx = APP_TICKETS.findIndex(x => x.id === _atdCurrentId);
+  if(idx !== -1) APP_TICKETS[idx] = updated;
+  ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+  showToast('Changes saved.', 'success');
+}
+
+async function _atdSubmitVisit(){
+  if(!_atdCurrentId) return;
+  const t = APP_TICKETS.find(x => x.id === _atdCurrentId);
+  if(!t) return;
+
+  const email = (_currentUser?.email || '').toLowerCase();
+  const eng = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
+  const engId   = eng?.id   || _currentUser?.id   || 'unknown';
+  const engName = eng?.name || email || 'Unknown';
+
+  const note = document.getElementById('atd-log-note')?.value.trim() || '';
+  const entry = { eng_id: engId, eng_name: engName, note, ts: new Date().toISOString() };
+  const newLog = [...(t.visit_log || []), entry];
+
+  const btn = document.querySelector('#at-detail-modal button[onclick="_atdSubmitVisit()"]');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  const updated = await dbUpdateAppTicket(_atdCurrentId, { visit_log: newLog });
+  if(btn){ btn.disabled = false; btn.textContent = 'Log Visit'; }
+  if(!updated) return;
+
+  const idx = APP_TICKETS.findIndex(x => x.id === _atdCurrentId);
+  if(idx !== -1) APP_TICKETS[idx] = updated;
+  ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+
+  document.getElementById('atd-log-form').style.display = 'none';
+  const noteEl = document.getElementById('atd-log-note');
+  if(noteEl) noteEl.value = '';
+  _atdRenderVisitLog(updated);
+  showToast('Visit logged.', 'success');
+}
+
+async function dbUpdateAppTicket(id, fields){
+  suppressRealtimeReload(3000);
+  const { data, error } = await _sb.from('app_tickets').update(fields).eq('id', id).select().single();
+  if(error){
+    console.error('dbUpdateAppTicket failed:', error);
+    showToast('Update failed: ' + (error.message || 'unknown error'), 'error');
+    return null;
+  }
+  return {
+    id: data.id, ticket_type: data.ticket_type, status: data.status,
+    asset_code: data.asset_code || '', customer: data.customer || '',
+    town: data.town || '', state: data.state || '', region: data.region || '',
+    model: data.model || '', contract: data.contract || '',
+    pm_id: data.pm_id || null, pm_cycle_key: data.pm_cycle_key || null,
+    call_date: data.call_date || null, call_type: data.call_type || '',
+    issue_description: data.issue_description || '',
+    parts: data.parts || '', parts_req_date: data.parts_req_date || null,
+    parts_recv_date: data.parts_recv_date || null, parts_status: data.parts_status || '',
+    resolution: data.resolution || '', sys_up_date: data.sys_up_date || null,
+    resolved_at: data.resolved_at || null, closed_at: data.closed_at || null,
+    priority: data.priority || 'normal', sla_due_at: data.sla_due_at || null,
+    assigned_engineer_ids:   data.assigned_engineer_ids   || [],
+    assigned_engineer_names: data.assigned_engineer_names || [],
+    pm_completion_engineer_id: data.pm_completion_engineer_id || null,
+    pm_completion_engineer_name: data.pm_completion_engineer_name || null,
+    visit_log: data.visit_log || [], deleted_at: data.deleted_at || null,
+    created_at: data.created_at, updated_at: data.updated_at,
+  };
+}
+
+function _autoCloseResolvedTickets(){
+  const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
+  const toClose = APP_TICKETS.filter(t =>
+    t.status === 'resolved' && t.resolved_at &&
+    (Date.now() - new Date(t.resolved_at).getTime()) > TWO_DAYS
+  );
+  if(!toClose.length) return;
+  toClose.forEach(async t => {
+    const updated = await dbUpdateAppTicket(t.id, { status: 'closed' });
+    if(!updated) return;
+    const idx = APP_TICKETS.findIndex(x => x.id === t.id);
+    if(idx !== -1) APP_TICKETS[idx] = updated;
+    ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+  });
+}
+
+function renderMyWork(){
+  // When viewer (engineer): auto-filter to their own name; admin/mgr see all
+  const mwHeading = document.getElementById('mw-heading');
+  const searchEl  = document.getElementById('mw-eng-search');
+  if(_userRole === 'viewer' && searchEl){
+    const email = (_currentUser?.email || '').toLowerCase();
+    const eng = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
+    if(eng && !searchEl.value) searchEl.value = eng.name;
+    if(mwHeading) mwHeading.textContent = eng ? `My Work — ${eng.name}` : 'My Work';
+  } else {
+    if(mwHeading) mwHeading.textContent = 'All Open Work Orders';
+  }
+
+  const statusVal = document.getElementById('mw-status')?.value || 'open';
+  const engSearch = (searchEl?.value || '').trim().toLowerCase();
+
+  let rows = APP_TICKETS.filter(t => {
+    if(statusVal === 'open') return _AT_OPEN_STATUSES.includes(t.status);
+    return true;
+  });
+  if(engSearch) rows = rows.filter(t =>
+    t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch))
+  );
+
+  const myCount = APP_TICKETS.filter(t =>
+    _AT_OPEN_STATUSES.includes(t.status) &&
+    (engSearch ? t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch)) : true)
+  ).length;
+  setNavBadgeCount('nb-my-work', myCount);
+
+  const summaryEl = document.getElementById('mw-summary');
+  if(summaryEl) summaryEl.textContent = `${rows.length} ticket${rows.length===1?'':'s'} shown`;
+
+  const tbody = document.getElementById('mw-tbody');
+  if(!tbody) return;
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-dim)">No tickets match this filter.</td></tr>`;
+    return;
+  }
+
+  const now = new Date();
+  tbody.innerHTML = rows.map(t => {
+    const engCell = t.assigned_engineer_names.length
+      ? t.assigned_engineer_names.map(n=>esc(n)).join(', ')
+      : `<span style="color:var(--text-faint)">—</span>`;
+    const callDateStr = t.call_date
+      ? new Date(t.call_date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+      : '—';
+    let slaStr='—', slaStyle='';
+    if(t.sla_due_at){
+      const d = new Date(t.sla_due_at);
+      slaStr = d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+      if(_AT_OPEN_STATUSES.includes(t.status) && d < now) slaStyle='color:#ef4444;font-weight:600';
+    }
+    return `<tr style="cursor:pointer" onclick="_openTicketDetail('${esc(t.id)}')">
+      <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(t.id)}</td>
+      <td>${esc(t.customer||'—')}</td>
+      <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
+      <td>${esc(t.region||'—')}</td>
+      <td style="font-size:11px">${callDateStr}</td>
+      <td>${_atStatusBadge(t.status)}</td>
+      <td style="font-size:11px;${slaStyle}">${slaStr}</td>
+      <td style="font-size:11px">${engCell}</td>
+    </tr>`;
+  }).join('');
 }
 
 function openNewTicketModal(){
