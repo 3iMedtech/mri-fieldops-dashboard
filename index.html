@@ -916,7 +916,7 @@ button,input,select,textarea{font-family:inherit;}
     <div class="nav-item active" data-page="dashboard" role="button" tabindex="0" aria-current="page"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Dashboard</div>
     <div class="nav-item" data-page="tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket"></i></span> Service History <span class="nav-badge" id="nb-open" style="display:none" title="Open tickets"></span></div>
     <div class="nav-item" data-page="pm" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
-    <div class="nav-item" data-page="app-tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="clipboard-list"></i></span> Create Work Order <span class="nav-badge" id="nb-app-tickets" style="display:none" title="Open work orders"></span></div>
+    <div class="nav-item" data-page="app-tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="clipboard-list"></i></span> Work Orders <span class="nav-badge" id="nb-app-tickets" style="display:none" title="Open work orders"></span></div>
     <div class="nav-item" data-page="my-work" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="list-checks"></i></span> Open Work Orders <span class="nav-badge green" id="nb-my-work" style="display:none" title="My open work orders"></span></div>
     <div class="nav-section" role="presentation">Assets &amp; team</div>
     <div class="nav-item" data-page="assets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="building-2"></i></span> Install Base</div>
@@ -996,7 +996,7 @@ button,input,select,textarea{font-family:inherit;}
   <div class="grid-2 g-3-1">
     <div class="panel">
       <div class="panel-head">
-        <h2 class="panel-title"><i data-lucide="alert-circle"></i>Open Work Orders</h2>
+        <h2 class="panel-title"><i data-lucide="alert-circle"></i>Open Tickets (Legacy)</h2>
         <div class="panel-action" onclick="navigate('open')">View All →</div>
       </div>
       <div style="overflow-x:auto">
@@ -1442,6 +1442,13 @@ button,input,select,textarea{font-family:inherit;}
           <option value="all">All regions</option>
         </select>
         <input class="search-box" id="at-eng-search" type="search" placeholder="Engineer name…" aria-label="Filter by engineer" oninput="renderAppTickets()" style="width:150px;padding:5px 10px">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">DATE:</span>
+        <select id="at-date" onchange="renderAppTickets()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+          <option value="today" selected>Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="all">All</option>
+        </select>
         <button class="btn btn-primary mgr-plus" style="font-size:11px;padding:6px 14px" onclick="openNewTicketModal()"><i data-lucide="plus"></i>New Work Order</button>
       </div>
     </div>
@@ -4797,8 +4804,9 @@ function renderKPIGrid(){
   const incidentStatus = incidentPct > 40 ? 'risk' : incidentPct > 25 ? 'warn' : 'good';
   const incidentStatusLabel = incidentPct > 40 ? 'High Ratio' : incidentPct > 25 ? 'Watch' : 'Normal';
   const pmPct = scope.length ? Math.round(scopePM.length/scope.length*100) : 0;
-  const partsAwaited = OPEN_TICKETS.filter(t => t.parts && t.parts !== 'NA' && t.parts.trim() !== '').length;
-  const openLive = OPEN_TICKETS.length;
+  const _unmigrated = _unmigratedOpen();
+  const partsAwaited = _unmigrated.filter(t => t.parts && t.parts !== 'NA' && t.parts.trim() !== '').length;
+  const openLive = _unmigrated.length;
   const openStatus = openLive === 0 ? 'good' : openLive <= 3 ? 'warn' : 'risk';
   const openStatusLabel = openLive === 0 ? 'All Clear' : 'Action Required';
   const slaStatus = slaResult.total < 10 ? 'muted' : slaResult.pct >= 90 ? 'good' : slaResult.pct >= 70 ? 'warn' : 'risk';
@@ -9978,6 +9986,29 @@ function renderAppTickets(){
     t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch))
   );
 
+  // Date filter — default today; handles midnight rollover via data attribute
+  const _atTodayStr = new Date().toISOString().slice(0,10);
+  const atDateEl = document.getElementById('at-date');
+  if(atDateEl){
+    if(!atDateEl.dataset.defaultDate){
+      atDateEl.dataset.defaultDate = _atTodayStr;
+    } else if(atDateEl.dataset.defaultDate !== _atTodayStr && atDateEl.value === 'today'){
+      atDateEl.dataset.defaultDate = _atTodayStr;
+    }
+  }
+  const dateVal = atDateEl?.value || 'today';
+  if(dateVal !== 'all'){
+    const now = new Date();
+    rows = rows.filter(t => {
+      if(!t.created_at) return dateVal !== 'today';
+      const d = new Date(t.created_at);
+      if(dateVal === 'today')  return d.toISOString().slice(0,10) === _atTodayStr;
+      if(dateVal === 'week')   { const w = new Date(now); w.setDate(w.getDate()-7); return d >= w; }
+      if(dateVal === 'month')  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      return true;
+    });
+  }
+
   // Summary line
   const summaryEl = document.getElementById('at-summary');
   if(summaryEl){
@@ -10231,12 +10262,17 @@ function _atdRenderTransitions(t){
   const map = t.ticket_type === 'pm' ? PM : SVC;
   const transitions = map[t.status] || [];
 
-  // Engineers can only do forward operational moves; admin/mgr get all
+  // Engineers can only do forward operational moves on tickets they are assigned to
   const isEng = !canManagePM();
   const engAllowed = ['in_progress','resolved','on_hold','parts_pending','completed'];
-  const visible = isEng
-    ? transitions.filter(tr => engAllowed.includes(tr.s))
-    : transitions;
+  let visible;
+  if(isEng){
+    visible = _isCurrentEngineerAssigned(t)
+      ? transitions.filter(tr => engAllowed.includes(tr.s))
+      : [];
+  } else {
+    visible = transitions;
+  }
 
   wrap.innerHTML = `<span style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1px">MOVE TO:</span>` +
     (visible.length
@@ -10672,12 +10708,27 @@ function _ntOnAssetChange(){
   set('nt-customer',   opt.dataset.customer);
   set('nt-asset-code', sel.value);
   set('nt-town',       opt.dataset.town);
-  // Auto-fill region from PM_SCHEDULE by matching customer name
+  // Auto-fill region: PM_SCHEDULE by customer → PM_SCHEDULE by town → engineer by customer history
   const customerName = opt.dataset.customer;
+  const town = opt.dataset.town || '';
+  let region = '';
   if(customerName){
     const pm = PM_SCHEDULE.find(p => p.customer === customerName && p.region);
-    if(pm) set('nt-region', pm.region);
+    if(pm) region = pm.region;
   }
+  if(!region && town){
+    const pmByTown = PM_SCHEDULE.find(p => p.town && p.town.toLowerCase() === town.toLowerCase() && p.region);
+    if(pmByTown) region = pmByTown.region;
+  }
+  if(!region && customerName){
+    const engForCustomer = ENGINEERS.find(e => e.region &&
+      RAW_TICKETS.some(r => r.customer === customerName &&
+        splitEngineers(r.engineer).some(n => canonEngName(n) === canonEngName(e.name))
+      )
+    );
+    if(engForCustomer) region = engForCustomer.region;
+  }
+  if(region) set('nt-region', region);
 }
 
 const _NT_SYS_STATUS_OPTS = {
