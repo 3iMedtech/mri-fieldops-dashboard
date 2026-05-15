@@ -996,7 +996,7 @@ button,input,select,textarea{font-family:inherit;}
   <div class="grid-2 g-3-1">
     <div class="panel">
       <div class="panel-head">
-        <h2 class="panel-title"><i data-lucide="alert-circle"></i>Currently Open Tickets</h2>
+        <h2 class="panel-title"><i data-lucide="alert-circle"></i>Open Work Orders</h2>
         <div class="panel-action" onclick="navigate('open')">View All →</div>
       </div>
       <div style="overflow-x:auto">
@@ -1392,7 +1392,7 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-my-work">
   <div class="panel">
     <div class="panel-head" style="flex-wrap:wrap;gap:8px">
-      <h2 class="panel-title"><i data-lucide="wrench"></i><span id="mw-heading">My Assigned Work</span></h2>
+      <h2 class="panel-title"><i data-lucide="list-checks"></i><span id="mw-heading">Open Work Orders</span></h2>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <select id="mw-status" aria-label="Status filter" onchange="renderMyWork()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
           <option value="open">Open</option>
@@ -1439,7 +1439,7 @@ button,input,select,textarea{font-family:inherit;}
           <option value="all">All regions</option>
         </select>
         <input class="search-box" id="at-eng-search" type="search" placeholder="Engineer name…" aria-label="Filter by engineer" oninput="renderAppTickets()" style="width:150px;padding:5px 10px">
-        <button class="btn btn-primary mgr-plus" style="font-size:11px;padding:6px 14px" onclick="openNewTicketModal()"><i data-lucide="plus"></i>New Ticket</button>
+        <button class="btn btn-primary mgr-plus" style="font-size:11px;padding:6px 14px" onclick="openNewTicketModal()"><i data-lucide="plus"></i>New Work Order</button>
       </div>
     </div>
     <div style="padding:6px 18px 8px">
@@ -1910,7 +1910,7 @@ button,input,select,textarea{font-family:inherit;}
   <div class="modal" style="max-width:580px" tabindex="-1">
     <div class="modal-head">
       <div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--brand);margin-bottom:3px">NEW SERVICE TICKET</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--brand);margin-bottom:3px">NEW WORK ORDER</div>
         <div id="nt-title" style="font-family:var(--display);font-weight:700;font-size:17px">Create Work Order</div>
       </div>
       <button class="modal-close" type="button" aria-label="Close" onclick="closeModal('new-ticket-modal')"><i data-lucide="x"></i></button>
@@ -1947,23 +1947,18 @@ button,input,select,textarea{font-family:inherit;}
             <input class="search-box" id="nt-call-date" type="date" style="width:100%;box-sizing:border-box">
           </div>
           <div>
-            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">CALL TYPE</label>
-            <select id="nt-call-type" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px">
-              <option value="">—</option>
-              <option value="Breakdown">Breakdown</option>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">CALL TYPE *</label>
+            <select id="nt-call-type" onchange="_ntOnCallTypeChange()" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px">
+              <option value="">— Select —</option>
               <option value="Incident">Incident</option>
-              <option value="PM">PM</option>
               <option value="Installation">Installation</option>
               <option value="Other">Other</option>
             </select>
           </div>
           <div>
-            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">PRIORITY</label>
-            <select id="nt-priority" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px">
-              <option value="normal" selected>Normal</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
-              <option value="low">Low</option>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">SYSTEM STATUS *</label>
+            <select id="nt-sys-status" disabled style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px;opacity:0.6">
+              <option value="">— select call type first —</option>
             </select>
           </div>
         </div>
@@ -1971,21 +1966,15 @@ button,input,select,textarea{font-family:inherit;}
           <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ISSUE / COMPLAINT *</label>
           <textarea id="nt-issue" rows="3" placeholder="Describe the issue or reason for this call…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;outline:none"></textarea>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div>
-            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ENGINEER 1</label>
-            <select id="nt-eng1" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px"></select>
-          </div>
-          <div>
-            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ENGINEER 2 <span style="color:var(--text-faint)">(optional)</span></label>
-            <select id="nt-eng2" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px"></select>
-          </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ASSIGNED TO <span style="color:var(--text-faint)">(optional — sets status to Assigned)</span></label>
+          <select id="nt-assigned-to" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px"></select>
         </div>
       </div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)">
       <button class="btn btn-ghost" onclick="closeModal('new-ticket-modal')">Cancel</button>
-      <button class="btn btn-primary" id="nt-submit" onclick="submitNewTicket()">Create Ticket</button>
+      <button class="btn btn-primary" id="nt-submit" onclick="submitNewTicket()">Create Work Order</button>
     </div>
   </div>
 </div>
@@ -9736,6 +9725,7 @@ async function loadAllFromDB(opts = {}){
     model: r.model || '', contract: r.contract || '',
     pm_id: r.pm_id || null, pm_cycle_key: r.pm_cycle_key || null,
     call_date: r.call_date || null, call_type: r.call_type || '',
+    sys_status: r.sys_status || null,
     issue_description: r.issue_description || '',
     parts: r.parts || '', parts_req_date: r.parts_req_date || null,
     parts_recv_date: r.parts_recv_date || null, parts_status: r.parts_status || '',
@@ -9914,8 +9904,8 @@ function _openTicketDetail(id){
   document.getElementById('atd-title').textContent = t.customer + (t.model ? ' — ' + t.model : '');
   document.getElementById('atd-badges').innerHTML  =
     _atStatusBadge(t.status) + ' ' +
-    `<span style="font-size:10px;font-family:var(--mono);color:var(--text-dim);letter-spacing:.5px">${esc((t.priority||'normal').toUpperCase())}</span>` +
-    (t.ticket_type === 'pm' ? ' <span style="font-size:10px;font-family:var(--mono);color:var(--accent)">PM</span>' : '');
+    (t.sys_status ? sysStatusBadge(t.sys_status) + ' ' : '') +
+    (t.ticket_type === 'pm' ? '<span style="font-size:10px;font-family:var(--mono);color:var(--accent)">PM</span>' : '');
 
   // §1 Status transitions
   _atdRenderTransitions(t);
@@ -9934,6 +9924,7 @@ function _openTicketDetail(id){
     <div class="detail-field"><label>Town</label><span>${esc(t.town||'—')}</span></div>
     <div class="detail-field"><label>Call Date</label><span style="font-family:var(--mono)">${callDateStr}</span></div>
     <div class="detail-field"><label>Call Type</label><span>${esc(t.call_type||'—')}</span></div>
+    <div class="detail-field"><label>System Status</label><span>${t.sys_status ? sysStatusBadge(t.sys_status) : '<span style="color:var(--text-faint)">—</span>'}</span></div>
     <div class="detail-field"><label>SLA Due</label><span style="font-family:var(--mono);${t.sla_due_at&&new Date(t.sla_due_at)<new Date()&&_AT_OPEN_STATUSES.includes(t.status)?'color:#ef4444':''}">${slaStr}</span></div>
     <div class="detail-field"><label>Assigned Engineers</label><span>${t.assigned_engineer_names.length?t.assigned_engineer_names.map(n=>esc(n)).join(', '):'<span style="color:var(--text-faint)">Unassigned</span>'}</span></div>`;
   document.getElementById('atd-issue-box').textContent = t.issue_description || '—';
@@ -10137,6 +10128,7 @@ async function dbUpdateAppTicket(id, fields){
     model: data.model || '', contract: data.contract || '',
     pm_id: data.pm_id || null, pm_cycle_key: data.pm_cycle_key || null,
     call_date: data.call_date || null, call_type: data.call_type || '',
+    sys_status: data.sys_status || null,
     issue_description: data.issue_description || '',
     parts: data.parts || '', parts_req_date: data.parts_req_date || null,
     parts_recv_date: data.parts_recv_date || null, parts_status: data.parts_status || '',
@@ -10231,6 +10223,7 @@ async function ensurePMTickets(){
       model: data.model || '', contract: data.contract || '',
       pm_id: data.pm_id || null, pm_cycle_key: data.pm_cycle_key || null,
       call_date: data.call_date || null, call_type: data.call_type || '',
+      sys_status: data.sys_status || null,
       issue_description: data.issue_description || '',
       parts: data.parts || '', parts_req_date: data.parts_req_date || null,
       parts_recv_date: data.parts_recv_date || null, parts_status: data.parts_status || '',
@@ -10312,7 +10305,7 @@ function renderMyWork(){
     const email = (_currentUser?.email || '').toLowerCase();
     const eng = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
     if(eng && !searchEl.value) searchEl.value = eng.name;
-    if(mwHeading) mwHeading.textContent = eng ? `My Work — ${eng.name}` : 'My Work';
+    if(mwHeading) mwHeading.textContent = eng ? `My Open Work Orders — ${eng.name}` : 'Open Work Orders';
   } else {
     if(mwHeading) mwHeading.textContent = 'All Open Work Orders';
   }
@@ -10394,13 +10387,13 @@ function openNewTicketModal(){
       regions.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
   }
 
-  // Engineer selects (active roster only)
-  const engOpts = '<option value="">— None —</option>' +
-    activeRoster().map(e => `<option value="${esc(e.id)}" data-name="${esc(e.name)}">${esc(e.name)} (${esc(e.region)})</option>`).join('');
-  ['nt-eng1','nt-eng2'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.innerHTML = engOpts;
-  });
+  // Assigned To select (active roster only)
+  const assignedToEl = document.getElementById('nt-assigned-to');
+  if(assignedToEl){
+    assignedToEl.innerHTML = '<option value="">— Unassigned —</option>' +
+      activeRoster().map(e => `<option value="${esc(e.id)}" data-name="${esc(e.name)}">${esc(e.name)} (${esc(e.region)})</option>`).join('');
+    assignedToEl.value = '';
+  }
 
   // Reset text fields
   ['nt-customer','nt-asset-code','nt-town'].forEach(id => {
@@ -10413,8 +10406,12 @@ function openNewTicketModal(){
   if(callDateEl) callDateEl.value = new Date().toISOString().slice(0,10);
   const callTypeEl = document.getElementById('nt-call-type');
   if(callTypeEl) callTypeEl.value = '';
-  const priorityEl = document.getElementById('nt-priority');
-  if(priorityEl) priorityEl.value = 'normal';
+  const sysStatusEl = document.getElementById('nt-sys-status');
+  if(sysStatusEl){
+    sysStatusEl.innerHTML = '<option value="">— select call type first —</option>';
+    sysStatusEl.disabled = true;
+    sysStatusEl.style.opacity = '0.6';
+  }
 
   openModal('new-ticket-modal');
   setTimeout(() => document.getElementById('nt-asset')?.focus(), 80);
@@ -10428,6 +10425,37 @@ function _ntOnAssetChange(){
   set('nt-customer',   opt.dataset.customer);
   set('nt-asset-code', sel.value);
   set('nt-town',       opt.dataset.town);
+  // Auto-fill region from PM_SCHEDULE by matching customer name
+  const customerName = opt.dataset.customer;
+  if(customerName){
+    const pm = PM_SCHEDULE.find(p => p.customer === customerName && p.region);
+    if(pm) set('nt-region', pm.region);
+  }
+}
+
+const _NT_SYS_STATUS_OPTS = {
+  'Incident':     [{ v:'down', label:'Down' }, { v:'partially_down', label:'Partially Down' }],
+  'Installation': [{ v:'planned_activity', label:'Planned Activity' }],
+  'Other':        [{ v:'planned_activity', label:'Planned Activity' }],
+};
+
+function _ntOnCallTypeChange(){
+  const callType = document.getElementById('nt-call-type')?.value || '';
+  const sysStatusEl = document.getElementById('nt-sys-status');
+  if(!sysStatusEl) return;
+  const opts = _NT_SYS_STATUS_OPTS[callType];
+  if(!opts){
+    sysStatusEl.innerHTML = '<option value="">— select call type first —</option>';
+    sysStatusEl.disabled = true;
+    sysStatusEl.style.opacity = '0.6';
+    return;
+  }
+  sysStatusEl.innerHTML = opts.map(o => `<option value="${o.v}">${o.label}</option>`).join('');
+  sysStatusEl.disabled = false;
+  sysStatusEl.style.opacity = '';
+  // Auto-select if only one option
+  if(opts.length === 1) sysStatusEl.value = opts[0].v;
+  else sysStatusEl.value = '';
 }
 
 async function submitNewTicket(){
@@ -10439,22 +10467,23 @@ async function submitNewTicket(){
   const town      = document.getElementById('nt-town')?.value.trim() || '';
   const callDate  = document.getElementById('nt-call-date')?.value || '';
   const callType  = document.getElementById('nt-call-type')?.value || '';
-  const priority  = document.getElementById('nt-priority')?.value || 'normal';
+  const sysStatus = document.getElementById('nt-sys-status')?.value || '';
   const issue     = document.getElementById('nt-issue')?.value.trim() || '';
 
-  if(!customer){ showToast('Customer is required.', 'error'); return; }
-  if(!region)  { showToast('Region is required.', 'error'); return; }
-  if(!callDate){ showToast('Call date is required.', 'error'); return; }
-  if(!issue)   { showToast('Issue / complaint is required.', 'error'); return; }
+  if(!customer) { showToast('Customer is required.', 'error'); return; }
+  if(!region)   { showToast('Region is required.', 'error'); return; }
+  if(!callDate) { showToast('Call date is required.', 'error'); return; }
+  if(!callType) { showToast('Call type is required.', 'error'); return; }
+  if(!sysStatus){ showToast('System status is required.', 'error'); return; }
+  if(!issue)    { showToast('Issue / complaint is required.', 'error'); return; }
 
-  // Collect up to 2 unique engineers
+  // Single assigned engineer
   const engIds = [], engNames = [];
-  ['nt-eng1','nt-eng2'].forEach(selId => {
-    const sel = document.getElementById(selId);
-    if(!sel || !sel.value || engIds.includes(sel.value)) return;
-    const eng = ENGINEERS.find(e => e.id === sel.value);
+  const assignedSel = document.getElementById('nt-assigned-to');
+  if(assignedSel && assignedSel.value){
+    const eng = ENGINEERS.find(e => e.id === assignedSel.value);
     if(eng){ engIds.push(eng.id); engNames.push(eng.name); }
-  });
+  }
 
   const btn = document.getElementById('nt-submit');
   if(btn){ btn.disabled = true; btn.textContent = 'Creating…'; }
@@ -10467,20 +10496,20 @@ async function submitNewTicket(){
     region,
     town:                 town || null,
     call_date:            callDate,
-    call_type:            callType || null,
+    call_type:            callType,
+    sys_status:           sysStatus,
     issue_description:    issue,
-    priority,
     assigned_engineer_ids:   engIds,
     assigned_engineer_names: engNames,
   });
 
-  if(btn){ btn.disabled = false; btn.textContent = 'Create Ticket'; }
+  if(btn){ btn.disabled = false; btn.textContent = 'Create Work Order'; }
 
   if(ticket){
     APP_TICKETS.unshift(ticket);
     ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
     closeModal('new-ticket-modal');
-    showToast(`Ticket ${ticket.id} created.`, 'success');
+    showToast(`Work Order ${ticket.id} created.`, 'success');
     renderAppTickets();
   }
 }
@@ -10500,6 +10529,7 @@ async function dbSaveAppTicket(fields){
     model: data.model || '', contract: data.contract || '',
     pm_id: null, pm_cycle_key: null,
     call_date: data.call_date || null, call_type: data.call_type || '',
+    sys_status: data.sys_status || null,
     issue_description: data.issue_description || '',
     parts: '', parts_req_date: null, parts_recv_date: null, parts_status: '',
     resolution: '', sys_up_date: null, resolved_at: null, closed_at: null,
