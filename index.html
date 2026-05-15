@@ -1882,7 +1882,8 @@ button,input,select,textarea{font-family:inherit;}
             </div>
           </div>
         </div>
-        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+          <button class="btn btn-ghost mgr-plus" id="atd-notify-btn" style="font-size:12px;display:none" onclick="notifyWorkOrder(_atdCurrentId)"><i data-lucide="mail"></i>Notify Engineer</button>
           <button class="btn btn-primary" id="atd-save-btn" style="font-size:12px" onclick="_atdSaveWork()">Save Changes</button>
         </div>
       </div>
@@ -9989,6 +9990,10 @@ function _openTicketDetail(id){
   });
   const saveBtn = document.getElementById('atd-save-btn');
   if(saveBtn) saveBtn.style.display = canEdit ? '' : 'none';
+  const notifyBtn = document.getElementById('atd-notify-btn');
+  if(notifyBtn){
+    notifyBtn.style.display = (canManagePM() && t.ticket_type === 'service' && (t.assigned_engineer_ids||[]).length > 0) ? '' : 'none';
+  }
 
   // §4 Visit log
   _atdRenderVisitLog(t);
@@ -10099,6 +10104,7 @@ async function submitSubWO(){
     ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
     closeModal('sub-wo-modal');
     showToast(`Sub Work Order ${ticket.id} created.`, 'success');
+    notifyWorkOrder(ticket.id);
     const parentTicket = APP_TICKETS.find(t => t.id === _atdCurrentId);
     if(parentTicket) _atdRenderSubWOs(parentTicket);
   }
@@ -10659,7 +10665,24 @@ async function submitNewTicket(){
     closeModal('new-ticket-modal');
     showToast(`Work Order ${ticket.id} created.`, 'success');
     renderAppTickets();
+    if(engIds.length) notifyWorkOrder(ticket.id);
   }
+}
+
+async function notifyWorkOrder(ticketId){
+  if(!ticketId) return;
+  const btn = document.getElementById('atd-notify-btn');
+  const origText = btn?.textContent || 'Notify Engineer';
+  if(btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const { error } = await _sb.functions.invoke('notify-work-order', { body: { ticket_id: ticketId } });
+    if(error) throw error;
+    showToast('Engineer notified by email.', 'success');
+  } catch(e){
+    console.warn('[notifyWorkOrder] failed:', e);
+    showToast('Email notification failed — work order saved.', 'warn');
+  }
+  if(btn){ btn.disabled = false; btn.textContent = origText; }
 }
 
 async function dbSaveAppTicket(fields){
