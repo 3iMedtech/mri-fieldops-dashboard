@@ -914,7 +914,7 @@ button,input,select,textarea{font-family:inherit;}
   <nav class="nav" aria-label="Main navigation">
     <div class="nav-section" role="presentation">Operations</div>
     <div class="nav-item active" data-page="dashboard" role="button" tabindex="0" aria-current="page"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Dashboard</div>
-    <div class="nav-item" data-page="tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket"></i></span> Service History <span class="nav-badge" id="nb-open" style="display:none" title="Open tickets"></span></div>
+    <div class="nav-item" data-page="tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket"></i></span> Service History <span class="nav-badge" id="nb-open" style="display:none" title="Legacy open calls (unmigrated)"></span></div>
     <div class="nav-item" data-page="pm" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
     <div class="nav-item" data-page="app-tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="clipboard-list"></i></span> Work Orders <span class="nav-badge" id="nb-app-tickets" style="display:none" title="Open work orders"></span></div>
     <div class="nav-item" data-page="my-work" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="list-checks"></i></span> Open Work Orders <span class="nav-badge green" id="nb-my-work" style="display:none" title="My open work orders"></span></div>
@@ -996,12 +996,12 @@ button,input,select,textarea{font-family:inherit;}
   <div class="grid-2 g-3-1">
     <div class="panel">
       <div class="panel-head">
-        <h2 class="panel-title"><i data-lucide="alert-circle"></i>Open Tickets (Legacy)</h2>
-        <div class="panel-action" onclick="navigate('open')">View All →</div>
+        <h2 class="panel-title"><i data-lucide="alert-circle"></i>Open Work Orders</h2>
+        <div class="panel-action" onclick="navigate('app-tickets')">View All →</div>
       </div>
       <div style="overflow-x:auto">
         <table class="data-table">
-          <thead><tr><th>ID</th><th>CUSTOMER</th><th>ISSUE</th><th>ENGINEER</th><th>PARTS</th><th>MONTH</th><th>STATUS</th></tr></thead>
+          <thead><tr><th>ID</th><th>CUSTOMER</th><th>ASSET</th><th>REGION</th><th>CALL DATE</th><th>ENGINEER</th><th>STATUS</th></tr></thead>
           <tbody id="dash-open-body"></tbody>
         </table>
       </div>
@@ -1111,7 +1111,7 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-open">
   <div class="panel">
     <div class="panel-head">
-      <h2 class="panel-title" id="open-panel-title"><i data-lucide="alert-circle"></i>Open Tickets</h2>
+      <h2 class="panel-title" id="open-panel-title"><i data-lucide="alert-circle"></i>Legacy Open Calls (XLSX)</h2>
       <button class="btn btn-ghost superadmin-only" style="font-size:11px;padding:5px 12px" onclick="migrateOpenCallsToWOs()" id="migrate-open-btn" title="Import legacy open calls into the Work Orders system"><i data-lucide="archive-restore"></i>Import to Work Orders</button>
     </div>
     <div id="open-aging-strip" class="aging-strip" role="group" aria-label="Open ticket aging buckets"></div>
@@ -1444,10 +1444,10 @@ button,input,select,textarea{font-family:inherit;}
         <input class="search-box" id="at-eng-search" type="search" placeholder="Engineer name…" aria-label="Filter by engineer" oninput="renderAppTickets()" style="width:150px;padding:5px 10px">
         <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">DATE:</span>
         <select id="at-date" onchange="renderAppTickets()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
-          <option value="today" selected>Today</option>
+          <option value="all" selected>All</option>
+          <option value="today">Today</option>
           <option value="week">This Week</option>
           <option value="month">This Month</option>
-          <option value="all">All</option>
         </select>
         <button class="btn btn-primary mgr-plus" style="font-size:11px;padding:6px 14px" onclick="openNewTicketModal()"><i data-lucide="plus"></i>New Work Order</button>
       </div>
@@ -1921,6 +1921,56 @@ button,input,select,textarea{font-family:inherit;}
         <div id="atd-sub-wo-list" style="display:grid;gap:6px"></div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ── CLOSURE / RESOLVE STATUS MODAL ── -->
+<!-- Captured at the moment the WO is marked resolved/completed so the team
+     can answer "what state was the system left in?". The selected value is
+     persisted to app_tickets.sys_status alongside the status transition in
+     a single DB call. See _atdTransition() + _atdConfirmCloseStatus(). -->
+<div class="modal-overlay" id="close-status-modal" role="dialog" aria-modal="true" aria-labelledby="cs-title" aria-hidden="true">
+  <div class="modal" style="max-width:440px" tabindex="-1">
+    <div class="modal-head">
+      <div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--brand);margin-bottom:3px">CLOSURE STATUS</div>
+        <div id="cs-title" style="font-family:var(--display);font-weight:700;font-size:16px">Set System Status at Closure</div>
+      </div>
+      <button class="modal-close" type="button" aria-label="Close" onclick="_atdCancelCloseStatus()"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">
+        Select the system condition at the time this work order is being marked
+        <b id="cs-target-label" style="color:var(--text)">resolved</b>.
+      </div>
+      <div style="display:grid;gap:10px">
+        <label style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;cursor:pointer">
+          <input type="radio" name="cs-sys-status" value="working">
+          <div>
+            <div style="font-weight:600;font-size:13px">Working</div>
+            <div style="font-size:11px;color:var(--text-dim)">System restored to normal operation.</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;cursor:pointer">
+          <input type="radio" name="cs-sys-status" value="partially_down">
+          <div>
+            <div style="font-weight:600;font-size:13px">Partially Down</div>
+            <div style="font-size:11px;color:var(--text-dim)">Reduced/degraded operation, follow-up planned.</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;cursor:pointer">
+          <input type="radio" name="cs-sys-status" value="down">
+          <div>
+            <div style="font-weight:600;font-size:13px">Down</div>
+            <div style="font-size:11px;color:var(--text-dim)">System remains non-operational at closure.</div>
+          </div>
+        </label>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" onclick="_atdCancelCloseStatus()">Cancel</button>
+      <button class="btn btn-primary" id="cs-confirm" onclick="_atdConfirmCloseStatus()">Confirm</button>
     </div>
   </div>
 </div>
@@ -4972,27 +5022,55 @@ async function migrateOpenCallsToWOs(){
 }
 
 function renderDashOpen(){
-  // v1.2.0 2e — celebrate the rare zero-open-tickets state with a green
-  // empty-state banner instead of a blank table.
-  const visibleOpen = _unmigratedOpen();
-  if(visibleOpen.length === 0){
-    document.getElementById('dash-open-body').innerHTML = _emptyStateHtml({
-      icon:'check-circle-2', headline:'All clear — no open tickets', variant:'success',
-      colspan:7, secondary:'Every ticket in scope is closed. Nothing pending action right now.',
+  // Dashboard "Open Work Orders" panel — sourced from APP_TICKETS so the
+  // dashboard and the /work-orders tab show the SAME records. Falls back
+  // to the unmigrated legacy open calls when no work orders exist yet so
+  // operators are not staring at a blank table during transition.
+  const body = document.getElementById('dash-open-body');
+  if(!body) return;
+  const openAppTickets = APP_TICKETS
+    .filter(t => _AT_OPEN_STATUSES.includes(t.status) && t.wo_type !== 'sub')
+    .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
+  const legacyOpen = _unmigratedOpen();
+  if(openAppTickets.length === 0 && legacyOpen.length === 0){
+    body.innerHTML = _emptyStateHtml({
+      icon:'check-circle-2', headline:'All clear — no open work orders', variant:'success',
+      colspan:7, secondary:'Every work order in scope is closed. Nothing pending action right now.',
     });
     if(window.refreshIcons) window.refreshIcons();
     return;
   }
-  document.getElementById('dash-open-body').innerHTML=visibleOpen.map(t=>`
-    <tr class="clickable" onclick="openDetail('${t.id}')">
-      <td><span class="ticket-id">${t.id}</span></td>
-      <td style="font-weight:500;max-width:150px">${truncate(t.customer,22)}</td>
-      <td style="max-width:200px;font-size:11px;color:var(--text-dim)">${truncate(t.issue,45)}</td>
-      <td style="font-size:11px">${truncate(t.engineer,20)}</td>
-      <td style="font-size:11px;color:var(--amber)">${t.parts&&t.parts!=='NA'?truncate(t.parts,25):'—'}</td>
-      <td><span class="month-pill">${t.month}</span></td>
-      <td>${statusBadge(t.status)}</td>
-    </tr>`).join('');
+  if(openAppTickets.length){
+    body.innerHTML = openAppTickets.slice(0, 20).map(t => {
+      const cd = t.call_date
+        ? new Date(t.call_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'})
+        : '—';
+      const eng = (t.assigned_engineer_names && t.assigned_engineer_names.length)
+        ? esc(t.assigned_engineer_names.join(', '))
+        : '<span style="color:var(--text-faint)">—</span>';
+      return `<tr class="clickable" onclick="_openTicketDetail('${esc(t.id)}')">
+        <td><span class="ticket-id">${esc(t.id)}</span></td>
+        <td style="font-weight:500;max-width:160px">${truncate(t.customer,22)}</td>
+        <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
+        <td style="font-size:11px">${esc(t.region||'—')}</td>
+        <td style="font-size:11px;font-family:var(--mono)">${cd}</td>
+        <td style="font-size:11px">${eng}</td>
+        <td>${_atStatusBadge(t.status)}</td>
+      </tr>`;
+    }).join('');
+  } else {
+    body.innerHTML = legacyOpen.map(t=>`
+      <tr class="clickable" onclick="openDetail('${t.id}')">
+        <td><span class="ticket-id">${t.id}</span></td>
+        <td style="font-weight:500;max-width:150px">${truncate(t.customer,22)}</td>
+        <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
+        <td style="font-size:11px">${esc(t.state||'—')}</td>
+        <td style="font-size:11px;font-family:var(--mono)">${esc(t.call_date||'—')}</td>
+        <td style="font-size:11px">${truncate(t.engineer,20)}</td>
+        <td>${statusBadge(t.status)}</td>
+      </tr>`).join('');
+  }
+  if(window.refreshIcons) window.refreshIcons();
 }
 
 function renderDashEngineers(){
@@ -9996,7 +10074,7 @@ function renderAppTickets(){
       atDateEl.dataset.defaultDate = _atTodayStr;
     }
   }
-  const dateVal = atDateEl?.value || 'today';
+  const dateVal = atDateEl?.value || 'all';
   if(dateVal !== 'all'){
     const now = new Date();
     rows = rows.filter(t => {
@@ -10303,18 +10381,56 @@ function _atdRenderVisitLog(t){
   }).join('');
 }
 
+// Closure transitions that require operator-supplied sys_status capture.
+const _AT_CLOSE_STATUSES = ['resolved', 'completed'];
+let _atdPendingClose = null; // { ticketId, newStatus }
+
 async function _atdTransition(newStatus){
   if(!_atdCurrentId) return;
   const t = APP_TICKETS.find(x => x.id === _atdCurrentId);
   if(!t) return;
+
+  // Closure transitions must capture sys_status first.
+  if(_AT_CLOSE_STATUSES.includes(newStatus)){
+    _atdPendingClose = { ticketId: _atdCurrentId, newStatus };
+    document.querySelectorAll('#close-status-modal input[name="cs-sys-status"]').forEach(r => { r.checked = false; });
+    const lbl = document.getElementById('cs-target-label');
+    if(lbl) lbl.textContent = newStatus;
+    openModal('close-status-modal');
+    return;
+  }
+
   const btn = event?.target;
   if(btn){ btn.disabled = true; }
-
   const updated = await dbUpdateAppTicket(_atdCurrentId, { status: newStatus });
   if(btn){ btn.disabled = false; }
   if(!updated) return;
+  _atdApplyUpdatedTicket(updated, newStatus);
+}
 
-  const idx = APP_TICKETS.findIndex(x => x.id === _atdCurrentId);
+function _atdCancelCloseStatus(){
+  _atdPendingClose = null;
+  closeModal('close-status-modal');
+}
+
+async function _atdConfirmCloseStatus(){
+  if(!_atdPendingClose) return;
+  const { ticketId, newStatus } = _atdPendingClose;
+  const sel = document.querySelector('#close-status-modal input[name="cs-sys-status"]:checked');
+  if(!sel){ showToast('Pick a system status to continue.', 'error'); return; }
+  const sysStatus = sel.value;
+  const btn = document.getElementById('cs-confirm');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  const updated = await dbUpdateAppTicket(ticketId, { status: newStatus, sys_status: sysStatus });
+  if(btn){ btn.disabled = false; btn.textContent = 'Confirm'; }
+  if(!updated) return;
+  _atdPendingClose = null;
+  closeModal('close-status-modal');
+  _atdApplyUpdatedTicket(updated, newStatus);
+}
+
+async function _atdApplyUpdatedTicket(updated, newStatus){
+  const idx = APP_TICKETS.findIndex(x => x.id === updated.id);
   if(idx !== -1) APP_TICKETS[idx] = updated;
   ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
 
@@ -10323,10 +10439,11 @@ async function _atdTransition(newStatus){
   }
 
   // Refresh modal in place
-  _openTicketDetail(_atdCurrentId);
+  _openTicketDetail(updated.id);
   // Refresh the list page if visible
   if(document.getElementById('page-app-tickets')?.classList.contains('active')) renderAppTickets();
   if(document.getElementById('page-my-work')?.classList.contains('active')) renderMyWork();
+  if(document.getElementById('page-dashboard')?.classList.contains('active')) renderDashOpen();
 }
 
 async function _atdSaveWork(){
@@ -10678,11 +10795,13 @@ function openNewTicketModal(){
     assignedToEl.value = '';
   }
 
-  // Reset text fields
+  // Reset text fields + unlock asset-linked fields (re-enable in case the
+  // user previously selected an asset, then closed and re-opened the modal).
   ['nt-customer','nt-asset-code','nt-town'].forEach(id => {
     const el = document.getElementById(id);
-    if(el) el.value = '';
+    if(el){ el.value = ''; el.readOnly = false; el.style.opacity = ''; el.style.cursor = ''; el.title = ''; }
   });
+  if(regionSel){ regionSel.disabled = false; regionSel.style.opacity = ''; regionSel.style.cursor = ''; regionSel.title = ''; regionSel.value = ''; }
   const issueEl = document.getElementById('nt-issue');
   if(issueEl) issueEl.value = '';
   const callDateEl = document.getElementById('nt-call-date');
@@ -10702,9 +10821,23 @@ function openNewTicketModal(){
 
 function _ntOnAssetChange(){
   const sel = document.getElementById('nt-asset');
-  if(!sel || !sel.value) return;
+  if(!sel) return;
+  const customerEl = document.getElementById('nt-customer');
+  const assetCodeEl = document.getElementById('nt-asset-code');
+  const townEl = document.getElementById('nt-town');
+  const regionEl = document.getElementById('nt-region');
+
+  // Blank selection — unlock everything and let the user fill manually.
+  if(!sel.value){
+    [customerEl, assetCodeEl, townEl].forEach(el => {
+      if(el){ el.readOnly = false; el.style.opacity = ''; el.style.cursor = ''; el.title = ''; }
+    });
+    if(regionEl){ regionEl.disabled = false; regionEl.style.opacity = ''; regionEl.style.cursor = ''; regionEl.title = ''; }
+    return;
+  }
+
   const opt = sel.options[sel.selectedIndex];
-  const set = (id, val) => { if(!val) return; const el = document.getElementById(id); if(el) el.value = val; };
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
   set('nt-customer',   opt.dataset.customer);
   set('nt-asset-code', sel.value);
   set('nt-town',       opt.dataset.town);
@@ -10729,6 +10862,23 @@ function _ntOnAssetChange(){
     if(engForCustomer) region = engForCustomer.region;
   }
   if(region) set('nt-region', region);
+
+  // Lock the 4 asset-linked fields — they are now bound to the install base
+  // record. Operator clears the asset dropdown to unlock.
+  const lockTitle = 'Locked — derived from the selected asset. Clear the asset to edit manually.';
+  [customerEl, assetCodeEl, townEl].forEach(el => {
+    if(!el) return;
+    el.readOnly = true;
+    el.style.opacity = '0.6';
+    el.style.cursor = 'not-allowed';
+    el.title = lockTitle;
+  });
+  if(regionEl){
+    regionEl.disabled = true;
+    regionEl.style.opacity = '0.6';
+    regionEl.style.cursor = 'not-allowed';
+    regionEl.title = lockTitle;
+  }
 }
 
 const _NT_SYS_STATUS_OPTS = {
