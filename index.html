@@ -916,8 +916,8 @@ button,input,select,textarea{font-family:inherit;}
     <div class="nav-item active" data-page="dashboard" role="button" tabindex="0" aria-current="page"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Dashboard</div>
     <div class="nav-item" data-page="tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket"></i></span> Service History <span class="nav-badge" id="nb-open" style="display:none" title="Open tickets"></span></div>
     <div class="nav-item" data-page="pm" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
-    <div class="nav-item" data-page="app-tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket-check"></i></span> Work Orders <span class="nav-badge" id="nb-app-tickets" style="display:none" title="Open work orders"></span></div>
-    <div class="nav-item" data-page="my-work" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="wrench"></i></span> My Work <span class="nav-badge green" id="nb-my-work" style="display:none" title="My assigned tickets"></span></div>
+    <div class="nav-item" data-page="app-tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="clipboard-list"></i></span> Create Work Order <span class="nav-badge" id="nb-app-tickets" style="display:none" title="Open work orders"></span></div>
+    <div class="nav-item" data-page="my-work" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="list-checks"></i></span> Open Work Orders <span class="nav-badge green" id="nb-my-work" style="display:none" title="My open work orders"></span></div>
     <div class="nav-section" role="presentation">Assets &amp; team</div>
     <div class="nav-item" data-page="assets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="building-2"></i></span> Install Base</div>
     <div class="nav-item" data-page="engineers" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="users-round"></i></span> Engineers <span class="nav-badge green" id="nb-engineers" style="display:none"></span></div>
@@ -1426,7 +1426,7 @@ button,input,select,textarea{font-family:inherit;}
 <div class="page" id="page-app-tickets">
   <div class="panel">
     <div class="panel-head" style="flex-wrap:wrap;gap:8px">
-      <h2 class="panel-title"><i data-lucide="ticket-check"></i>Work Orders</h2>
+      <h2 class="panel-title"><i data-lucide="clipboard-list"></i>Work Orders</h2>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">STATUS:</span>
         <select id="at-status" aria-label="Status filter" onchange="renderAppTickets()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
