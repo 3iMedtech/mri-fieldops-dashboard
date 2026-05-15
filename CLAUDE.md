@@ -265,7 +265,22 @@ Use `TEST_MATRIX.md` for detailed role, page, Supabase, UI, accessibility, and p
 
 ## 12. Release and Deployment Rules
 
-All runtime changes must go through staging before production.
+All runtime changes must go through staging before production — no exceptions.
+This includes bug fixes, hotfixes, UI changes, CSS changes, text and label changes,
+script updates, and documentation changes. There is no category of change small
+enough to skip staging. Agents must not invent exceptions. The staging matrix must
+pass (0 failures) before any production action is taken.
+
+### Staging-first — hard rule for all agents
+
+Every code change, regardless of size, urgency, or category, must:
+
+1. Land on the `staging` branch first.
+2. Pass the full test matrix on staging (`node scripts/test-matrix.js staging`) — 0 failures, 0 JS errors.
+3. Receive explicit operator approval before any production action.
+
+**No agent may bypass this sequence.** Not for a typo fix. Not for a hotfix. Not for a CSS change.
+If a change is urgent, it still goes through staging — the sequence is fast, not skippable.
 
 ### Development branch rule
 
@@ -283,7 +298,7 @@ Production deploy requires an explicit approval phrase from the user. Accepted p
 
 On receiving one of these phrases, and only then:
 
-1. Confirm staging matrix passed (0 failures): `node /tmp/fieldops_matrix.js staging`
+1. Confirm staging matrix passed (0 failures): `node scripts/test-matrix.js staging`
 2. Fast-forward main to staging: `git push origin staging:main`
 3. Trigger manual deploy: `gh workflow run pages-deploy.yml --ref main`
 4. Wait for workflow completion, then run matrix on production: `node /tmp/fieldops_matrix.js production`

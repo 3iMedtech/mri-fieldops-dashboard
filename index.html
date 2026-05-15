@@ -1219,6 +1219,11 @@ button,input,select,textarea{font-family:inherit;}
         <select id="eng-region" aria-label="Region filter" onchange="renderEngineers()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
           <option value="all">All regions</option>
         </select>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px">SHOW:</span>
+        <select id="eng-status-filter" aria-label="Status filter" onchange="renderEngineers()" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px">
+          <option value="active" selected>Active</option>
+          <option value="all">All</option>
+        </select>
         <button class="btn btn-ghost mgr-plus" style="font-size:11px;padding:5px 12px;margin-left:4px" onclick="openAddEngineerModal()">+ Add Engineer</button>
       </div>
     </div>
@@ -4617,8 +4622,7 @@ function renderDashEngineers(){
   const label = dashMonthFilter === 'all' ? 'total calls' : `calls · ${dashMonthFilter}`;
   const sorted = activeRoster()
     .map((e, i) => ({ e, i, calls: ticketsForEngineer(e, { monthFilter: dashMonthFilter }).length }))
-    .sort((a, b) => b.calls - a.calls)
-    .slice(0, 8);
+    .sort((a, b) => b.calls - a.calls);
   document.getElementById('dash-eng-list').innerHTML = sorted.map(({ e, i, calls }) =>
     `<div class="eng-row" onclick="navigate('engineers')">
       <div class="eng-avatar" style="background:${engColor(i)}25;color:${engColor(i)}">${e.name.slice(0,2).toUpperCase()}</div>
@@ -7163,7 +7167,9 @@ async function renderEngineers(){
   const windowStart = epWindowStart(windowVal);
   const windowLabel = ({'30':'last 30 days','90':'last 90 days','180':'last 6 months','365':'last 12 months','ytd':'year to date','all':'all time'})[windowVal] || 'window';
 
-  const roster = activeRoster().filter(e => regionVal === 'all' || e.region === regionVal);
+  const statusVal = document.getElementById('eng-status-filter')?.value || 'active';
+  const baseRoster = statusVal === 'all' ? ENGINEERS : activeRoster();
+  const roster = baseRoster.filter(e => regionVal === 'all' || e.region === regionVal);
   const engActiveCount = document.getElementById('eng-active-count');
   if(engActiveCount) engActiveCount.textContent = activeRoster().length;
 
@@ -7222,6 +7228,10 @@ function engCardHtml(eng, m, windowLabel){
   const resigningBadge = resigningStr
     ? ` <span style="display:inline-flex;align-items:center;font-size:9px;font-family:var(--mono);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--amber);border-radius:4px;padding:2px 7px;letter-spacing:.3px">${esc(resigningStr)}</span>`
     : '';
+  const inactiveBadge = eng.status === 'inactive'
+    ? ` <span style="display:inline-flex;align-items:center;font-size:9px;font-family:var(--mono);background:rgba(107,114,128,.12);border:1px solid rgba(107,114,128,.3);color:var(--text-faint);border-radius:4px;padding:2px 7px;letter-spacing:.3px">INACTIVE</span>`
+    : '';
+  const activeDotCls = eng.status === 'inactive' ? 'dot-gray' : dotCls;
 
   const canManage = canManagePM();
   const resignBtn = canManage && eng.status === 'active'
@@ -7230,13 +7240,13 @@ function engCardHtml(eng, m, windowLabel){
        </div>`
     : '';
 
-  return `<div class="panel ep-card" style="padding:14px;margin:0">
+  return `<div class="panel ep-card" style="padding:14px;margin:0${eng.status === 'inactive' ? ';opacity:0.55' : ''}">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">
       <div style="min-width:0;flex:1">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
-          <div class="status-dot ${dotCls}" style="width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
+          <div class="status-dot ${activeDotCls}" style="width:8px;height:8px;border-radius:50%;flex-shrink:0"></div>
           <div style="font-family:var(--display);font-weight:700;font-size:15px">${esc(eng.name)}</div>
-          ${resigningBadge}
+          ${resigningBadge}${inactiveBadge}
         </div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:1px">${esc(eng.region||'Unassigned')}${eng.email ? ' · '+esc(eng.email) : ''}</div>
         ${joinedStr ? `<div style="font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:2px">${joinedStr}</div>` : ''}
