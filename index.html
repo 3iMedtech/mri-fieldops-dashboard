@@ -9934,7 +9934,7 @@ function _openTicketDetail(id){
     <div class="detail-field"><label>Town</label><span>${esc(t.town||'—')}</span></div>
     <div class="detail-field"><label>Call Date</label><span style="font-family:var(--mono)">${callDateStr}</span></div>
     <div class="detail-field"><label>Call Type</label><span>${esc(t.call_type||'—')}</span></div>
-    <div class="detail-field"><label>SLA Due</label><span style="font-family:var(--mono);${t.sla_due_at&&new Date(t.sla_due_at)<new Date()&&_AT_OPEN_STATUSES.includes(t.status)?'color:#ef4444':'''}">${slaStr}</span></div>
+    <div class="detail-field"><label>SLA Due</label><span style="font-family:var(--mono);${t.sla_due_at&&new Date(t.sla_due_at)<new Date()&&_AT_OPEN_STATUSES.includes(t.status)?'color:#ef4444':''}">${slaStr}</span></div>
     <div class="detail-field"><label>Assigned Engineers</label><span>${t.assigned_engineer_names.length?t.assigned_engineer_names.map(n=>esc(n)).join(', '):'<span style="color:var(--text-faint)">Unassigned</span>'}</span></div>`;
   document.getElementById('atd-issue-box').textContent = t.issue_description || '—';
 
