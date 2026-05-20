@@ -2939,7 +2939,7 @@ function extractSheetYears(wb){
 function validateUploadDates(allTickets, sheetYears){
   if(!sheetYears || !sheetYears.size) return [];
   const minYear = Math.min(...sheetYears) - 2; // 2-year back grace for historical tickets
-  const maxYear = Math.max(...sheetYears);      // no forward grace
+  const maxYear = Math.max(...sheetYears) + 1;  // 1-year forward grace for scheduled future appointments
   const fields = ['call_date','attended_date','parts_req_date','parts_recv_date','sys_up_date'];
   const anomalies = [];
   for(const t of allTickets){
