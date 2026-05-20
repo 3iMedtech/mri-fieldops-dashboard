@@ -2938,7 +2938,7 @@ function extractSheetYears(wb){
 
 function validateUploadDates(allTickets, sheetYears){
   if(!sheetYears || !sheetYears.size) return [];
-  const minYear = Math.min(...sheetYears) - 1; // 1-year back grace
+  const minYear = Math.min(...sheetYears) - 2; // 2-year back grace for historical tickets
   const maxYear = Math.max(...sheetYears);      // no forward grace
   const fields = ['call_date','attended_date','parts_req_date','parts_recv_date','sys_up_date'];
   const anomalies = [];
@@ -3970,10 +3970,11 @@ function parseFlexDate(s, ctx){
   // YYYY-MM-DD
   if(!d){ m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if(m) d=new Date(parseInt(m[1]),parseInt(m[2])-1,parseInt(m[3])); }
-  // DD/MM/YYYY or DD-MM-YYYY
-  if(!d){ m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  // DD/MM/YYYY or DD-MM-YYYY or DD/MM/YY or DD-MM-YY
+  if(!d){ m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
     if(m){
-      const _day=parseInt(m[1]),_mon=parseInt(m[2]),_yr=parseInt(m[3]);
+      const _day=parseInt(m[1]),_mon=parseInt(m[2]);
+      const _yr=m[3].length===2?2000+parseInt(m[3]):parseInt(m[3]);
       if(_mon>=1&&_mon<=12&&_day>=1&&_day<=31){
         const _t=new Date(_yr,_mon-1,_day);
         // Guard: if month overflows (e.g. "12-29-2025" read as day=12, mon=29) discard
