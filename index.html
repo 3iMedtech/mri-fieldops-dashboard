@@ -1404,6 +1404,7 @@ button,input,select,textarea{font-family:inherit;}
         <input class="search-box" id="mw-eng-search" type="search" placeholder="Engineer name…" aria-label="Filter by engineer" oninput="renderMyWork()" style="width:150px;padding:5px 10px">
       </div>
     </div>
+    <div id="mw-migration-banner" style="display:none;padding:8px 18px;background:rgba(245,158,11,0.08);border-bottom:1px solid rgba(245,158,11,0.2)"></div>
     <div style="padding:6px 18px 8px">
       <span id="mw-summary" style="font-size:11px;color:var(--text-dim)"></span>
     </div>
@@ -3561,6 +3562,7 @@ async function applyUploadedData(){
     MONTH_SHORT = MONTHS.map(m => m.split(' ')[0].slice(0,3));
     if(r.config && r.config.length > 0) CONFIG_ASSETS = r.config;
     if(r.cmc && r.cmc.length > 0) CMC_DATA = r.cmc;
+    ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
     // Overlay xlsx source-of-truth on top of whatever the uploaded sheet
     // (or legacy DB) provided — 24 canonical rows, xlsx spellings.
     applyInstallBaseOverlay();
@@ -3673,6 +3675,8 @@ function renderAll(){
   renderAssets();
   renderAmbiguities();
   renderReports();
+  renderMyWork();
+  renderAppTickets();
   // Sync nav badges — route through setNavBadgeCount so they un-hide on first
   // data load (the static HTML starts with display:none to avoid showing
   // stale placeholder counts before real data has arrived).
@@ -3690,7 +3694,7 @@ function renderAll(){
   if(typeof _refreshContractsNavBadge === 'function') _refreshContractsNavBadge();
   // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
   try {
-    const openCount = _unmigratedOpen().length;
+    const openCount = _unmigratedOpen().length + APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status) && t.wo_type !== 'sub').length;
     document.title = openCount > 0
       ? `● ${openCount} open · FieldOps`
       : 'FieldOps · Medical Imaging';
@@ -3698,7 +3702,8 @@ function renderAll(){
   const hpt = document.getElementById('history-panel-title');
   if(hpt){
     const range = MONTHS.length ? ` (${MONTHS[0]} – ${MONTHS[MONTHS.length-1]})` : '';
-    hpt.innerHTML = `<i data-lucide="clipboard-list"></i>Full Service History — ${RAW_TICKETS.length} Record${RAW_TICKETS.length!==1?'s':''}${range}`;
+    const totalHist = RAW_TICKETS.length + APP_TICKETS.filter(t => t.ticket_type === 'service' && !_AT_OPEN_STATUSES.includes(t.status)).length;
+    hpt.innerHTML = `<i data-lucide="clipboard-list"></i>Full Service History — ${totalHist} Record${totalHist!==1?'s':''}${range}`;
   }
   // Sweep the document for any newly-injected <i data-lucide=…> nodes and
   // swap them for SVGs (v1.1.0 1a chrome cleanup).
@@ -5040,36 +5045,34 @@ function renderDashOpen(){
     if(window.refreshIcons) window.refreshIcons();
     return;
   }
-  if(openAppTickets.length){
-    body.innerHTML = openAppTickets.slice(0, 20).map(t => {
-      const cd = t.call_date
-        ? new Date(t.call_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'})
-        : '—';
-      const eng = (t.assigned_engineer_names && t.assigned_engineer_names.length)
-        ? esc(t.assigned_engineer_names.join(', '))
-        : '<span style="color:var(--text-faint)">—</span>';
-      return `<tr class="clickable" onclick="_openTicketDetail('${esc(t.id)}')">
-        <td><span class="ticket-id">${esc(t.id)}</span></td>
-        <td style="font-weight:500;max-width:160px">${truncate(t.customer,22)}</td>
-        <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
-        <td style="font-size:11px">${esc(t.region||'—')}</td>
-        <td style="font-size:11px;font-family:var(--mono)">${cd}</td>
-        <td style="font-size:11px">${eng}</td>
-        <td>${_atStatusBadge(t.status)}</td>
-      </tr>`;
-    }).join('');
-  } else {
-    body.innerHTML = legacyOpen.map(t=>`
-      <tr class="clickable" onclick="openDetail('${t.id}')">
-        <td><span class="ticket-id">${t.id}</span></td>
-        <td style="font-weight:500;max-width:150px">${truncate(t.customer,22)}</td>
-        <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
-        <td style="font-size:11px">${esc(t.state||'—')}</td>
-        <td style="font-size:11px;font-family:var(--mono)">${esc(t.call_date||'—')}</td>
-        <td style="font-size:11px">${truncate(t.engineer,20)}</td>
-        <td>${statusBadge(t.status)}</td>
-      </tr>`).join('');
-  }
+  const appRows = openAppTickets.slice(0, 20).map(t => {
+    const cd = t.call_date
+      ? new Date(t.call_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'})
+      : '—';
+    const eng = (t.assigned_engineer_names && t.assigned_engineer_names.length)
+      ? esc(t.assigned_engineer_names.join(', '))
+      : '<span style="color:var(--text-faint)">—</span>';
+    return `<tr class="clickable" onclick="_openTicketDetail('${esc(t.id)}')">
+      <td><span class="ticket-id">${esc(t.id)}</span></td>
+      <td style="font-weight:500;max-width:160px">${truncate(t.customer,22)}</td>
+      <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
+      <td style="font-size:11px">${esc(t.region||'—')}</td>
+      <td style="font-size:11px;font-family:var(--mono)">${cd}</td>
+      <td style="font-size:11px">${eng}</td>
+      <td>${_atStatusBadge(t.status)}</td>
+    </tr>`;
+  });
+  const legacyRows = legacyOpen.map(t=>`
+    <tr class="clickable" onclick="openDetail('${t.id}')">
+      <td><span class="ticket-id">${t.id}</span></td>
+      <td style="font-weight:500;max-width:150px">${truncate(t.customer,22)}</td>
+      <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
+      <td style="font-size:11px">${esc(t.state||'—')}</td>
+      <td style="font-size:11px;font-family:var(--mono)">${esc(t.call_date||'—')}</td>
+      <td style="font-size:11px">${truncate(t.engineer,20)}</td>
+      <td>${statusBadge(t.status)}</td>
+    </tr>`);
+  body.innerHTML = [...appRows, ...legacyRows].join('');
   if(window.refreshIcons) window.refreshIcons();
 }
 
@@ -6359,8 +6362,46 @@ function printCurrentPage(label){
   setTimeout(() => window.print(), 50);
 }
 
+function _monthLabelFromDate(d){
+  if(!d || isNaN(d)) return '';
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const candidate = names[d.getMonth()] + ' ' + d.getFullYear();
+  return MONTHS.find(m => m === candidate) || candidate;
+}
+
+function _mapAppTicketToHistory(t){
+  const callDateRaw = t.call_date ? new Date(t.call_date + 'T00:00:00') : null;
+  const callDateStr = callDateRaw
+    ? callDateRaw.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+  const monthLabel  = _monthLabelFromDate(callDateRaw || new Date(t.created_at || Date.now()));
+  const sysUpRaw    = t.sys_up_date  ? new Date(t.sys_up_date  + 'T00:00:00') : null;
+  const resolvedRaw = t.resolved_at  ? new Date(t.resolved_at) : null;
+  const attendedRaw = resolvedRaw || sysUpRaw;
+  const attendedStr = attendedRaw
+    ? attendedRaw.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+  const sysUpStr    = sysUpRaw
+    ? sysUpRaw.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+  return {
+    id: t.id, month: monthLabel, src_row: 0,
+    customer_raw: t.customer||'', customer: t.customer||'',
+    asset_code: t.asset_code||'', town: t.town||'', state: t.state||'',
+    contract: t.contract||'', call_date: callDateStr, call_type: t.call_type||'',
+    model: t.model||'', sys_status: t.sys_status||'', issue: t.issue_description||'',
+    attended_date: attendedStr, engineer: (t.assigned_engineer_names||[]).join(' & '),
+    parts: t.parts||'', parts_req_date:'', parts_recv_date:'',
+    parts_status: t.parts_status||'', sys_up_date: sysUpStr,
+    resolution: t.resolution||'', status: 'Closed',
+    orphaned:false, unmatched:false, ambiguities:[],
+    _callDate: callDateRaw, _upDate: sysUpRaw, _isAppTicket: true,
+  };
+}
+
 function getFilteredHistoryRows(){
-  let rows=RAW_TICKETS;
+  // Merge closed/resolved service app_tickets alongside RAW_TICKETS
+  const closedAt = APP_TICKETS
+    .filter(t => t.ticket_type === 'service' && !_AT_OPEN_STATUSES.includes(t.status))
+    .map(_mapAppTicketToHistory);
+  let rows = [...RAW_TICKETS, ...closedAt];
   if(historyFilter!=='all') rows=rows.filter(t=>t.month===historyFilter);
   if(historySearch) rows=rows.filter(t=>[t.customer,t.issue,t.engineer,t.parts,t.resolution,t.model].some(v=>v&&v.toLowerCase().includes(historySearch.toLowerCase())));
   if(historyModalityFilter!=='all') rows=rows.filter(t=>getTicketModality(t)===historyModalityFilter);
@@ -9329,6 +9370,10 @@ function renderReports(){
 // TICKET DETAIL MODAL
 // ══════════════════════════════════════════
 function openDetail(id){
+  // If not a legacy ticket, delegate to the app_ticket detail viewer
+  if(!RAW_TICKETS.find(t=>t.id===id) && !AMBIGUITIES.find(a=>a.id===id)){
+    if(APP_TICKETS.find(t=>t.id===id)){ _openTicketDetail(id); return; }
+  }
   const t=RAW_TICKETS.find(t=>t.id===id)||AMBIGUITIES.find(a=>a.id===id);
   if(!t||!t.customer) return;
   document.getElementById('dm-id').textContent=t.id;
@@ -9550,6 +9595,8 @@ async function doFirstPaint(){
   renderAssets();
   renderAmbiguities();
   renderReports();
+  renderMyWork();
+  renderAppTickets();
 
   // Sync dynamic nav badges (all of them — this ran only in renderAll() before,
   // so after a fresh login these badges kept the hardcoded HTML values).
@@ -9566,9 +9613,9 @@ async function doFirstPaint(){
   setNavBadgeCount('nb-total', RAW_TICKETS.length, {showZero: true});
   _refreshDQNavBadge();
   if(typeof _refreshContractsNavBadge === 'function') _refreshContractsNavBadge();
-  // Dynamic tab title — surface open-ticket count so the browser tab is useful at a glance.
+  // Dynamic tab title — surface open-ticket count (app_tickets + unmigrated legacy).
   try {
-    const openCount = _unmigratedOpen().length;
+    const openCount = _unmigratedOpen().length + APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status) && t.wo_type !== 'sub').length;
     document.title = openCount > 0
       ? `● ${openCount} open · FieldOps`
       : 'FieldOps · Medical Imaging';
@@ -9578,7 +9625,8 @@ async function doFirstPaint(){
   const hpt = document.getElementById('history-panel-title');
   if(hpt){
     const range = MONTHS.length ? ` (${MONTHS[0]} – ${MONTHS[MONTHS.length-1]})` : '';
-    hpt.innerHTML = `<i data-lucide="clipboard-list"></i>Full Service History — ${RAW_TICKETS.length} Record${RAW_TICKETS.length!==1?'s':''}${range}`;
+    const totalHist = RAW_TICKETS.length + APP_TICKETS.filter(t => t.ticket_type === 'service' && !_AT_OPEN_STATUSES.includes(t.status)).length;
+    hpt.innerHTML = `<i data-lucide="clipboard-list"></i>Full Service History — ${totalHist} Record${totalHist!==1?'s':''}${range}`;
     if (window.refreshIcons) window.refreshIcons();
   }
 
@@ -10720,25 +10768,45 @@ function renderMyWork(){
     t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch))
   );
 
+  // Legacy open calls not yet migrated — shown when viewing open or all statuses
+  const legacyOpen = _unmigratedOpen().filter(t =>
+    !engSearch || (t.engineer||'').toLowerCase().includes(engSearch)
+  );
+  const showLegacy = statusVal !== 'closed';
+
+  // Badge: combined open count (app_tickets + unmigrated legacy)
   const myCount = APP_TICKETS.filter(t =>
     t.wo_type !== 'sub' &&
     _AT_OPEN_STATUSES.includes(t.status) &&
     (engSearch ? t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch)) : true)
-  ).length;
+  ).length + _unmigratedOpen().length;
   setNavBadgeCount('nb-my-work', myCount);
 
+  // Migration banner visible to admin/manager when legacy calls exist
+  const bannerEl = document.getElementById('mw-migration-banner');
+  if(bannerEl){
+    const lc = _unmigratedOpen().length;
+    if(lc && canManagePM()){
+      bannerEl.style.display = '';
+      bannerEl.innerHTML = `<span style="font-size:12px;color:var(--amber)"><b>${lc} legacy open call${lc===1?'':'s'}</b> not yet in Work Order system. <button onclick="migrateOpenCallsToWOs()" style="margin-left:10px;padding:3px 10px;font-size:11px;background:var(--amber);color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:600">Import as WOs</button></span>`;
+    } else {
+      bannerEl.style.display = 'none';
+    }
+  }
+
+  const totalShown = rows.length + (showLegacy ? legacyOpen.length : 0);
   const summaryEl = document.getElementById('mw-summary');
-  if(summaryEl) summaryEl.textContent = `${rows.length} ticket${rows.length===1?'':'s'} shown`;
+  if(summaryEl) summaryEl.textContent = `${totalShown} ticket${totalShown===1?'':'s'} shown`;
 
   const tbody = document.getElementById('mw-tbody');
   if(!tbody) return;
-  if(!rows.length){
+  if(!totalShown){
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-dim)">No tickets match this filter.</td></tr>`;
     return;
   }
 
   const now = new Date();
-  tbody.innerHTML = rows.map(t => {
+  const appRows = rows.map(t => {
     const engCell = t.assigned_engineer_names.length
       ? t.assigned_engineer_names.map(n=>esc(n)).join(', ')
       : `<span style="color:var(--text-faint)">—</span>`;
@@ -10761,7 +10829,20 @@ function renderMyWork(){
       <td style="font-size:11px;${slaStyle}">${slaStr}</td>
       <td style="font-size:11px">${engCell}</td>
     </tr>`;
-  }).join('');
+  });
+
+  const legacyRows = showLegacy ? legacyOpen.map(t => `<tr style="cursor:pointer" onclick="openDetail('${esc(t.id)}')">
+    <td style="font-family:var(--mono);font-size:11px;color:var(--text-dim)">${esc(t.id)}</td>
+    <td>${esc(t.customer||'—')}</td>
+    <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
+    <td>${esc(t.region||t.state||'—')}</td>
+    <td style="font-size:11px">${esc(t.call_date||'—')}</td>
+    <td>${statusBadge(t.status)}</td>
+    <td style="font-size:11px;color:var(--text-faint)">—</td>
+    <td style="font-size:11px">${esc(t.engineer||'—')}</td>
+  </tr>`) : [];
+
+  tbody.innerHTML = [...appRows, ...legacyRows].join('');
 }
 
 function openNewTicketModal(){
