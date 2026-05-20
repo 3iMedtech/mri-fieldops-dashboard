@@ -4969,9 +4969,11 @@ async function _autoMigrateOpenCalls(){
     const matched = names
       .map(n => ENGINEERS.find(e => canonEngName(e.name) === canonEngName(n)))
       .filter(Boolean);
-    const engIds   = matched.map(e => e.id);
-    const engNames = matched.map(e => e.name);
-    const region   = matched[0]?.region || t.region || '';
+    const capped   = matched.slice(0, 2); // DB allows max 2 engineers per ticket
+    if(matched.length > 2) console.warn(`[AutoMigrate] ${t.id}: ${matched.length} engineers — truncated to first 2`);
+    const engIds   = capped.map(e => e.id);
+    const engNames = capped.map(e => e.name);
+    const region   = capped[0]?.region || matched[0]?.region || t.region || '';
     const callDateRaw = parseFlexDate(t.call_date, `${t.id}:call_date`);
     const callDate    = callDateRaw ? callDateRaw.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
     const ticket = await dbSaveAppTicket({
