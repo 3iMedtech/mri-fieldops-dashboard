@@ -151,7 +151,7 @@ async function testRole(page, user, envUrl, expectedVersion) {
 
   // XLSX button
   const xlsxBtns = await page.$$eval('button', bs =>
-    bs.filter(b => b.textContent.includes('Upload XLSX') && window.getComputedStyle(b).display !== 'none').length
+    bs.filter(b => b.textContent.includes('XLSX') && window.getComputedStyle(b).display !== 'none').length
   );
   const fileInputDisplay = await page.$eval('#xlsx-upload', el => window.getComputedStyle(el).display).catch(() => 'not found');
   if (user.role === 'Engineer') {
