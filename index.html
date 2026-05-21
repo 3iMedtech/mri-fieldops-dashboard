@@ -27,9 +27,9 @@
    ════════════════════════════════════════════════════════════════════════════ */
 :root{
   /* — surface + text (legacy names preserved for back-compat) — */
-  --bg:#0a0e17; --surface:#111827; --surface2:#1a2235; --surface3:#1f2d44;
-  --border:#243044;
-  --text:#e2e8f0; --text-dim:#94a3b8; --text-faint:#4b5a72;
+  --bg:#f0f2f5; --surface:#ffffff; --surface2:#f1f5f9; --surface3:#e8edf4;
+  --border:#e2e8f0;
+  --text:#1e293b; --text-dim:#64748b; --text-faint:#94a3b8;
 
   /* — brand + accent — */
   --brand:#3b82f6; --brand-dim:#1d4ed8;
@@ -60,13 +60,13 @@
   /* — radius scale — */
   --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:12px; --radius-2xl:16px; --radius-pill:999px;
 
-  /* — elevation (layered shadows that read on dark surfaces) — */
-  --shadow-1:0 1px 2px rgba(0,0,0,.20);
-  --shadow-2:0 2px 4px rgba(0,0,0,.25),0 1px 2px rgba(0,0,0,.20);
-  --shadow-3:0 4px 8px rgba(0,0,0,.30),0 2px 4px rgba(0,0,0,.20);
-  --shadow-4:0 8px 16px rgba(0,0,0,.35),0 4px 8px rgba(0,0,0,.20);
-  --shadow-5:0 16px 32px rgba(0,0,0,.40),0 8px 16px rgba(0,0,0,.25);
-  --shadow-6:0 24px 48px rgba(0,0,0,.45),0 12px 24px rgba(0,0,0,.30);
+  /* — elevation (layered shadows calibrated for light surfaces) — */
+  --shadow-1:0 1px 2px rgba(0,0,0,.06);
+  --shadow-2:0 2px 4px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --shadow-3:0 4px 8px rgba(0,0,0,.10),0 2px 4px rgba(0,0,0,.06);
+  --shadow-4:0 8px 16px rgba(0,0,0,.10),0 4px 8px rgba(0,0,0,.06);
+  --shadow-5:0 16px 32px rgba(0,0,0,.12),0 8px 16px rgba(0,0,0,.07);
+  --shadow-6:0 24px 48px rgba(0,0,0,.14),0 12px 24px rgba(0,0,0,.08);
 
   /* — focus ring (used by Phase 1b accessibility work) — */
   --focus-ring:0 0 0 3px rgba(59,130,246,.45);
@@ -121,13 +121,17 @@ button,input,select,textarea{font-family:inherit;}
 .nav-badge.amber{background:var(--amber);color:#000;}
 .nav-badge.green{background:var(--green);}
 .nav-badge.blue{background:var(--brand);}
-.sidebar-footer{padding:14px 10px;border-top:1px solid var(--border);}
+.sidebar-footer{padding:12px 10px;border-top:1px solid var(--border);}
 .user-card{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--surface2);}
-.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--brand),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;}
+.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--brand),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;color:#fff;flex-shrink:0;}
 .user-name{font-size:12px;font-weight:600;}
 .user-role{font-size:10px;color:var(--text-dim);font-family:var(--mono);}
+.sb-email{font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sf-actions{display:flex;gap:6px;margin-top:8px;}
+.sf-btn{font-size:11px;padding:5px 10px;flex:1;justify-content:center;gap:5px;}
+.sf-btn svg{width:13px;height:13px;}
 .topbar{position:fixed;left:224px;top:0;right:0;height:54px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:14px;z-index:99;}
-.topbar-title{font-family:var(--display);font-weight:700;font-size:17px;flex:1;}
+.topbar-title{font-family:var(--display);font-weight:700;font-size:17px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .static-dataset-label{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:.5px;}
 .clock{font-family:var(--mono);font-size:12px;color:var(--text-dim);}
 /* v1.1.0 1a button system. The base .btn establishes typography, radius, and
@@ -160,13 +164,13 @@ button,input,select,textarea{font-family:inherit;}
 .alert-banner{background:linear-gradient(90deg,rgba(239,68,68,.12),rgba(239,68,68,.04));border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:11px 16px;display:flex;align-items:center;gap:12px;margin-bottom:18px;}
 .alert-close{color:var(--text-faint);cursor:pointer;background:transparent;border:1px solid transparent;border-radius:var(--radius-sm);padding:4px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;}
 .alert-close svg{width:16px;height:16px;}
-.alert-close:hover{color:var(--text);background:rgba(255,255,255,.05);}
+.alert-close:hover{color:var(--text);background:rgba(0,0,0,.05);}
 .alert-close:focus-visible{outline:none;box-shadow:var(--focus-ring);}
 .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px;}
 /* Default cursor stays inactive; clickable cards opt in via inline style="cursor:pointer" + onclick (PM tiles)
    or via cursor:help for tooltip-only cards (SLA / MTTR / Repeat Failures). The dashboard top-row KPIs are
    summary tiles with no drill-in yet, so they should not falsely advertise clickability. (audit F-01) */
-.kpi-card{background:linear-gradient(180deg,var(--surface),#0f172a);border:1px solid var(--border);border-radius:14px;padding:15px;cursor:default;transition:transform .25s cubic-bezier(.2,.7,.2,1),border-color .2s,box-shadow .25s;position:relative;overflow:hidden;}
+.kpi-card{background:linear-gradient(180deg,var(--surface),#f8fafc);border:1px solid var(--border);border-radius:14px;padding:15px;cursor:default;transition:transform .25s cubic-bezier(.2,.7,.2,1),border-color .2s,box-shadow .25s;position:relative;overflow:hidden;}
 .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;z-index:1;}
 .kpi-card::after{content:'';position:absolute;inset:0;border-radius:14px;padding:1px;background:linear-gradient(135deg,transparent 40%,rgba(59,130,246,.0) 50%,transparent 60%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity .25s,background .25s;}
 .kpi-card.blue::before{background:var(--brand);}
@@ -281,24 +285,24 @@ button,input,select,textarea{font-family:inherit;}
 .data-table thead th .sort-chevron{display:inline-block;margin-left:6px;opacity:.25;color:var(--text-faint);font-size:9px;letter-spacing:0;transition:opacity .12s,color .12s,transform .12s;}
 .data-table thead th.sort-active .sort-chevron{opacity:1;color:var(--brand);}
 .data-table thead th.sort-active.sort-desc .sort-chevron{transform:rotate(180deg);}
-.data-table td{padding:10px 12px;border-bottom:1px solid rgba(36,48,68,.5);font-size:12px;vertical-align:middle;}
+.data-table td{padding:10px 12px;border-bottom:1px solid rgba(0,0,0,.07);font-size:12px;vertical-align:middle;}
 .data-table tr:last-child td{border-bottom:none;}
 .data-table tr:hover td{background:var(--surface2);}
 .data-table tr.clickable{cursor:pointer;}
 .badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;font-weight:500;padding:3px 8px;border-radius:5px;}
-.badge.critical,.badge.down{background:rgba(239,68,68,.15);color:#fca5a5;}
-.badge.high,.badge.partially-working{background:rgba(245,158,11,.15);color:#fcd34d;}
-.badge.medium,.badge.incident{background:rgba(59,130,246,.15);color:#93c5fd;}
-.badge.low,.badge.remote{background:rgba(100,116,139,.1);color:var(--text-dim);}
-.badge.open{background:rgba(239,68,68,.1);color:#fca5a5;}
-.badge.closed{background:rgba(16,185,129,.1);color:#6ee7b7;}
-.badge.pms,.badge.installation,.badge.testing{background:rgba(139,92,246,.1);color:#c4b5fd;}
-.badge.planned{background:rgba(16,185,129,.08);color:#6ee7b7;}
-.badge.cmc{background:rgba(59,130,246,.1);color:#93c5fd;}
-.badge.amc{background:rgba(245,158,11,.1);color:#fbbf24;}
-.badge.warranty{background:rgba(16,185,129,.1);color:#6ee7b7;}
-.badge.ambiguous{background:rgba(245,158,11,.15);color:#fcd34d;}
-.badge.unknown{background:rgba(100,116,139,.1);color:var(--text-dim);}
+.badge.critical,.badge.down{background:rgba(239,68,68,.10);color:#dc2626;}
+.badge.high,.badge.partially-working{background:rgba(245,158,11,.12);color:#b45309;}
+.badge.medium,.badge.incident{background:rgba(59,130,246,.10);color:#1d4ed8;}
+.badge.low,.badge.remote{background:rgba(100,116,139,.09);color:var(--text-dim);}
+.badge.open{background:rgba(239,68,68,.09);color:#dc2626;}
+.badge.closed{background:rgba(16,185,129,.10);color:#059669;}
+.badge.pms,.badge.installation,.badge.testing{background:rgba(139,92,246,.09);color:#7c3aed;}
+.badge.planned{background:rgba(16,185,129,.09);color:#059669;}
+.badge.cmc{background:rgba(59,130,246,.10);color:#1d4ed8;}
+.badge.amc{background:rgba(245,158,11,.10);color:#b45309;}
+.badge.warranty{background:rgba(16,185,129,.10);color:#059669;}
+.badge.ambiguous{background:rgba(245,158,11,.12);color:#b45309;}
+.badge.unknown{background:rgba(100,116,139,.09);color:var(--text-dim);}
 .ticket-id{font-family:var(--mono);font-size:11px;color:var(--brand);cursor:pointer;}
 .ticket-id:hover{text-decoration:underline;}
 .filter-tabs{display:flex;gap:4px;margin-bottom:13px;flex-wrap:wrap;}
@@ -360,7 +364,7 @@ button,input,select,textarea{font-family:inherit;}
 .month-pill{display:inline-block;font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text-dim);margin-bottom:3px;}
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18);border-radius:3px;}
 .pag-info{font-family:var(--mono);font-size:10px;color:var(--text-faint);padding:10px 18px;border-top:1px solid var(--border);}
   .login-overlay {
     position: fixed; inset: 0; z-index: 99999;
@@ -409,7 +413,7 @@ button,input,select,textarea{font-family:inherit;}
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text {
-    color: var(--text-dim); font-size: 13px; font-weight: 500;
+    color: #94a3b8; font-size: 13px; font-weight: 500;
     letter-spacing: .3px;
     position: relative;
   }
@@ -446,7 +450,7 @@ button,input,select,textarea{font-family:inherit;}
   /* Admin + manager only — the "management" tier. Engineers see nothing. */
   .viewer-mode .mgr-plus { display: none !important; }
   .viewer-mode.manager-mode .mgr-plus { display: revert !important; }
-  .viewer-badge { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(139,92,246,.2); color: #c4b5fd; letter-spacing: 1px; }
+  .viewer-badge { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(139,92,246,.12); color: #7c3aed; letter-spacing: 1px; }
 
   /* Engineer Performance — clickable metric tiles. Each tile opens a drill-down
      that filters to that metric, so the value on the tile and the rows in the
@@ -512,7 +516,7 @@ button,input,select,textarea{font-family:inherit;}
     .content { padding: 14px; }
 
     /* Hide low-value topbar chrome on phones to save space */
-    .clock, .static-dataset-label, #user-email { display: none; }
+    .clock, .static-dataset-label { display: none; }
     .topbar-title { font-size: 15px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #user-menu { gap: 6px; }
 
@@ -571,7 +575,7 @@ button,input,select,textarea{font-family:inherit;}
     padding: 3px 8px; border-radius: 10px;
     font-family: var(--mono, ui-monospace, monospace);
     font-size: 10px; font-weight: 600; letter-spacing: .5px;
-    background: rgba(255,255,255,.03); border: 1px solid var(--border, rgba(255,255,255,.08));
+    background: rgba(0,0,0,.03); border: 1px solid var(--border, rgba(0,0,0,.12));
     color: var(--text-dim, #94a3b8);
     user-select: none; transition: background .2s ease, color .2s ease, border-color .2s ease;
   }
@@ -579,20 +583,20 @@ button,input,select,textarea{font-family:inherit;}
     width: 7px; height: 7px; border-radius: 50%;
     background: #94a3b8; box-shadow: 0 0 0 0 rgba(148,163,184,.5);
   }
-  .live-badge[data-state="live"]     { color: #4ade80; border-color: rgba(74,222,128,.25); background: rgba(74,222,128,.06); }
+  .live-badge[data-state="live"]     { color: #16a34a; border-color: rgba(22,163,74,.25); background: rgba(22,163,74,.07); }
   .live-badge[data-state="live"] .live-badge__dot {
-    background: #4ade80;
+    background: #16a34a;
     animation: liveDotPulse 2.4s ease-out infinite;
   }
-  .live-badge[data-state="offline"]  { color: #f87171; border-color: rgba(248,113,113,.3); background: rgba(248,113,113,.08); }
-  .live-badge[data-state="offline"] .live-badge__dot { background: #f87171; animation: none; }
+  .live-badge[data-state="offline"]  { color: #dc2626; border-color: rgba(220,38,38,.3); background: rgba(220,38,38,.07); }
+  .live-badge[data-state="offline"] .live-badge__dot { background: #dc2626; animation: none; }
   .live-badge[data-state="idle"]     { color: #94a3b8; }
   .live-badge[data-state="idle"] .live-badge__dot { background: #94a3b8; animation: none; }
-  .live-badge--flash { background: rgba(74,222,128,.2) !important; }
+  .live-badge--flash { background: rgba(22,163,74,.15) !important; }
   @keyframes liveDotPulse {
-    0%   { box-shadow: 0 0 0 0   rgba(74,222,128,.55); }
-    70%  { box-shadow: 0 0 0 6px rgba(74,222,128,0); }
-    100% { box-shadow: 0 0 0 0   rgba(74,222,128,0); }
+    0%   { box-shadow: 0 0 0 0   rgba(22,163,74,.55); }
+    70%  { box-shadow: 0 0 0 6px rgba(22,163,74,0); }
+    100% { box-shadow: 0 0 0 0   rgba(22,163,74,0); }
   }
   @media (max-width: 768px) {
     .live-badge__label { display: none; }  /* dot-only on phones to save space */
@@ -785,10 +789,10 @@ button,input,select,textarea{font-family:inherit;}
   .toast-msg{flex:1;line-height:1.4;}
   .toast-close{flex-shrink:0;background:transparent;border:none;cursor:pointer;color:inherit;opacity:.5;padding:0;line-height:1;font-size:16px;margin-top:-1px;}
   .toast-close:hover{opacity:1;}
-  .toast.info{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:#93c5fd;}
-  .toast.success{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3);color:#6ee7b7;}
-  .toast.warning{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#fcd34d;}
-  .toast.error{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:#fca5a5;}
+  .toast.info{background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.25);color:#1d4ed8;}
+  .toast.success{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.25);color:#059669;}
+  .toast.warning{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.25);color:#b45309;}
+  .toast.error{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25);color:#dc2626;}
   @keyframes toastIn{from{opacity:0;transform:translateX(24px) scale(.97)}to{opacity:1;transform:none}}
   @keyframes toastOut{from{opacity:1;transform:none}to{opacity:0;transform:translateX(16px) scale(.96)}}
   @media(max-width:768px){#toast-container{bottom:14px;right:14px;left:14px;}.toast{min-width:0;max-width:100%;}}
@@ -934,7 +938,17 @@ button,input,select,textarea{font-family:inherit;}
   <div class="sidebar-footer">
     <div class="user-card">
       <div class="avatar" id="sb-avatar">SM</div>
-      <div><div class="user-name" id="sb-user-name">—</div><div class="user-role" id="sb-user-role">—</div></div>
+      <div style="flex:1;min-width:0;">
+        <div class="user-name" id="sb-user-name">—</div>
+        <div class="user-role" id="sb-user-role">—</div>
+        <div class="sb-email" id="sb-email">—</div>
+      </div>
+      <span id="user-role-badge"></span>
+    </div>
+    <div class="sf-actions">
+      <input type="file" id="xlsx-upload" accept=".xlsx" aria-label="Upload service operations XLSX file" style="display:none" onchange="handleXLSXUpload(event)">
+      <button class="btn btn-ghost sf-btn mgr-plus" onclick="document.getElementById('xlsx-upload').click()" title="Upload service operations Excel file"><i data-lucide="upload"></i>XLSX</button>
+      <button class="btn btn-ghost sf-btn" onclick="handleLogout()" title="Sign out"><i data-lucide="log-out"></i>Sign out</button>
     </div>
   </div>
 </aside>
@@ -963,17 +977,10 @@ button,input,select,textarea{font-family:inherit;}
   <div id="global-search-results" class="global-search-results" role="listbox" aria-label="Search results" hidden></div>
   <div id="env-pill" style="display:none;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;padding:4px 10px;border-radius:4px;background:#f59e0b;color:#000;box-shadow:0 0 0 1px #b45309 inset" title="You are on the STAGING environment. Data here is isolated from production.">STAGING</div>
   <div class="static-dataset-label" id="dataset-label">DATASET · OCT 2025 – MAR 2026</div>
-  <input type="file" id="xlsx-upload" accept=".xlsx" aria-label="Upload service operations XLSX file" style="display:none" onchange="handleXLSXUpload(event)">
-  <button class="btn btn-ghost mgr-plus" style="font-size:11px;padding:6px 12px" onclick="document.getElementById('xlsx-upload').click()" title="Upload service operations Excel file"><i data-lucide="upload"></i>Upload XLSX</button>
   <button class="btn btn-ghost" id="reset-data-btn" style="font-size:11px;padding:6px 12px" onclick="resetToBundledData()" title="Refresh data from database"><i data-lucide="rotate-cw"></i>Refresh</button>
   <div class="clock" id="clock">—</div>
   <div id="live-badge" class="live-badge" data-state="idle" title="Connecting…">
     <span class="live-badge__dot"></span><span class="live-badge__label">LIVE</span>
-  </div>
-  <div id="user-menu" style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim)">
-    <span id="user-role-badge"></span>
-    <span id="user-email" style="font-family:var(--mono)"></span>
-    <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px" onclick="handleLogout()" title="Sign out">Sign out</button>
   </div>
 </header>
 
@@ -9789,9 +9796,9 @@ async function applyRoleRestrictions(){
   const badge = document.getElementById('user-role-badge');
   if(badge){
     if(_userRole === 'admin'){
-      badge.innerHTML = '<span class="viewer-badge" style="background:rgba(59,130,246,.2);color:#93c5fd">ADMIN</span>';
+      badge.innerHTML = '<span class="viewer-badge" style="background:rgba(59,130,246,.12);color:#1d4ed8">ADMIN</span>';
     } else if(isManager){
-      badge.innerHTML = '<span class="viewer-badge" style="background:rgba(16,185,129,.2);color:#6ee7b7">MANAGER</span>';
+      badge.innerHTML = '<span class="viewer-badge" style="background:rgba(16,185,129,.12);color:#059669">MANAGER</span>';
     } else {
       badge.innerHTML = '<span class="viewer-badge">VIEWER</span>';
     }
@@ -11485,9 +11492,9 @@ async function bootApp(){
     showLoading('Loading data…');
     await loadAllFromDB();
     hideLoading();
-    // Show logged-in user in topbar
-    const ue = document.getElementById('user-email');
-    if(ue && _currentUser) ue.textContent = _currentUser.email || '';
+    // Show logged-in user email in sidebar footer
+    const sbEmail = document.getElementById('sb-email');
+    if(sbEmail && _currentUser) sbEmail.textContent = _currentUser.email || '';
     await applyRoleRestrictions();
     await doFirstPaint();
     // v1.1.0 1c: respect a deep-link hash on first paint so a bookmarked
