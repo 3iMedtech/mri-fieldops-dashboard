@@ -12,7 +12,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 ## Last verified
 
-- **Snapshot timestamp:** 2026-05-21 (WO email notification shipped to production; test-matrix XLSX fix deployed; staging and main fully in sync)
+- **Snapshot timestamp:** 2026-05-21 (v1.5.1 tagged; WO email notification + test-matrix fix in production; staging and main fully in sync)
 - **Snapshot author:** Claude (acting as automation-memory-agent)
 
 ---
@@ -22,8 +22,8 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 - **Canonical branch:** `main`
 - **Latest commit on `main`:** `7f8ab60` — `fix(test): correct XLSX button text filter in test-matrix.js`
 - **Latest commit on `staging`:** `7f8ab60` — same; **staging and main are fully in sync**
-- **Latest tag:** `v1.4.1` (annotated, tag object `59a5da6`) — ⚠️ NO v1.5.x tag created yet. `APP_BUILD.tag` references `'v1.5.1'` in index.html but that git tag does not exist. Tag should be created before the next release cycle.
-- **Previous tag:** `v1.4.0.1`
+- **Latest tag:** `v1.5.1` (annotated, tag object `29e0ff2`, pointing to commit `7f8ab60`) — `APP_BUILD.tag` and git tag are now aligned.
+- **Previous tag:** `v1.4.1`
 - **Working tree:** clean
 
 ---
@@ -144,7 +144,6 @@ WO email notification feature additionally verified via Playwright (all 3 roles,
 
 | Suggestion | Phrase needed |
 |---|---|
-| Create missing `v1.5.1` git tag | `approved, tag v1.5.1` |
 | Close stale PR #25 (v1.4.1 Phase 1 runbook) | `approved, close PR #25` |
 | Close stale PR #28 (v1.4.2 technical design) | `approved, close PR #28` |
 | Configure Zoho SMTP secrets in Supabase to activate server-side WO email | Operator sets `ZOHO_SMTP_USER`, `ZOHO_SMTP_PASS`, `ALERT_FROM`, `WO_NOTIFY_CC` in Supabase dashboard |
@@ -155,7 +154,7 @@ WO email notification feature additionally verified via Playwright (all 3 roles,
 
 | Risk | Severity | Owner | Recorded at |
 |---|---|---|---|
-| No `v1.5.1` git tag — `APP_BUILD.tag` references it but tag doesn't exist | Medium | release-pm | 2026-05-21 |
+| ~~No `v1.5.1` git tag~~ | ~~Medium~~ | closed | **CLOSED** 2026-05-21 — tag created (object `29e0ff2`) |
 | PR #25 stale (v1.4.1 Phase 1 runbook — superseded) | Low | release-pm | 2026-05-13, unchanged |
 | PR #28 stale (v1.4.2 technical design — superseded by direct staging work) | Low | release-pm | 2026-05-21 |
 | `cmc_contracts` UNIQUE constraint on `sn` not yet applied — safe-upsert deferred | Medium | database-pm | `L-DBPM-005` |
@@ -192,7 +191,8 @@ WO email notification feature additionally verified via Playwright (all 3 roles,
   - `cf8c6bc` — `feat: WO creation email notification via mailto (opt-in)`. Replaced broken edge-function auto-fire (SMTP never configured — 6 failed attempts) with opt-in mailto: approach matching PM reminder pattern. Reuses `PM_REMINDER_CC`. Detail modal opens automatically after WO creation. Playwright-verified across all 3 roles.
   - `7f8ab60` — `fix(test): correct XLSX button text filter in test-matrix.js`. Test looked for "Upload XLSX" but button label is "XLSX". Pre-existing false failure since button was renamed.
   - All 3 commits deployed to production. Matrix 59/59, 0 JS errors.
-  - STATE.md refreshed to current truth (this commit).
+  - Annotated tag `v1.5.1` created on `7f8ab60` (tag object `29e0ff2`), pushed to origin.
+  - STATE.md refreshed to current truth.
 
 ---
 
