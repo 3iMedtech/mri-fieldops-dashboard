@@ -9742,6 +9742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let _sb = null;            // Supabase client
 let _currentUser = null;   // logged-in user
 let _userRole = 'viewer';  // 'admin' | 'manager' | 'viewer'
+let _notifiedTickets = new Set(); // session: tickets where email was already prepared this session
 
 // ───────────────────────────────────────────────────────────────
 // PROFILE DISPLAY — per-email name, title, and avatar initials
@@ -10281,7 +10282,17 @@ function _openTicketDetail(id){
   if(saveBtn) saveBtn.style.display = canEdit ? '' : 'none';
   const notifyBtn = document.getElementById('atd-notify-btn');
   if(notifyBtn){
-    notifyBtn.style.display = (canManagePM() && t.ticket_type === 'service' && (t.assigned_engineer_ids||[]).length > 0) ? '' : 'none';
+    const showNotify = canManagePM() && t.ticket_type === 'service' && (t.assigned_engineer_ids||[]).length > 0;
+    notifyBtn.style.display = showNotify ? '' : 'none';
+    if(showNotify){
+      const alreadyPrepared = _notifiedTickets.has(t.id);
+      notifyBtn.disabled = alreadyPrepared;
+      if(alreadyPrepared){
+        notifyBtn.textContent = '✓ Email Prepared';
+      } else {
+        notifyBtn.innerHTML = '<i data-lucide="mail"></i>Notify Engineer';
+      }
+    }
   }
 
   // §4 Visit log
@@ -10393,7 +10404,6 @@ async function submitSubWO(){
     ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
     closeModal('sub-wo-modal');
     showToast(`Sub Work Order ${ticket.id} created.`, 'success');
-    notifyWorkOrder(ticket.id);
     const parentTicket = APP_TICKETS.find(t => t.id === _atdCurrentId);
     if(parentTicket) _atdRenderSubWOs(parentTicket);
   }
@@ -11111,24 +11121,73 @@ async function submitNewTicket(){
     closeModal('new-ticket-modal');
     showToast(`Work Order ${ticket.id} created.`, 'success');
     renderAppTickets();
-    if(engIds.length) notifyWorkOrder(ticket.id);
+    setTimeout(() => _openTicketDetail(ticket.id), 150);
   }
 }
 
 async function notifyWorkOrder(ticketId){
   if(!ticketId) return;
-  const btn = document.getElementById('atd-notify-btn');
-  const origText = btn?.textContent || 'Notify Engineer';
-  if(btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
-  try {
-    const { error } = await _sb.functions.invoke('notify-work-order', { body: { ticket_id: ticketId } });
-    if(error) throw error;
-    showToast('Engineer notified by email.', 'success');
-  } catch(e){
-    console.warn('[notifyWorkOrder] failed:', e);
-    showToast('Email notification failed — work order saved.', 'warn');
+
+  const t = APP_TICKETS.find(x => x.id === ticketId);
+  if(!t){ showToast('Work order not found.', 'error'); return; }
+
+  const engId = (t.assigned_engineer_ids || [])[0];
+  const eng   = ENGINEERS.find(e => e.id === engId);
+  if(!eng || !eng.email){
+    showToast('No email address found for the assigned engineer. Update the engineer record first.', 'error');
+    return;
   }
-  if(btn){ btn.disabled = false; btn.textContent = origText; }
+
+  let createdByEmail = '—';
+  try {
+    const { data: { session } } = await _sb.auth.getSession();
+    createdByEmail = session?.user?.email ?? '—';
+  } catch(_){}
+
+  const fmt     = s => (s || '—');
+  const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN',
+    { day:'2-digit', month:'short', year:'numeric' }) : '—';
+  const fmtDT   = d => d ? new Date(d).toLocaleDateString('en-IN',
+    { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+
+  const subject = encodeURIComponent(
+    `New Work Order Assigned: ${t.id} - ${t.customer}${t.model ? ' / ' + t.model : ''}`
+  );
+
+  const lines = [
+    `Work Order No.    : ${fmt(t.id)}`,
+    `Customer          : ${fmt(t.customer)}`,
+    `Asset Code        : ${fmt(t.asset_code)}`,
+    `Machine / Model   : ${fmt(t.model)}`,
+    `Region            : ${fmt(t.region)}`,
+    `Town / Location   : ${fmt(t.town)}`,
+    `Call Type         : ${fmt(t.call_type)}`,
+    `System Status     : ${fmt(t.sys_status)}`,
+    `Call Date         : ${fmtDate(t.call_date)}`,
+    `SLA Due           : ${fmtDT(t.sla_due_at)}`,
+    ``,
+    `Assigned Engineer : ${(t.assigned_engineer_names || []).join(', ') || '—'}`,
+    ``,
+    `Issue / Complaint :`,
+    fmt(t.issue_description),
+    ``,
+    `Created By        : ${createdByEmail}`,
+    `Created At        : ${fmtDT(t.created_at)}`,
+    ``,
+    `—`,
+    `3i MEDTECH — MRI FieldOps`,
+  ];
+
+  const body      = encodeURIComponent(lines.join('\r\n'));
+  const ccParam   = encodeURIComponent(PM_REMINDER_CC.join(','));
+  const mailtoUrl = `mailto:${eng.email}?cc=${ccParam}&subject=${subject}&body=${body}`;
+  window.open(mailtoUrl, '_blank');
+
+  showToast('Email client opened — complete and send from your mail app.', 'success');
+
+  _notifiedTickets.add(ticketId);
+  const btn = document.getElementById('atd-notify-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '✓ Email Prepared'; }
 }
 
 async function dbSaveAppTicket(fields){
