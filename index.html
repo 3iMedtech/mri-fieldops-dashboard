@@ -920,7 +920,7 @@ button,input,select,textarea{font-family:inherit;}
     <div class="nav-section" role="presentation">Operations</div>
     <div class="nav-item active" data-page="dashboard" role="button" tabindex="0" aria-current="page"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span> Dashboard</div>
     <div class="nav-item" data-page="tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="ticket"></i></span> Service History <span class="nav-badge" id="nb-open" style="display:none" title="Legacy open calls (unmigrated)"></span></div>
-    <div class="nav-item" data-page="pm" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
+    <div class="nav-item mgr-plus" data-page="pm" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="calendar-clock"></i></span> PM Schedules <span class="nav-badge amber" id="nb-pm" style="display:none"></span></div>
     <div class="nav-item mgr-plus" data-page="app-tickets" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="clipboard-list"></i></span> Create Work Order <span class="nav-badge" id="nb-app-tickets" style="display:none" title="Today's work orders"></span></div>
     <div class="nav-item" data-page="my-work" role="button" tabindex="0"><span class="nav-icon"><i data-lucide="list-checks"></i></span> Open Work Orders <span class="nav-badge green" id="nb-my-work" style="display:none" title="My open work orders"></span></div>
     <div class="nav-section" role="presentation">Assets &amp; team</div>
@@ -4546,7 +4546,11 @@ function navigate(page, opts = {}){
     logAudit('restricted_access_attempt', {target: page});
     page='dashboard';
   }
-  // Contracts (v1.4.0) is admin + manager only.
+  // PM Schedules, Contracts, and Create Work Order are admin + manager only.
+  if(page==='pm' && !canManagePM()){
+    logAudit('restricted_access_attempt', {target: page});
+    page='dashboard';
+  }
   if(page==='contracts' && !canManagePM()){
     logAudit('restricted_access_attempt', {target: page});
     page='dashboard';
