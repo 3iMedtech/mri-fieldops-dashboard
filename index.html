@@ -9809,9 +9809,11 @@ async function applyRoleRestrictions(){
   const av = document.getElementById('sb-avatar');
   const un = document.getElementById('sb-user-name');
   const ur = document.getElementById('sb-user-role');
+  const se = document.getElementById('sb-email');
   if(av) av.textContent = prof.avatar;
   if(un) un.textContent = prof.name;
   if(ur) ur.textContent = prof.role;
+  if(se) se.textContent = _currentUser?.email || '';
 }
 
 function showLogin(){ document.getElementById('login-overlay').style.display = 'flex'; }
@@ -11492,10 +11494,7 @@ async function bootApp(){
     showLoading('Loading data…');
     await loadAllFromDB();
     hideLoading();
-    // Show logged-in user email in sidebar footer
-    const sbEmail = document.getElementById('sb-email');
-    if(sbEmail && _currentUser) sbEmail.textContent = _currentUser.email || '';
-    await applyRoleRestrictions();
+    await applyRoleRestrictions(); // sets sidebar profile: name, role, email, badge
     await doFirstPaint();
     // v1.1.0 1c: respect a deep-link hash on first paint so a bookmarked
     // /#/pm or /#/tickets?status=open lands the user on that view.
