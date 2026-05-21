@@ -940,7 +940,6 @@ button,input,select,textarea{font-family:inherit;}
       <div class="avatar" id="sb-avatar">SM</div>
       <div style="flex:1;min-width:0;">
         <div class="user-name" id="sb-user-name">—</div>
-        <div class="user-role" id="sb-user-role">—</div>
         <div class="sb-email" id="sb-email">—</div>
       </div>
       <span id="user-role-badge"></span>
@@ -9808,11 +9807,9 @@ async function applyRoleRestrictions(){
   const prof = getProfileDisplay(_currentUser?.email);
   const av = document.getElementById('sb-avatar');
   const un = document.getElementById('sb-user-name');
-  const ur = document.getElementById('sb-user-role');
   const se = document.getElementById('sb-email');
   if(av) av.textContent = prof.avatar;
   if(un) un.textContent = prof.name;
-  if(ur) ur.textContent = prof.role;
   if(se) se.textContent = _currentUser?.email || '';
 }
 
@@ -10177,9 +10174,14 @@ function renderAppTickets(){
     summaryEl.textContent = `${rows.length} work order${rows.length===1?'':'s'} shown · ${openCount} open total`;
   }
 
-  // Nav badge
-  const openCount = APP_TICKETS.filter(t => _AT_OPEN_STATUSES.includes(t.status) && t.wo_type !== 'sub').length;
-  setNavBadgeCount('nb-app-tickets', openCount);
+  // Nav badge — count of today's open WOs (matches the default 'today' view, not total open)
+  const _nbTodayStr = new Date().toISOString().slice(0,10);
+  const todayCount = APP_TICKETS.filter(t =>
+    _AT_OPEN_STATUSES.includes(t.status) &&
+    t.wo_type !== 'sub' &&
+    (t.created_at || '').slice(0,10) === _nbTodayStr
+  ).length;
+  setNavBadgeCount('nb-app-tickets', todayCount);
 
   const tbody = document.getElementById('at-tbody');
   if(!tbody) return;
