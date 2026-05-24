@@ -7,6 +7,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.5.2] — 2026-05-24
+
+Manager XLSX upload enabled (deferred from v1.4.1), `cmc_contracts` UNIQUE(sn) constraint applied (migration 0007), and test matrix render coverage added (PD-006/PD-007).
+
+### Added
+- **Manager XLSX upload** — `applyUploadedData()` gate changed from `_userRole !== 'admin'` to `!canManagePM()`. Admin and Manager permitted; Engineer/Viewer remain blocked. Closes `L-RTI-008`.
+- **`cmc_contracts` UNIQUE(sn) constraint** — Migration 0007 applied to staging (constraint was pre-existing) and will be applied to production. Adds `cmc_contracts_sn_key`, enabling safe `ON CONFLICT(sn) DO UPDATE` on re-upload. Idempotent DO block. Closes `L-DBPM-005`.
+
+### Fixed
+- **Test matrix PD-006** — Render checks added: `#pm-overview-stats` (≥5 KPI cards), `#pm-timeline` (non-empty), `.ep-card`, `.ep-tile`, and XLSX button visibility per role. Engineers correctly skip PM stats/timeline (access blocked).
+- **Test matrix PD-007** — `process.exit(1)` added when `totalFail > 0` for CI exit code detection.
+
+### Safety
+- Three-layer defense preserved: CSS (`mgr-plus` + `manager-mode`), JS (`canManagePM`), RLS (`app_can_write` from migration 0004).
+- Rollback: `DROP CONSTRAINT IF EXISTS cmc_contracts_sn_key` + revert `applyUploadedData` line 3459 to `_userRole !== 'admin'`.
+
+---
+
 ## [1.4.1] — 2026-05-13
 
 Phase 2 lifecycle write paths, RPC-resolved role gating, and Install Base master-source backfill. Closes the Phase 1.5 manager-role gap and operationalizes Install Base as the canonical asset registry. Ships the runtime + SQL artifacts together: production SQL `0004` + `0005` applied 2026-05-12; production runtime smoke PASS across Admin / Manager / Engineer + RPC failure path; tag created after production verification.

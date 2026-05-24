@@ -232,6 +232,48 @@ async function testRole(page, user, envUrl, expectedVersion) {
     else bad(`Add Engineer button hidden for ${user.role} (display: ${addEngBtn})`);
   }
 
+  // ── PM overview stats + timeline (PD-006) ─────────────────
+  if (user.role !== 'Engineer') {
+    await page.evaluate(() => { if (typeof navigate === 'function') navigate('pm'); });
+    await sleep(2500);
+    const pmStatCards = await page.$$eval('#pm-overview-stats .kpi-card', els => els.length);
+    if (pmStatCards >= 5) ok(`PM overview stats rendered (${pmStatCards} cards)`);
+    else bad(`PM overview stats incomplete — expected ≥5 KPI cards, got ${pmStatCards}`);
+    const pmTimelineLen = await page.$eval('#pm-timeline', el => el.innerHTML.trim().length).catch(() => 0);
+    if (pmTimelineLen > 100) ok('PM timeline rendered (non-empty)');
+    else bad('PM timeline empty or not rendered');
+  } else {
+    ok('PM overview stats check skipped for Engineer (access blocked)');
+    ok('PM timeline check skipped for Engineer (access blocked)');
+  }
+
+  // ── Engineer cards + metric tiles (PD-006) ────────────────
+  await page.evaluate(() => { if (typeof navigate === 'function') navigate('engineers'); });
+  await sleep(2500);
+  const epCards2 = await page.$$eval('.ep-card', els => els.length);
+  if (epCards2 > 0) ok(`Engineer performance cards rendered (${epCards2} ep-cards)`);
+  else bad('No .ep-card elements found on Engineers tab');
+  const epTiles = await page.$$eval('.ep-tile', els => els.length);
+  if (epTiles > 0) ok(`Engineer metric tiles rendered (${epTiles} ep-tiles)`);
+  else bad('No .ep-tile elements found on Engineers tab');
+
+  // ── XLSX button visibility by role (PD-006 extended) ──────
+  await page.evaluate(() => { if (typeof navigate === 'function') navigate('dashboard'); });
+  await sleep(1000);
+  const xlsxVisible = await page.$$eval('button',
+    bs => bs.filter(b => b.textContent.includes('XLSX') && window.getComputedStyle(b).display !== 'none').length
+  );
+  if (user.role === 'Engineer') {
+    if (xlsxVisible === 0) ok('XLSX button correctly hidden for Engineer');
+    else bad(`XLSX button should be hidden for Engineer — found ${xlsxVisible}`);
+  } else if (user.role === 'Manager') {
+    if (xlsxVisible >= 1) ok(`XLSX button visible for Manager (${xlsxVisible})`);
+    else bad('XLSX button missing for Manager — check canManagePM gate in applyUploadedData');
+  } else {
+    if (xlsxVisible >= 1) ok(`XLSX button visible for Admin (${xlsxVisible})`);
+    else bad('XLSX button missing for Admin');
+  }
+
   // ── Console errors (PD-007) — fail if any JS errors on page ──
   // (consoleErrors is populated via page.on listener set in testEnv)
   // Check is deferred to testEnv where we have access to the array
@@ -336,5 +378,5 @@ async function testEnv(envKey, expectedVersion) {
   }
   console.log(`\n  Total failures: ${totalFail}`);
   if (totalFail === 0) console.log('  🟢 All checks passed on all tested environments.');
-  else console.log('  🔴 Failures found — see details above.');
+  else { console.log('  🔴 Failures found — see details above.'); process.exit(1); }
 })();
