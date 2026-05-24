@@ -12,7 +12,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 ## Last verified
 
-- **Snapshot timestamp:** 2026-05-21 (v1.5.1 tagged; WO email notification + test-matrix fix in production; staging and main fully in sync)
+- **Snapshot timestamp:** 2026-05-24 (v1.5.2 deployed to production; v1.5.3 on staging — 74/74 matrix pass)
 - **Snapshot author:** Claude (acting as automation-memory-agent)
 
 ---
@@ -20,20 +20,17 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 ## Branch + commit
 
 - **Canonical branch:** `main`
-- **Latest commit on `main`:** `7f8ab60` — `fix(test): correct XLSX button text filter in test-matrix.js`
-- **Latest commit on `staging`:** `7f8ab60` — same; **staging and main are fully in sync**
-- **Latest tag:** `v1.5.1` (annotated, tag object `29e0ff2`, pointing to commit `7f8ab60`) — `APP_BUILD.tag` and git tag are now aligned.
-- **Previous tag:** `v1.4.1`
+- **Latest commit on `main`:** `4581fae` — `release: v1.5.2 — Manager XLSX upload, cmc_contracts UNIQUE(sn), test matrix render coverage`
+- **Latest commit on `staging`:** `ba2351b` — `fix(ux): PD-003/008/010/011/012 — UX polish bundle (v1.5.3)` — **staging is 1 commit ahead of main**
+- **Latest tag:** `v1.5.2` (annotated, pointing to `4581fae`) — `APP_BUILD.tag` and git tag aligned.
+- **Previous tag:** `v1.5.1`
 - **Working tree:** clean
 
 ---
 
 ## Open PRs
 
-| # | Title | State | Draft | Head branch | Owner verdict |
-|---|---|---|---|---|---|
-| 25 | Draft: v1.4.1 Phase 1 production-apply runbook (review-only) | OPEN | YES | `docs/v1.4.1-phase1-production-runbook` | **Stale** — superseded by Phase 2 ship (2026-05-13). Operator decision pending: close or leave for archival. Not blocking any work. |
-| 28 | Draft: v1.4.2 technical design | OPEN | YES | `feat/v1.4.2-technical-design` | **Stale** — opened 2026-05-13; v1.4.2 through v1.5.1 have since shipped on `staging`/`main` without this branch. Likely superseded. Operator decision pending: close or archive. |
+No open PRs. PRs #25 and #28 closed 2026-05-24 (superseded by direct staging work).
 
 ---
 
@@ -78,8 +75,9 @@ All v1.4.2 through v1.5.1 work was shipped directly on the `staging` branch (no 
 ## Staging Pages state
 
 - **Staging Pages URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/staging/index.html`
-- **Currently served commit:** `7f8ab60`
-- **APP_VERSION:** `1.5.1`
+- **Currently served commit:** `ba2351b`
+- **APP_VERSION:** `1.5.3`
+- **Matrix:** 74/74, 0 JS errors (2026-05-24)
 
 ---
 
@@ -102,51 +100,45 @@ All v1.4.2 through v1.5.1 work was shipped directly on the `staging` branch (no 
 ## Production Pages state
 
 - **Production Pages URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/`
-- **Currently served commit:** `7f8ab60` — `fix(test): correct XLSX button text filter in test-matrix.js`
-- **APP_VERSION:** `1.5.1`
-- **Pages workflow run (latest):** `26230984781` — manual dispatch from `7f8ab60`, completed/success, 2026-05-21
-- **Previous deploy:** `26229727431` — WO email notification + version metadata (cf8c6bc), 2026-05-21
+- **Currently served commit:** `4581fae` — `release: v1.5.2`
+- **APP_VERSION:** `1.5.2`
+- **Pages workflow run (latest):** `26361036755` — manual dispatch from `4581fae`, completed/success, 2026-05-24
+- **Matrix:** 74/74, 0 JS errors, all 3 roles (2026-05-24)
 
 ---
 
 ## App runtime state
 
-- **APP_VERSION on production:** `1.5.1`
-- **APP_VERSION on staging:** `1.5.1`
-- **Latest git tag:** `v1.4.1` — ⚠️ no v1.5.x tag created. `APP_BUILD.tag = 'v1.5.1'` in index.html is forward-declared; the actual git tag must still be created.
-- **`index.html` on `main`:** all four version constants aligned:
-  - `window.APP_VERSION = '1.5.1'`
-  - `window.APP_BUILD = { version: '1.5.1', released: '2026-05-20', tag: 'v1.5.1' }`
-  - `const APP_VERSION = '1.5.1'`
-  - `const APP_RELEASE_DATE = '20 May 2026'`
+- **APP_VERSION on production:** `1.5.2`
+- **APP_VERSION on staging:** `1.5.3`
+- **Latest git tag:** `v1.5.2` (annotated, `4581fae`) — aligned with `APP_BUILD.tag`.
+- **`index.html` on `main` (v1.5.2):** all four version constants aligned:
+  - `window.APP_VERSION = '1.5.2'`
+  - `window.APP_BUILD = { version: '1.5.2', released: '2026-05-24', tag: 'v1.5.2' }`
+  - `const APP_VERSION = '1.5.2'`
+  - `const APP_RELEASE_DATE = '24 May 2026'`
+- **`index.html` on `staging` (v1.5.3):** staged, awaiting production approval.
 
 ---
 
-## Production runtime smoke (2026-05-21)
+## Production runtime smoke (2026-05-24)
 
-Automated test matrix (`scripts/test-matrix.js production`) ran post-deploy on 2026-05-21 against commit `7f8ab60`. **59/59 checks passed, 0 JS errors across all 3 roles.**
+Automated test matrix (`scripts/test-matrix.js production 1.5.2`) ran post-deploy on 2026-05-24 against commit `4581fae`. **74/74 checks passed, 0 JS errors across all 3 roles.**
 
 | Role | Result |
 |---|---|
-| Admin | PASS — 21/21. APP_VERSION=1.5.1, role=admin, body=superadmin-mode, KPIs loaded, Contracts/PM/Engineers tabs functional, XLSX button visible, 0 JS errors. |
-| Manager | PASS — 21/21. APP_VERSION=1.5.1, role=manager, body=viewer-mode manager-mode, KPIs loaded, Contracts/PM/Engineers tabs functional, XLSX button visible, 0 JS errors. |
-| Engineer | PASS — 17/17. APP_VERSION=1.5.1, role=viewer, body=viewer-mode, Contracts nav hidden, Renew buttons absent, XLSX hidden, PM read-only, Engineers tab visible (read-only), 0 JS errors. |
-
-WO email notification feature additionally verified via Playwright (all 3 roles, 25 checks, 0 failures) — see 2026-05-21 session for full detail.
+| Admin | PASS — 26/26. APP_VERSION=1.5.2, role=admin, body=superadmin-mode, KPIs loaded (16), Contracts/PM/Engineers tabs functional, XLSX button visible, PM stats/timeline rendered, EP cards/tiles rendered. |
+| Manager | PASS — 26/26. APP_VERSION=1.5.2, role=manager, body=viewer-mode manager-mode, KPIs loaded (16), all tabs functional, XLSX button visible, PM stats/timeline rendered. |
+| Engineer | PASS — 22/22. APP_VERSION=1.5.2, role=viewer, body=viewer-mode, Contracts nav hidden, Renew buttons absent, XLSX hidden, PM read-only, EP cards/tiles rendered. |
 
 ---
 
 ## Open approval gates (operator phrase needed)
 
-**No open forward gates.** v1.5.1 is fully shipped and in sync on staging + production.
-
-### Optional follow-up actions (operator-discretion)
-
-| Suggestion | Phrase needed |
+| Gate | Phrase needed |
 |---|---|
-| Close stale PR #25 (v1.4.1 Phase 1 runbook) | `approved, close PR #25` |
-| Close stale PR #28 (v1.4.2 technical design) | `approved, close PR #28` |
-| Configure Zoho SMTP secrets in Supabase to activate server-side WO email | Operator sets `ZOHO_SMTP_USER`, `ZOHO_SMTP_PASS`, `ALERT_FROM`, `WO_NOTIFY_CC` in Supabase dashboard |
+| Deploy v1.5.3 to production (staged, 74/74 PASS) | `deploy to production` |
+| Configure Zoho SMTP secrets to activate server-side WO email | Operator sets secrets in Supabase dashboard |
 
 ---
 
@@ -154,19 +146,15 @@ WO email notification feature additionally verified via Playwright (all 3 roles,
 
 | Risk | Severity | Owner | Recorded at |
 |---|---|---|---|
-| ~~No `v1.5.1` git tag~~ | ~~Medium~~ | closed | **CLOSED** 2026-05-21 — tag created (object `29e0ff2`) |
-| PR #25 stale (v1.4.1 Phase 1 runbook — superseded) | Low | release-pm | 2026-05-13, unchanged |
-| PR #28 stale (v1.4.2 technical design — superseded by direct staging work) | Low | release-pm | 2026-05-21 |
-| `cmc_contracts` UNIQUE constraint on `sn` not yet applied — safe-upsert deferred | Medium | database-pm | `L-DBPM-005` |
-| Manager XLSX gate remains admin-only until `cmc_contracts` UNIQUE constraint ships | Medium | runtime-pm | `L-RTI-008` |
 | `notify-work-order` edge function deployed but SMTP secrets not configured — will always fail if invoked directly | Low | runtime-pm | 2026-05-21 (app uses mailto: now; edge fn dormant) |
 | No automated tests in repo (only manual matrix + ad-hoc Playwright) | High | qa-test-automation | ongoing |
 | AN026 + AN027 retained as staging de-installed fixtures; production never sees them | Low | runtime-pm | 2026-05-12, unchanged |
 
-**Closed since prior snapshot:**
-- `APP_VERSION` / `APP_BUILD` / `VERSION` file misalignment — all four constants now aligned at `1.5.1` (`34bc689`).
-- WO email notification silently auto-firing and failing — replaced with opt-in mailto: flow (`cf8c6bc`).
-- Test matrix XLSX button false failure — test text filter fixed (`7f8ab60`).
+**Closed since prior snapshot (2026-05-24):**
+- `cmc_contracts` UNIQUE(sn) constraint — applied to both environments; `L-DBPM-005` closed.
+- Manager XLSX gate — now uses `canManagePM()`; `L-RTI-008` closed.
+- PR #25 and #28 — closed (superseded).
+- Test matrix extended to 74 checks per run (PD-006/007 shipped in v1.5.2).
 
 ---
 
@@ -177,8 +165,8 @@ WO email notification feature additionally verified via Playwright (all 3 roles,
 | Staging row counts | 2026-05-21 | After any SQL applied or significant time passes |
 | Production row counts | 2026-05-21 | After any SQL applied or significant time passes |
 | Production V2 missing code | 2026-05-12 (AN025 backfilled; none missing since) | If V2 baseline changes |
-| Production Pages content | 2026-05-21 (commit `7f8ab60`, APP_VERSION=1.5.1) | After any future deploy |
-| GitHub Actions Pages workflow | 2026-05-21 (2 successful runs today: staging + production) | Before next production deploy |
+| Production Pages content | 2026-05-24 (commit `4581fae`, APP_VERSION=1.5.2) | After any future deploy |
+| GitHub Actions Pages workflow | 2026-05-24 (run `26361036755`, success) | Before next production deploy |
 
 ---
 
@@ -186,12 +174,13 @@ WO email notification feature additionally verified via Playwright (all 3 roles,
 
 (This section is overwritten on each snapshot. Older entries archive into a future `automation/STATE_HISTORY.md` if needed.)
 
-- **2026-05-21 (this session):**
-  - `34bc689` — `chore: align version metadata to v1.5.1`. VERSION file was stale (1.4.1); APP_BUILD still referenced v1.5.0. All four version constants now aligned.
-  - `cf8c6bc` — `feat: WO creation email notification via mailto (opt-in)`. Replaced broken edge-function auto-fire (SMTP never configured — 6 failed attempts) with opt-in mailto: approach matching PM reminder pattern. Reuses `PM_REMINDER_CC`. Detail modal opens automatically after WO creation. Playwright-verified across all 3 roles.
-  - `7f8ab60` — `fix(test): correct XLSX button text filter in test-matrix.js`. Test looked for "Upload XLSX" but button label is "XLSX". Pre-existing false failure since button was renamed.
-  - All 3 commits deployed to production. Matrix 59/59, 0 JS errors.
-  - Annotated tag `v1.5.1` created on `7f8ab60` (tag object `29e0ff2`), pushed to origin.
+- **2026-05-24 (this session):**
+  - `4581fae` — `release: v1.5.2` — Manager XLSX gate (`canManagePM()`), `cmc_contracts` UNIQUE(sn) constraint confirmed, test matrix extended to 74 checks (PD-006/PD-007).
+  - `ba2351b` — `fix(ux): PD-003/008/010/011/012` — UX polish bundle (v1.5.3): toast warning duration, page-header CSS, AMC filter chips, expired tile CTA, PM empty state. **On staging only — not yet in production.**
+  - v1.5.2 deployed to production via `git push origin 4581fae:main` + `gh workflow run pages-deploy.yml --ref main` (run `26361036755`).
+  - Production matrix 74/74, 0 JS errors across all 3 roles.
+  - Tag `v1.5.2` created on `4581fae`, pushed to origin.
+  - PRs #25 and #28 closed.
   - STATE.md refreshed to current truth.
 
 ---
