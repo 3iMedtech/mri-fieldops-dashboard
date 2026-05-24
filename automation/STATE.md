@@ -12,7 +12,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 ## Last verified
 
-- **Snapshot timestamp:** 2026-05-24 (v1.5.2 deployed to production; v1.5.3 on staging — 74/74 matrix pass)
+- **Snapshot timestamp:** 2026-05-24 (v1.5.3 deployed to production; staging and main fully in sync)
 - **Snapshot author:** Claude (acting as automation-memory-agent)
 
 ---
@@ -20,10 +20,10 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 ## Branch + commit
 
 - **Canonical branch:** `main`
-- **Latest commit on `main`:** `4581fae` — `release: v1.5.2 — Manager XLSX upload, cmc_contracts UNIQUE(sn), test matrix render coverage`
-- **Latest commit on `staging`:** `ba2351b` — `fix(ux): PD-003/008/010/011/012 — UX polish bundle (v1.5.3)` — **staging is 1 commit ahead of main**
-- **Latest tag:** `v1.5.2` (annotated, pointing to `4581fae`) — `APP_BUILD.tag` and git tag aligned.
-- **Previous tag:** `v1.5.1`
+- **Latest commit on `main`:** `32fdacb` — `docs: update STATE.md to v1.5.2 production truth` — **staging and main fully in sync**
+- **Latest commit on `staging`:** `32fdacb` — same
+- **Latest tag:** `v1.5.3` (annotated, pointing to `ba2351b`) — `APP_BUILD.tag` and git tag aligned.
+- **Previous tag:** `v1.5.2`
 - **Working tree:** clean
 
 ---
@@ -75,7 +75,7 @@ All v1.4.2 through v1.5.1 work was shipped directly on the `staging` branch (no 
 ## Staging Pages state
 
 - **Staging Pages URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/staging/index.html`
-- **Currently served commit:** `ba2351b`
+- **Currently served commit:** `32fdacb`
 - **APP_VERSION:** `1.5.3`
 - **Matrix:** 74/74, 0 JS errors (2026-05-24)
 
@@ -100,36 +100,35 @@ All v1.4.2 through v1.5.1 work was shipped directly on the `staging` branch (no 
 ## Production Pages state
 
 - **Production Pages URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/`
-- **Currently served commit:** `4581fae` — `release: v1.5.2`
-- **APP_VERSION:** `1.5.2`
-- **Pages workflow run (latest):** `26361036755` — manual dispatch from `4581fae`, completed/success, 2026-05-24
+- **Currently served commit:** `32fdacb` — `docs: update STATE.md to v1.5.2 production truth`
+- **APP_VERSION:** `1.5.3`
+- **Pages workflow run (latest):** `26361158495` — manual dispatch from `32fdacb`, completed/success, 2026-05-24
 - **Matrix:** 74/74, 0 JS errors, all 3 roles (2026-05-24)
 
 ---
 
 ## App runtime state
 
-- **APP_VERSION on production:** `1.5.2`
+- **APP_VERSION on production:** `1.5.3`
 - **APP_VERSION on staging:** `1.5.3`
-- **Latest git tag:** `v1.5.2` (annotated, `4581fae`) — aligned with `APP_BUILD.tag`.
-- **`index.html` on `main` (v1.5.2):** all four version constants aligned:
-  - `window.APP_VERSION = '1.5.2'`
-  - `window.APP_BUILD = { version: '1.5.2', released: '2026-05-24', tag: 'v1.5.2' }`
-  - `const APP_VERSION = '1.5.2'`
+- **Latest git tag:** `v1.5.3` (annotated, `ba2351b`) — aligned with `APP_BUILD.tag`.
+- **`index.html` on `main` (v1.5.3):** all four version constants aligned:
+  - `window.APP_VERSION = '1.5.3'`
+  - `window.APP_BUILD = { version: '1.5.3', released: '2026-05-24', tag: 'v1.5.3' }`
+  - `const APP_VERSION = '1.5.3'`
   - `const APP_RELEASE_DATE = '24 May 2026'`
-- **`index.html` on `staging` (v1.5.3):** staged, awaiting production approval.
 
 ---
 
 ## Production runtime smoke (2026-05-24)
 
-Automated test matrix (`scripts/test-matrix.js production 1.5.2`) ran post-deploy on 2026-05-24 against commit `4581fae`. **74/74 checks passed, 0 JS errors across all 3 roles.**
+Automated test matrix (`scripts/test-matrix.js production 1.5.3`) ran post-deploy on 2026-05-24 against commit `32fdacb`. **74/74 checks passed, 0 JS errors across all 3 roles.**
 
 | Role | Result |
 |---|---|
-| Admin | PASS — 26/26. APP_VERSION=1.5.2, role=admin, body=superadmin-mode, KPIs loaded (16), Contracts/PM/Engineers tabs functional, XLSX button visible, PM stats/timeline rendered, EP cards/tiles rendered. |
-| Manager | PASS — 26/26. APP_VERSION=1.5.2, role=manager, body=viewer-mode manager-mode, KPIs loaded (16), all tabs functional, XLSX button visible, PM stats/timeline rendered. |
-| Engineer | PASS — 22/22. APP_VERSION=1.5.2, role=viewer, body=viewer-mode, Contracts nav hidden, Renew buttons absent, XLSX hidden, PM read-only, EP cards/tiles rendered. |
+| Admin | PASS — 26/26. APP_VERSION=1.5.3, role=admin, body=superadmin-mode, KPIs loaded (16), all tabs functional, XLSX visible, PM stats/timeline rendered, EP cards/tiles rendered. |
+| Manager | PASS — 26/26. APP_VERSION=1.5.3, role=manager, body=viewer-mode manager-mode, all tabs functional, XLSX visible, PM stats/timeline rendered. |
+| Engineer | PASS — 22/22. APP_VERSION=1.5.3, role=viewer, Contracts nav hidden, Renew absent, XLSX hidden, PM read-only, EP cards/tiles rendered. |
 
 ---
 
@@ -137,8 +136,9 @@ Automated test matrix (`scripts/test-matrix.js production 1.5.2`) ran post-deplo
 
 | Gate | Phrase needed |
 |---|---|
-| Deploy v1.5.3 to production (staged, 74/74 PASS) | `deploy to production` |
 | Configure Zoho SMTP secrets to activate server-side WO email | Operator sets secrets in Supabase dashboard |
+
+No code deploy gates open. Staging and production are in sync at v1.5.3.
 
 ---
 
@@ -165,8 +165,8 @@ Automated test matrix (`scripts/test-matrix.js production 1.5.2`) ran post-deplo
 | Staging row counts | 2026-05-21 | After any SQL applied or significant time passes |
 | Production row counts | 2026-05-21 | After any SQL applied or significant time passes |
 | Production V2 missing code | 2026-05-12 (AN025 backfilled; none missing since) | If V2 baseline changes |
-| Production Pages content | 2026-05-24 (commit `4581fae`, APP_VERSION=1.5.2) | After any future deploy |
-| GitHub Actions Pages workflow | 2026-05-24 (run `26361036755`, success) | Before next production deploy |
+| Production Pages content | 2026-05-24 (commit `32fdacb`, APP_VERSION=1.5.3) | After any future deploy |
+| GitHub Actions Pages workflow | 2026-05-24 (run `26361158495`, success) | Before next production deploy |
 
 ---
 
@@ -175,13 +175,14 @@ Automated test matrix (`scripts/test-matrix.js production 1.5.2`) ran post-deplo
 (This section is overwritten on each snapshot. Older entries archive into a future `automation/STATE_HISTORY.md` if needed.)
 
 - **2026-05-24 (this session):**
-  - `4581fae` — `release: v1.5.2` — Manager XLSX gate (`canManagePM()`), `cmc_contracts` UNIQUE(sn) constraint confirmed, test matrix extended to 74 checks (PD-006/PD-007).
-  - `ba2351b` — `fix(ux): PD-003/008/010/011/012` — UX polish bundle (v1.5.3): toast warning duration, page-header CSS, AMC filter chips, expired tile CTA, PM empty state. **On staging only — not yet in production.**
-  - v1.5.2 deployed to production via `git push origin 4581fae:main` + `gh workflow run pages-deploy.yml --ref main` (run `26361036755`).
-  - Production matrix 74/74, 0 JS errors across all 3 roles.
-  - Tag `v1.5.2` created on `4581fae`, pushed to origin.
+  - `4581fae` — `release: v1.5.2` — Manager XLSX gate, `cmc_contracts` UNIQUE(sn), test matrix extended to 74 checks.
+  - `ba2351b` — `fix(ux): PD-003/008/010/011/012` — toast warning duration, page-header CSS, AMC filter chips, expired tile CTA, PM empty state (v1.5.3).
+  - `32fdacb` — `docs: update STATE.md to v1.5.2 production truth`.
+  - v1.5.2 deployed to production (run `26361036755`); matrix 74/74.
+  - v1.5.3 deployed to production (run `26361158495`); matrix 74/74.
+  - Tags `v1.5.2` and `v1.5.3` created and pushed.
   - PRs #25 and #28 closed.
-  - STATE.md refreshed to current truth.
+  - Staging and main fully in sync at `32fdacb`.
 
 ---
 
