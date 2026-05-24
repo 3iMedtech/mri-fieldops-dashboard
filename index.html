@@ -2095,8 +2095,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.5.3';
-window.APP_BUILD   = { version: '1.5.3', released: '2026-05-24', tag: 'v1.5.3' };
+window.APP_VERSION = '1.5.4';
+window.APP_BUILD   = { version: '1.5.4', released: '2026-05-25', tag: 'v1.5.4' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -4159,8 +4159,8 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.5.3';
-const APP_RELEASE_DATE = '24 May 2026';
+const APP_VERSION = '1.5.4';
+const APP_RELEASE_DATE = '25 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About','app-tickets':'Create Work Order','my-work':'Open Work Orders'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
 
@@ -4992,7 +4992,7 @@ async function _autoMigrateOpenCalls(){
     const engNames = capped.map(e => e.name);
     const region   = capped[0]?.region || matched[0]?.region || t.region || '';
     const callDateRaw = parseFlexDate(t.call_date, `${t.id}:call_date`);
-    const callDate    = callDateRaw ? callDateRaw.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+    const callDate    = callDateRaw ? _localDateStr(callDateRaw) : _localDateStr();
     const ticket = await dbSaveAppTicket({
       ticket_type: 'service', wo_type: 'primary', legacy_ref: t.id,
       status: t.attended_date ? 'in_progress' : 'new',
@@ -7377,7 +7377,7 @@ function openPMCompleteModal(pmId){
     (pm.nextPMS ? ` · Due <span style="color:var(--amber)">${esc(fmtDate(pm.nextPMS))}</span>` : '');
 
   // Date — default today, max=today (no future dates allowed)
-  const todayIso = new Date().toISOString().slice(0,10);
+  const todayIso = _localDateStr();
   const dateEl = document.getElementById('pm-complete-date');
   dateEl.value = todayIso;
   dateEl.max   = todayIso;
@@ -7819,7 +7819,7 @@ function openAddEngineerModal(){
       regions.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');
   }
   const startEl = document.getElementById('aem-start');
-  if(startEl) startEl.value = new Date().toISOString().slice(0,10);
+  if(startEl) startEl.value = _localDateStr();
   ['aem-name','aem-email','aem-aliases'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
@@ -7866,7 +7866,7 @@ function openResignModal(id){
   document.getElementById('rem-title').textContent = eng.name;
   document.getElementById('rem-sub').textContent = `${eng.region} · ${eng.id}`;
   const dateEl = document.getElementById('rem-date');
-  if(dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+  if(dateEl) dateEl.value = _localDateStr();
   openModal('resign-engineer-modal');
 }
 
@@ -9893,6 +9893,15 @@ function displayToDbDate(d){
   const dd = String(parsed.getDate()).padStart(2,'0');
   return `${yy}-${mm}-${dd}`;
 }
+// Returns YYYY-MM-DD in the browser's local timezone (IST for this app).
+// Use this instead of new Date().toISOString().slice(0,10), which returns
+// the UTC date and drifts by a day between midnight IST and 05:30 UTC.
+function _localDateStr(d = new Date()) {
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
 
 async function loadAllFromDB(opts = {}){
   // `silent: true` skips the full-screen blocking loader. Used by the
@@ -10160,7 +10169,7 @@ function renderAppTickets(){
   );
 
   // Date filter — default today; handles midnight rollover via data attribute
-  const _atTodayStr = new Date().toISOString().slice(0,10);
+  const _atTodayStr = _localDateStr();
   const atDateEl = document.getElementById('at-date');
   if(atDateEl){
     if(!atDateEl.dataset.defaultDate){
@@ -10175,7 +10184,7 @@ function renderAppTickets(){
     rows = rows.filter(t => {
       if(!t.created_at) return dateVal !== 'today';
       const d = new Date(t.created_at);
-      if(dateVal === 'today')  return d.toISOString().slice(0,10) === _atTodayStr;
+      if(dateVal === 'today')  return _localDateStr(d) === _atTodayStr;
       if(dateVal === 'week')   { const w = new Date(now); w.setDate(w.getDate()-7); return d >= w; }
       if(dateVal === 'month')  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
       return true;
@@ -10190,11 +10199,11 @@ function renderAppTickets(){
   }
 
   // Nav badge — count of today's open WOs (matches the default 'today' view, not total open)
-  const _nbTodayStr = new Date().toISOString().slice(0,10);
+  const _nbTodayStr = _localDateStr();
   const todayCount = APP_TICKETS.filter(t =>
     _AT_OPEN_STATUSES.includes(t.status) &&
     t.wo_type !== 'sub' &&
-    (t.created_at || '').slice(0,10) === _nbTodayStr
+    t.created_at && _localDateStr(new Date(t.created_at)) === _nbTodayStr
   ).length;
   setNavBadgeCount('nb-app-tickets', todayCount);
 
@@ -10403,7 +10412,7 @@ async function submitSubWO(){
     town:                    parent.town || null,
     model:                   parent.model || null,
     contract:                parent.contract || null,
-    call_date:               visitDate || new Date().toISOString().slice(0,10),
+    call_date:               visitDate || _localDateStr(),
     issue_description:       nature,
     assigned_engineer_ids:   eng ? [eng.id]   : [],
     assigned_engineer_names: eng ? [eng.name] : [],
@@ -10977,7 +10986,7 @@ function openNewTicketModal(){
   const issueEl = document.getElementById('nt-issue');
   if(issueEl) issueEl.value = '';
   const callDateEl = document.getElementById('nt-call-date');
-  if(callDateEl) callDateEl.value = new Date().toISOString().slice(0,10);
+  if(callDateEl) callDateEl.value = _localDateStr();
   const callTypeEl = document.getElementById('nt-call-type');
   if(callTypeEl) callTypeEl.value = '';
   const sysStatusEl = document.getElementById('nt-sys-status');
@@ -11408,7 +11417,7 @@ function renderAuditLog(){
     return 'var(--text)';
   };
   body.innerHTML = sortedRows.map(r => {
-    const when = r.created_at ? new Date(r.created_at).toLocaleString() : '—';
+    const when = r.created_at ? new Date(r.created_at).toLocaleString('en-IN', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
     const details = r.details && typeof r.details === 'object'
       ? Object.entries(r.details).map(([k,v]) => `<span style="color:var(--text-dim)">${esc(k)}:</span> ${esc(typeof v==='string'?v:JSON.stringify(v))}`).join(' · ')
       : esc(String(r.details||''));
