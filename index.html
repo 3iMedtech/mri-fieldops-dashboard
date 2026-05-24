@@ -1008,7 +1008,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
       <div id="dash-wo-scroll" style="overflow-x:auto;overflow-y:auto;flex:1;min-height:0;">
         <table class="data-table">
-          <thead><tr><th>ID</th><th>CUSTOMER</th><th>ASSET</th><th>REGION</th><th>CALL DATE</th><th>ENGINEER</th><th>STATUS</th></tr></thead>
+          <thead><tr><th>ID</th><th>CUSTOMER</th><th>ASSET</th><th>REGION</th><th>CALL DATE</th><th>CREATED</th><th>ENGINEER</th><th>STATUS</th></tr></thead>
           <tbody id="dash-open-body"></tbody>
         </table>
       </div>
@@ -1425,6 +1425,7 @@ button,input,select,textarea{font-family:inherit;}
           <th style="font-size:10px">CALL DATE</th>
           <th style="font-size:10px">STATUS</th>
           <th style="font-size:10px">SLA DUE</th>
+          <th style="font-size:10px">CREATED</th>
           <th style="font-size:10px">ENGINEERS</th>
         </tr></thead>
         <tbody id="mw-tbody"></tbody>
@@ -1473,6 +1474,7 @@ button,input,select,textarea{font-family:inherit;}
           <th style="font-size:10px">CALL DATE</th>
           <th style="font-size:10px">STATUS</th>
           <th style="font-size:10px">SLA DUE</th>
+          <th style="font-size:10px">CREATED</th>
           <th style="font-size:10px">ENGINEERS</th>
         </tr></thead>
         <tbody id="at-tbody"></tbody>
@@ -2095,8 +2097,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.5.4';
-window.APP_BUILD   = { version: '1.5.4', released: '2026-05-25', tag: 'v1.5.4' };
+window.APP_VERSION = '1.5.5';
+window.APP_BUILD   = { version: '1.5.5', released: '2026-05-25', tag: 'v1.5.5' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -4159,7 +4161,7 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.5.4';
+const APP_VERSION = '1.5.5';
 const APP_RELEASE_DATE = '25 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About','app-tickets':'Create Work Order','my-work':'Open Work Orders'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
@@ -5067,6 +5069,9 @@ function renderDashOpen(){
     const cd = t.call_date
       ? new Date(t.call_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'})
       : '—';
+    const createdStr = t.created_at
+      ? new Date(t.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+      : '—';
     const eng = (t.assigned_engineer_names && t.assigned_engineer_names.length)
       ? esc(t.assigned_engineer_names.join(', '))
       : '<span style="color:var(--text-faint)">—</span>';
@@ -5076,6 +5081,7 @@ function renderDashOpen(){
       <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
       <td style="font-size:11px">${esc(t.region||'—')}</td>
       <td style="font-size:11px;font-family:var(--mono)">${cd}</td>
+      <td style="font-size:11px;font-family:var(--mono)">${createdStr}</td>
       <td style="font-size:11px">${eng}</td>
       <td>${_atStatusBadge(t.status)}</td>
     </tr>`;
@@ -10230,6 +10236,9 @@ function renderAppTickets(){
       if(_AT_OPEN_STATUSES.includes(t.status) && slaDate < now)
         slaStyle = 'color:#ef4444;font-weight:600';
     }
+    const createdAtStr = t.created_at
+      ? new Date(t.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
+      : '—';
     return `<tr style="cursor:pointer" onclick="_openTicketDetail('${esc(t.id)}')">
       <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(t.id)}</td>
       <td>${esc(t.customer || '—')}</td>
@@ -10238,6 +10247,7 @@ function renderAppTickets(){
       <td style="font-size:11px">${callDateStr}</td>
       <td>${_atStatusBadge(t.status)}</td>
       <td style="font-size:11px;${slaStyle}">${slaStr}</td>
+      <td style="font-size:11px;font-family:var(--mono)">${createdAtStr}</td>
       <td style="font-size:11px">${engCell}</td>
     </tr>`;
   }).join('');
@@ -10269,7 +10279,7 @@ function _openTicketDetail(id){
 
   // §2 Info grid
   const slaStr = t.sla_due_at
-    ? new Date(t.sla_due_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
+    ? new Date(t.sla_due_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
     : '—';
   const callDateStr = t.call_date
     ? new Date(t.call_date + 'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
@@ -10283,6 +10293,7 @@ function _openTicketDetail(id){
     <div class="detail-field"><label>Call Type</label><span>${esc(t.call_type||'—')}</span></div>
     <div class="detail-field"><label>System Status</label><span>${t.sys_status ? sysStatusBadge(t.sys_status) : '<span style="color:var(--text-faint)">—</span>'}</span></div>
     <div class="detail-field"><label>SLA Due</label><span style="font-family:var(--mono);${t.sla_due_at&&new Date(t.sla_due_at)<new Date()&&_AT_OPEN_STATUSES.includes(t.status)?'color:#ef4444':''}">${slaStr}</span></div>
+    <div class="detail-field"><label>Created At</label><span style="font-family:var(--mono)">${t.created_at?new Date(t.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—'}</span></div>
     <div class="detail-field"><label>Assigned Engineers</label><span>${t.assigned_engineer_names.length?t.assigned_engineer_names.map(n=>esc(n)).join(', '):'<span style="color:var(--text-faint)">Unassigned</span>'}</span></div>
     ${t.wo_type === 'sub' && t.parent_id ? `<div class="detail-field"><label>Parent WO</label><span style="font-family:var(--mono);cursor:pointer;color:var(--brand)" onclick="closeModal('at-detail-modal');setTimeout(()=>_openTicketDetail('${esc(t.parent_id)}'),80)">${esc(t.parent_id)}</span></div>` : ''}`;
   document.getElementById('atd-issue-box').textContent = t.issue_description || '—';
@@ -10919,6 +10930,9 @@ function renderMyWork(){
       slaStr = d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
       if(_AT_OPEN_STATUSES.includes(t.status) && d < now) slaStyle='color:#ef4444;font-weight:600';
     }
+    const createdStr = t.created_at
+      ? new Date(t.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
+      : '—';
     return `<tr style="cursor:pointer" onclick="_openTicketDetail('${esc(t.id)}')">
       <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(t.id)}</td>
       <td>${esc(t.customer||'—')}</td>
@@ -10927,6 +10941,7 @@ function renderMyWork(){
       <td style="font-size:11px">${callDateStr}</td>
       <td>${_atStatusBadge(t.status)}</td>
       <td style="font-size:11px;${slaStyle}">${slaStr}</td>
+      <td style="font-size:11px;font-family:var(--mono)">${createdStr}</td>
       <td style="font-size:11px">${engCell}</td>
     </tr>`;
   });
