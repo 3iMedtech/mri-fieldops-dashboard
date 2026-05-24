@@ -7,6 +7,24 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.5.3] — 2026-05-24
+
+UX polish bundle — product design backlog items PD-003, PD-008, PD-010, PD-011, PD-012. No schema changes, no new migrations.
+
+### Added
+- **PD-012 — Expired tile CTA** — Contract Expiry KPI tile is now clickable for Admin/Manager when expired count > 0. Clicking navigates to Contracts page with the expired filter pre-applied. Engineer/Viewer sees a static tile (role-gated via `canManagePM()`).
+- **PD-010 — AMC sub-count on filter chips** — Each expiry filter chip on the Contracts page now shows an "N AMC" sub-label when AMC contracts exist in that bucket. Helps at-a-glance AMC tracking without opening the table.
+- **PD-003 — PM Schedules empty state** — When PM filters return no rows, the PM table body now renders a proper empty-state message (calendar icon, "No PM schedules match") instead of a blank table body.
+
+### Fixed
+- **PD-011 — Warning toast duration** — `showToast()` auto-extend logic now covers `type === 'warning'` in addition to `type === 'error'`. Both types extend from 4 s to 8 s when called with the default duration.
+- **PD-008 — Contract section headers** — Applied `.page-header` class (gradient underline, introduced in v1.4.2) to all three contract section `h3` titles: Contract Expiry Overview, Data Diagnostics, All Install-Base Assets · Contracts.
+
+### Housekeeping
+- Backlog entries PD-006, PD-007, PD-009, PD-015 marked Shipped (were already implemented in earlier releases but not recorded).
+
+---
+
 ## [1.5.2] — 2026-05-24
 
 Manager XLSX upload enabled (deferred from v1.4.1), `cmc_contracts` UNIQUE(sn) constraint applied (migration 0007), and test matrix render coverage added (PD-006/PD-007).

@@ -2095,8 +2095,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.5.2';
-window.APP_BUILD   = { version: '1.5.2', released: '2026-05-24', tag: 'v1.5.2' };
+window.APP_VERSION = '1.5.3';
+window.APP_BUILD   = { version: '1.5.3', released: '2026-05-24', tag: 'v1.5.3' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -4159,7 +4159,7 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.5.2';
+const APP_VERSION = '1.5.3';
 const APP_RELEASE_DATE = '24 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About','app-tickets':'Create Work Order','my-work':'Open Work Orders'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
@@ -6074,25 +6074,33 @@ function renderContracts(){
   const allRows = agg.rows;
   const counts = { expired:0, d0_30:0, d31_60:0, d61_90:0, active:0, unknown:0, no_contract:0 };
   for(const r of allRows) counts[r.status] = (counts[r.status] || 0) + 1;
+  const amcCounts = {};
+  for(const r of allRows){
+    if((r.contract||'').toLowerCase().includes('amc'))
+      amcCounts[r.status] = (amcCounts[r.status] || 0) + 1;
+  }
 
   const noContract = counts.no_contract || 0;
   const dupGroups  = _contractsDuplicateCustomers();
   const stale      = _contractsStaleContracts(allRows);
 
-  const tile = (key, label, sub) => {
+  const tile = (key, label, sub, action) => {
     const color = _CONTRACT_BUCKET_COLOR[key];
-    return `<div class="renew-tile" style="border-color:${color}40;background:${color}0d">
+    return `<div class="renew-tile" style="border-color:${color}40;background:${color}0d${action ? ';cursor:pointer' : ''}"${action ? ` role="button" tabindex="0" onclick="${action}"` : ''}>
       <div class="renew-tile__label">${label}</div>
       <div class="renew-tile__value" style="color:${color}">${counts[key] || 0}</div>
       <div class="renew-tile__sub">${sub}</div>
     </div>`;
   };
+  const expiredAction = canManagePM() && counts.expired > 0
+    ? "navigate('contracts');setTimeout(()=>_contractsSetFilter('expired'),300)"
+    : null;
 
   const tiles = `
     <section aria-labelledby="contracts-overview-title">
-      <h3 id="contracts-overview-title" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Contract Expiry Overview</h3>
+      <h3 id="contracts-overview-title" class="page-header" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Contract Expiry Overview</h3>
       <div class="renew-tiles" role="group" aria-label="Contract expiry buckets">
-        ${tile('expired', _CONTRACT_BUCKET_LABEL.expired, 'Already lapsed')}
+        ${tile('expired', _CONTRACT_BUCKET_LABEL.expired, 'Already lapsed', expiredAction)}
         ${tile('d0_30',   _CONTRACT_BUCKET_LABEL.d0_30,   'Act this month')}
         ${tile('d31_60',  _CONTRACT_BUCKET_LABEL.d31_60,  'Quote soon')}
         ${tile('d61_90',  _CONTRACT_BUCKET_LABEL.d61_90,  'Plan ahead')}
@@ -6113,7 +6121,7 @@ function renderContracts(){
     </div>`;
   const diagnostics = _userRole === 'admin' ? `
     <section aria-labelledby="contracts-diag-title" style="margin-top:18px">
-      <h3 id="contracts-diag-title" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Data Diagnostics</h3>
+      <h3 id="contracts-diag-title" class="page-header" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">Data Diagnostics</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
         ${diagCard('IB Assets · No Contract', noContract, noContract ? `${noContract} of ${allRows.length} install-base assets${noContractSample ? ' · ' + esc(noContractSample) : ''}` : 'All install-base assets matched', noContract ? noContractSample : '')}
         ${diagCard('Unmatched Contract Rows', agg.unmatchedCmc.length, agg.unmatchedCmc.length ? `CMC rows not matched to any IB asset${cmcSample ? ' · ' + esc(cmcSample) : ''}` : 'All CMC rows matched', cmcSample)}
@@ -6123,18 +6131,18 @@ function renderContracts(){
     </section>` : '';
 
   const filterDefs = [
-    { key:'all',     short:'All',         full:'All contracts',           n: allRows.length },
-    { key:'expired', short:'Expired',     full:_CONTRACT_BUCKET_LABEL.expired, n: counts.expired },
-    { key:'d0_30',   short:'≤ 30 d',      full:_CONTRACT_BUCKET_LABEL.d0_30,   n: counts.d0_30 },
-    { key:'d31_60',  short:'31–60 d',     full:_CONTRACT_BUCKET_LABEL.d31_60,  n: counts.d31_60 },
-    { key:'d61_90',  short:'61–90 d',     full:_CONTRACT_BUCKET_LABEL.d61_90,  n: counts.d61_90 },
-    { key:'active',  short:'Active',      full:_CONTRACT_BUCKET_LABEL.active,  n: counts.active },
-    { key:'unknown', short:'Unknown',     full:_CONTRACT_BUCKET_LABEL.unknown, n: counts.unknown },
-    { key:'no_contract', short:'No Contract', full:'No contract attached', n: counts.no_contract },
+    { key:'all',     short:'All',         full:'All contracts',           n: allRows.length,   amc: Object.values(amcCounts).reduce((s,v)=>s+v,0) },
+    { key:'expired', short:'Expired',     full:_CONTRACT_BUCKET_LABEL.expired, n: counts.expired,   amc: amcCounts.expired||0 },
+    { key:'d0_30',   short:'≤ 30 d',      full:_CONTRACT_BUCKET_LABEL.d0_30,   n: counts.d0_30,     amc: amcCounts.d0_30||0 },
+    { key:'d31_60',  short:'31–60 d',     full:_CONTRACT_BUCKET_LABEL.d31_60,  n: counts.d31_60,    amc: amcCounts.d31_60||0 },
+    { key:'d61_90',  short:'61–90 d',     full:_CONTRACT_BUCKET_LABEL.d61_90,  n: counts.d61_90,    amc: amcCounts.d61_90||0 },
+    { key:'active',  short:'Active',      full:_CONTRACT_BUCKET_LABEL.active,  n: counts.active,    amc: amcCounts.active||0 },
+    { key:'unknown', short:'Unknown',     full:_CONTRACT_BUCKET_LABEL.unknown, n: counts.unknown,   amc: amcCounts.unknown||0 },
+    { key:'no_contract', short:'No Contract', full:'No contract attached', n: counts.no_contract, amc: 0 },
   ];
   const filterButtons = filterDefs.map(t => {
     const active = _contractsActiveFilter === t.key;
-    return `<button type="button" class="btn btn-ghost" aria-pressed="${active}" title="${esc(t.full)}" onclick="_contractsSetFilter('${t.key}')" style="${active ? 'background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4)' : ''}">${esc(t.short)} <span style="font-family:var(--mono);font-size:10px;opacity:.7">${t.n}</span></button>`;
+    return `<button type="button" class="btn btn-ghost" aria-pressed="${active}" title="${esc(t.full)}" onclick="_contractsSetFilter('${t.key}')" style="${active ? 'background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4)' : ''}">${esc(t.short)} <span style="font-family:var(--mono);font-size:10px;opacity:.7">${t.n}</span>${t.amc > 0 ? `<span style="font-size:0.7em;opacity:0.75;margin-left:4px">${t.amc} AMC</span>` : ''}</button>`;
   }).join('');
 
   const filtered = _contractsApplyFilterSearch(allRows);
@@ -6215,7 +6223,7 @@ function renderContracts(){
 
   const tableSection = `
     <section aria-labelledby="contracts-table-title" style="margin-top:18px">
-      <h3 id="contracts-table-title" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">All Install-Base Assets · Contracts</h3>
+      <h3 id="contracts-table-title" class="page-header" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px">All Install-Base Assets · Contracts</h3>
       <div role="group" aria-label="Filter contracts by expiry bucket" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">
         ${filterButtons}
       </div>
@@ -6668,7 +6676,9 @@ function renderPM(){
   const PM_TIER_PILL_COLOR = { exact:'#10b981', fuzzy:'#3b82f6', town_model:'#f59e0b', none:'#94a3b8' };
   const PM_TIER_PILL_LABEL = { exact:'exact', fuzzy:'fuzzy', town_model:'town+model', none:'none' };
 
-  document.getElementById('pm-body').innerHTML = rows.map(({ib, pm, st, tier}) => {
+  if(!rows.length){
+    document.getElementById('pm-body').innerHTML = _emptyStateHtml('calendar', 'No PM schedules match', 'Adjust filters or check schedule data.', 'none', 13);
+  } else document.getElementById('pm-body').innerHTML = rows.map(({ib, pm, st, tier}) => {
     const cust = ib?.name || pm?.customer || '—';
     const town = ib?.town || pm?.town || '—';
     const model = ib?.model || pm?.model || '—';
@@ -9823,7 +9833,7 @@ function hideLogin(){ document.getElementById('login-overlay').style.display = '
 
 // ── v1.4.2 Toast notification system (replaces alert() for feedback) ──
 function showToast(message, type='info', duration=4000){
-  if(duration === 4000 && type === 'error') duration = 8000;
+  if(duration === 4000 && (type === 'error' || type === 'warning')) duration = 8000;
   let container = document.getElementById('toast-container');
   if(!container){
     container = document.createElement('div');
