@@ -1408,6 +1408,7 @@ button,input,select,textarea{font-family:inherit;}
           <option value="open">Open</option>
           <option value="all">All</option>
         </select>
+        <input class="search-box" id="mw-search" type="search" placeholder="Search WO, customer, asset…" aria-label="Search work orders" oninput="renderMyWork()" style="width:200px;padding:5px 10px">
         <input class="search-box" id="mw-eng-search" type="search" placeholder="Engineer name…" aria-label="Filter by engineer" oninput="renderMyWork()" style="width:150px;padding:5px 10px">
       </div>
     </div>
@@ -2097,8 +2098,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.5.5';
-window.APP_BUILD   = { version: '1.5.5', released: '2026-05-25', tag: 'v1.5.5' };
+window.APP_VERSION = '1.5.6';
+window.APP_BUILD   = { version: '1.5.6', released: '2026-05-25', tag: 'v1.5.6' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -3800,9 +3801,9 @@ function ticketsForEngineer(eng, opts){
   const canonSet = rosterEngineerCanonicals(eng);
   if(canonSet.size === 0) return [];
   const { windowStart=null, monthFilter=null } = opts || {};
-  return RAW_TICKETS.filter(t=>{
-    // Pre-enriched at load time: t._engCanons, t._callDate. Fall back to
-    // live parse if we hit a row that somehow bypassed enrichment.
+
+  // RAW_TICKETS: XLSX-uploaded legacy service history (canonical name match)
+  const rawMatches = RAW_TICKETS.filter(t=>{
     const engs = t._engCanons || splitEngineers(t.engineer);
     if(!engs.some(n => canonSet.has(n))) return false;
     if(monthFilter && monthFilter !== 'all' && t.month !== monthFilter) return false;
@@ -3812,6 +3813,29 @@ function ticketsForEngineer(eng, opts){
     }
     return true;
   });
+
+  // APP_TICKETS: in-app WOs (primary + sub) assigned to this engineer by ID.
+  // Only include closed/resolved — open ones are counted separately as backlog.
+  const appMatches = (typeof APP_TICKETS !== 'undefined' ? APP_TICKETS : [])
+    .filter(t => {
+      if(t.ticket_type !== 'service') return false;
+      if(_AT_OPEN_STATUSES.includes(t.status)) return false;  // open = backlog, not history
+      if(!(t.assigned_engineer_ids||[]).includes(eng.id)) return false;
+      return true;
+    })
+    .map(t => {
+      // Normalise to same shape expected by computeEngineerMetrics
+      const mapped = _mapAppTicketToHistory(t);
+      mapped._callDate = t.call_date ? new Date(t.call_date + 'T00:00:00') : null;
+      mapped._upDate   = t.sys_up_date ? new Date(t.sys_up_date + 'T00:00:00') : null;
+      mapped._isAppTicket = true;
+      if(windowStart && mapped._callDate && mapped._callDate < windowStart) return null;
+      if(monthFilter && monthFilter !== 'all' && mapped.month !== monthFilter) return null;
+      return mapped;
+    })
+    .filter(Boolean);
+
+  return [...rawMatches, ...appMatches];
 }
 
 // Count calls for a single roster engineer, optionally filtered by month.
@@ -4161,7 +4185,7 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.5.5';
+const APP_VERSION = '1.5.6';
 const APP_RELEASE_DATE = '25 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About','app-tickets':'Create Work Order','my-work':'Open Work Orders'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
@@ -6427,18 +6451,23 @@ function _mapAppTicketToHistory(t){
     ? attendedRaw.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
   const sysUpStr    = sysUpRaw
     ? sysUpRaw.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+  const isSubWO = t.wo_type === 'sub';
   return {
     id: t.id, month: monthLabel, src_row: 0,
     customer_raw: t.customer||'', customer: t.customer||'',
     asset_code: t.asset_code||'', town: t.town||'', state: t.state||'',
     contract: t.contract||'', call_date: callDateStr, call_type: t.call_type||'',
-    model: t.model||'', sys_status: t.sys_status||'', issue: t.issue_description||'',
+    model: t.model||'', sys_status: t.sys_status||'',
+    issue: isSubWO && t.parent_id
+      ? `[Sub WO of ${t.parent_id}] ${t.issue_description||''}`
+      : (t.issue_description||''),
     attended_date: attendedStr, engineer: (t.assigned_engineer_names||[]).join(' & '),
     parts: t.parts||'', parts_req_date:'', parts_recv_date:'',
     parts_status: t.parts_status||'', sys_up_date: sysUpStr,
     resolution: t.resolution||'', status: 'Closed',
     orphaned:false, unmatched:false, ambiguities:[],
     _callDate: callDateRaw, _upDate: sysUpRaw, _isAppTicket: true,
+    _isSubWO: isSubWO, _parentId: t.parent_id||null,
   };
 }
 
@@ -10471,7 +10500,7 @@ function _atdRenderTransitions(t){
 
   // Engineers can only do forward operational moves on tickets they are assigned to
   const isEng = !canManagePM();
-  const engAllowed = ['in_progress','resolved','on_hold','parts_pending','completed'];
+  const engAllowed = ['in_progress','resolved','on_hold','parts_pending','completed','closed'];
   let visible;
   if(isEng){
     visible = _isCurrentEngineerAssigned(t)
@@ -10518,6 +10547,21 @@ async function _atdTransition(newStatus){
   if(!_atdCurrentId) return;
   const t = APP_TICKETS.find(x => x.id === _atdCurrentId);
   if(!t) return;
+
+  // Guard: primary WO cannot close while sub-WOs are still open.
+  if(newStatus === 'closed' && t.wo_type === 'primary'){
+    const openSubs = APP_TICKETS.filter(s =>
+      s.parent_id === t.id && s.wo_type === 'sub' && _AT_OPEN_STATUSES.includes(s.status)
+    );
+    if(openSubs.length){
+      showToast(
+        `Cannot close this work order — ${openSubs.length} linked sub work order${openSubs.length===1?'':'s'} still open ` +
+        `(${openSubs.map(s=>s.id).join(', ')}). Close all sub work orders first.`,
+        'error'
+      );
+      return;
+    }
+  }
 
   // Closure transitions: validate required fields then capture sys_status.
   if(_AT_CLOSE_STATUSES.includes(newStatus)){
@@ -10855,37 +10899,73 @@ async function _createPMCompletionFromAppTicket(ticket){
 }
 
 function renderMyWork(){
-  // When viewer (engineer): auto-filter to their own name; admin/mgr see all
-  const mwHeading = document.getElementById('mw-heading');
-  const searchEl  = document.getElementById('mw-eng-search');
-  if(_userRole === 'viewer' && searchEl){
+  const mwHeading  = document.getElementById('mw-heading');
+  const engSearchEl = document.getElementById('mw-eng-search');
+  const genSearchEl = document.getElementById('mw-search');
+
+  // Resolve logged-in engineer (viewer role)
+  let currentEng = null;
+  if(_userRole === 'viewer'){
     const email = (_currentUser?.email || '').toLowerCase();
-    const eng = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
-    if(eng && !searchEl.value) searchEl.value = eng.name;
-    if(mwHeading) mwHeading.textContent = eng ? `My Open Work Orders — ${eng.name}` : 'Open Work Orders';
+    currentEng = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
+    if(mwHeading) mwHeading.textContent = currentEng ? `My Open Work Orders — ${currentEng.name}` : 'Open Work Orders';
+    // Hide engineer name search for viewers (irrelevant — they see their own WOs)
+    if(engSearchEl) engSearchEl.style.display = 'none';
   } else {
     if(mwHeading) mwHeading.textContent = 'All Open Work Orders';
+    if(engSearchEl) engSearchEl.style.display = '';
   }
 
   const statusVal = document.getElementById('mw-status')?.value || 'open';
-  const engSearch = (searchEl?.value || '').trim().toLowerCase();
+  const engSearch = (engSearchEl?.value || '').trim().toLowerCase();
+  const genSearch = (genSearchEl?.value || '').trim().toLowerCase();
 
-  let rows = APP_TICKETS.filter(t => {
-    if(t.wo_type === 'sub') return false;
-    if(statusVal === 'open') return _AT_OPEN_STATUSES.includes(t.status);
-    return true;
-  });
-  if(engSearch) rows = rows.filter(t =>
-    t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch))
+  let rows;
+  if(_userRole === 'viewer' && currentEng){
+    // Engineer: primary WOs + sub-WOs assigned to them (by ID — reliable, name-independent)
+    rows = APP_TICKETS.filter(t => {
+      if(!(t.assigned_engineer_ids||[]).includes(currentEng.id)) return false;
+      if(statusVal === 'open') return _AT_OPEN_STATUSES.includes(t.status);
+      return true;
+    });
+  } else if(_userRole === 'viewer'){
+    // Viewer with no ENGINEERS row — fall back to name search (existing behaviour)
+    rows = APP_TICKETS.filter(t => {
+      if(t.wo_type === 'sub') return false;
+      if(statusVal === 'open') return _AT_OPEN_STATUSES.includes(t.status);
+      return true;
+    });
+  } else {
+    // Admin / Manager: primary WOs only (sub-WOs shown inside parent detail)
+    rows = APP_TICKETS.filter(t => {
+      if(t.wo_type === 'sub') return false;
+      if(statusVal === 'open') return _AT_OPEN_STATUSES.includes(t.status);
+      return true;
+    });
+    // Engineer name filter (admin/manager only)
+    if(engSearch) rows = rows.filter(t =>
+      t.assigned_engineer_names.some(n => n.toLowerCase().includes(engSearch))
+    );
+  }
+
+  // General multi-field search — searches all relevant fields
+  if(genSearch) rows = rows.filter(t =>
+    [t.id, t.customer, t.asset_code, t.model, t.region, t.town,
+     t.call_type, t.sys_status, t.issue_description, t.status,
+     t.parent_id, ...(t.assigned_engineer_names||[])
+    ].some(v => (v||'').toLowerCase().includes(genSearch))
   );
 
-  // Legacy open calls not yet migrated — shown when viewing open or all statuses
-  const legacyOpen = _unmigratedOpen().filter(t =>
-    !engSearch || (t.engineer||'').toLowerCase().includes(engSearch)
+  // Legacy open calls (admin/manager only)
+  const isViewer = _userRole === 'viewer';
+  const legacyOpen = isViewer ? [] : _unmigratedOpen().filter(t =>
+    (!engSearch || (t.engineer||'').toLowerCase().includes(engSearch)) &&
+    (!genSearch  || [t.id, t.customer, t.asset_code, t.engineer, t.region, t.state]
+                      .some(v => (v||'').toLowerCase().includes(genSearch)))
   );
-  const showLegacy = statusVal !== 'closed';
+  const showLegacy = !isViewer && statusVal !== 'closed';
 
-  // Badge: combined open count (app_tickets + unmigrated legacy)
+  // Badge: open primary WOs + unmigrated legacy (unchanged from before)
   const myCount = APP_TICKETS.filter(t =>
     t.wo_type !== 'sub' &&
     _AT_OPEN_STATUSES.includes(t.status) &&
@@ -10912,7 +10992,7 @@ function renderMyWork(){
   const tbody = document.getElementById('mw-tbody');
   if(!tbody) return;
   if(!totalShown){
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-dim)">No tickets match this filter.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-dim)">No tickets match this filter.</td></tr>`;
     return;
   }
 
@@ -10933,8 +11013,12 @@ function renderMyWork(){
     const createdStr = t.created_at
       ? new Date(t.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
       : '—';
+    const isSubWO = t.wo_type === 'sub';
+    const idCell = isSubWO
+      ? `<span style="color:var(--brand)">${esc(t.id)}</span><br><span style="font-size:9px;color:var(--text-faint)">↳ sub of ${esc(t.parent_id||'')}</span>`
+      : esc(t.id);
     return `<tr style="cursor:pointer" onclick="_openTicketDetail('${esc(t.id)}')">
-      <td style="font-family:var(--mono);font-size:11px;color:var(--brand)">${esc(t.id)}</td>
+      <td style="font-family:var(--mono);font-size:11px">${idCell}</td>
       <td>${esc(t.customer||'—')}</td>
       <td style="font-family:var(--mono);font-size:11px">${esc(t.asset_code||'—')}</td>
       <td>${esc(t.region||'—')}</td>
