@@ -1879,8 +1879,8 @@ button,input,select,textarea{font-family:inherit;}
         <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1.5px;margin-bottom:12px">WORK RECORD</div>
         <div style="display:grid;gap:11px">
           <div>
-            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">RESOLUTION NOTES</label>
-            <textarea id="atd-resolution" rows="3" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;outline:none" placeholder="Steps taken, findings, outcome…"></textarea>
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">WORK DETAILS</label>
+            <textarea id="atd-resolution" rows="3" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;outline:none" placeholder="Fault diagnosis, action taken, parts replaced, outcome…"></textarea>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
             <div>
@@ -2098,8 +2098,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.5.6';
-window.APP_BUILD   = { version: '1.5.6', released: '2026-05-25', tag: 'v1.5.6' };
+window.APP_VERSION = '1.5.7';
+window.APP_BUILD   = { version: '1.5.7', released: '2026-05-26', tag: 'v1.5.7' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -4185,7 +4185,7 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.5.6';
+const APP_VERSION = '1.5.7';
 const APP_RELEASE_DATE = '25 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About','app-tickets':'Create Work Order','my-work':'Open Work Orders'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
