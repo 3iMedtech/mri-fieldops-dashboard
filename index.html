@@ -2098,8 +2098,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.5.8';
-window.APP_BUILD   = { version: '1.5.8', released: '2026-05-28', tag: 'v1.5.8' };
+window.APP_VERSION = '1.5.9';
+window.APP_BUILD   = { version: '1.5.9', released: '2026-05-28', tag: 'v1.5.9' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -2304,14 +2304,22 @@ function applyInstallBaseOverlay(){
   const v2Codes = new Set(INSTALL_BASE_V2.map(s => s.code));
   const fromV2 = INSTALL_BASE_V2.map(src => {
     const p = prev.get(src.code) || {};
+    // true once DB has been loaded; false on cold start (prev is empty)
+    const fromDb = !!p.code;
     return {
-      code: src.code, ast_id: src.ast_id, name: src.name,
-      tesla: src.tesla, model: src.model, town: src.town, state: src.state,
-      channel: src.channel, gradient: src.gradient, sw: src.sw,
-      compressor: src.compressor, coldhead: src.coldhead,
+      code: src.code,
+      ast_id:     fromDb ? p.ast_id               : src.ast_id,
+      name:       fromDb ? (p.name || src.name)   : src.name,
+      tesla:      fromDb ? p.tesla                 : src.tesla,
+      model:      fromDb ? p.model                 : src.model,
+      town:       fromDb ? p.town                  : src.town,
+      state:      fromDb ? p.state                 : src.state,
+      channel:    fromDb ? p.channel               : src.channel,
+      gradient:   fromDb ? p.gradient              : src.gradient,
+      sw:         fromDb ? p.sw                    : src.sw,
+      compressor: fromDb ? p.compressor            : src.compressor,
+      coldhead:   fromDb ? p.coldhead              : src.coldhead,
       _alias_of: null,
-      // Phase 2 B5.5: lifecycle + audit fields carried from the DB-loaded
-      // prev snapshot so V2-canonical codes still reflect their real status.
       status: p.status || 'active',
       de_installed_at: p.de_installed_at,
       de_installed_by: p.de_installed_by,
@@ -4185,7 +4193,7 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.5.8';
+const APP_VERSION = '1.5.9';
 const APP_RELEASE_DATE = '28 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About','app-tickets':'Create Work Order','my-work':'Open Work Orders'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
