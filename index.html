@@ -2098,8 +2098,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.5.7';
-window.APP_BUILD   = { version: '1.5.7', released: '2026-05-26', tag: 'v1.5.7' };
+window.APP_VERSION = '1.5.8';
+window.APP_BUILD   = { version: '1.5.8', released: '2026-05-28', tag: 'v1.5.8' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -4185,8 +4185,8 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.5.7';
-const APP_RELEASE_DATE = '25 May 2026';
+const APP_VERSION = '1.5.8';
+const APP_RELEASE_DATE = '28 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About','app-tickets':'Create Work Order','my-work':'Open Work Orders'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
 
@@ -6468,6 +6468,7 @@ function _mapAppTicketToHistory(t){
     orphaned:false, unmatched:false, ambiguities:[],
     _callDate: callDateRaw, _upDate: sysUpRaw, _isAppTicket: true,
     _isSubWO: isSubWO, _parentId: t.parent_id||null,
+    _visitLog: t.visit_log || [],
   };
 }
 
@@ -6514,7 +6515,8 @@ function renderHistory(){
   const sorted = applySort('history', getFilteredHistoryRows());
   const theadRow = document.getElementById('history-thead-row');
   if(theadRow) theadRow.innerHTML = renderSortableHeaders('history');
-  document.getElementById('history-body').innerHTML=sorted.map(t=>`
+  document.getElementById('history-body').innerHTML=sorted.map(t=>{
+    const mainRow=`
     <tr class="clickable" onclick="openDetail('${t.id}')">
       <td><span class="ticket-id">${t.id}</span></td>
       <td><span class="month-pill">${t.month}</span></td>
@@ -6529,7 +6531,14 @@ function renderHistory(){
       <td style="font-size:11px;color:${t.parts&&t.parts!=='NA'?'var(--amber)':'var(--text-faint)'}">${t.parts&&t.parts!=='NA'?truncate(t.parts,20):'—'}</td>
       <td style="font-family:var(--mono);font-size:10px">${t.sys_up_date||'—'}</td>
       <td>${statusBadge(t.status)}</td>
-    </tr>`).join('');
+    </tr>`;
+    if(!t._isAppTicket||!t._visitLog||t._visitLog.length===0) return mainRow;
+    const visitRows=t._visitLog.map(v=>{
+      const vDate=v.ts?new Date(v.ts).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—';
+      return `<tr style="background:var(--bg-card)"><td colspan="13" style="padding:4px 12px 4px 28px;font-size:11px;color:var(--text-dim)"><span style="color:var(--accent-blue);font-weight:600;margin-right:6px">&#8627; Visit</span><span style="font-family:var(--mono);margin-right:8px">${vDate}</span><span style="margin-right:8px">${v.eng_name||'—'}</span><span>${v.note||''}</span></td></tr>`;
+    }).join('');
+    return mainRow+visitRows;
+  }).join('');
   // v1.2.0 2e — empty state when filters strip everything out.
   if(sorted.length === 0){
     document.getElementById('history-body').innerHTML = _emptyStateHtml({
@@ -11698,7 +11707,7 @@ async function bootApp(){
 // One channel per table (not one shared channel with 5 bindings): if a
 // single table isn't in the realtime publication, only that subscription
 // fails — the others keep working and the badge stays green.
-const _RT_TABLES = ['tickets','pm_schedule','engineers','cmc_contracts','ambiguities'];
+const _RT_TABLES = ['tickets','pm_schedule','engineers','cmc_contracts','ambiguities','app_tickets'];
 let _rtChannels = [];       // [{ table, channel, status }]
 let _rtReloadTimer = null;
 // When THIS session writes to a table (upload, mark PM done, etc.), set
