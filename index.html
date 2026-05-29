@@ -1913,11 +1913,34 @@ button,input,select,textarea{font-family:inherit;}
       <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
         <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:1.5px;margin-bottom:10px">VISIT LOG</div>
         <div id="atd-visit-list" style="display:grid;gap:6px;margin-bottom:12px"></div>
-        <div id="atd-log-form" style="display:none">
-          <textarea id="atd-log-note" rows="2" placeholder="Brief note about this visit (optional)…" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:none;outline:none;margin-bottom:8px"></textarea>
+        <div id="atd-log-form" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ENGINEER *</label>
+              <select id="atd-log-engineer" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px"></select>
+            </div>
+            <div>
+              <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">ATTENDED DATE *</label>
+              <input type="date" id="atd-log-date" style="width:100%;box-sizing:border-box;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px">
+            </div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">SYSTEM STATUS *</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="atd-log-sys-status" value="working"> Working</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="atd-log-sys-status" value="partially_down"> Partially Down</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="atd-log-sys-status" value="down"> Down</label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="atd-log-sys-status" value="planned_activity"> Planned Activity</label>
+            </div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">WORK DESCRIPTION *</label>
+            <textarea id="atd-log-note" rows="3" placeholder="Describe the work done on this visit…" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;outline:none"></textarea>
+            <div id="atd-log-desc-err" style="display:none;font-size:11px;color:var(--red,#ef4444);margin-top:3px">Work description is required.</div>
+          </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-primary" style="font-size:12px" onclick="_atdSubmitVisit()">Log Visit</button>
-            <button class="btn btn-ghost" style="font-size:12px" onclick="document.getElementById('atd-log-form').style.display='none'">Cancel</button>
+            <button class="btn btn-ghost" style="font-size:12px" onclick="_atdCancelLogVisit()">Cancel</button>
           </div>
         </div>
         <div id="atd-log-btn-wrap"></div>
@@ -6560,9 +6583,17 @@ function renderHistory(){
       <td>${statusBadge(t.status)}</td>
     </tr>`;
     if(!t._isAppTicket||!t._visitLog||t._visitLog.length===0) return mainRow;
+    const _vSysStatusLabel={'working':'Working','partially_down':'Partially Down','down':'Down','planned_activity':'Planned Activity'};
+    const _vSysStatusColor={'working':'#10b981','partially_down':'#f59e0b','down':'#ef4444','planned_activity':'#3b82f6'};
     const visitRows=t._visitLog.map(v=>{
-      const vDate=v.ts?new Date(v.ts).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—';
-      return `<tr style="background:var(--bg-card)"><td colspan="13" style="padding:4px 12px 4px 28px;font-size:11px;color:var(--text-dim)"><span style="color:var(--accent-blue);font-weight:600;margin-right:6px">&#8627; Visit</span><span style="font-family:var(--mono);margin-right:8px">${vDate}</span><span style="margin-right:8px">${v.eng_name||'—'}</span><span>${v.note||''}</span></td></tr>`;
+      const vDate=v.attended_date
+        ? new Date(v.attended_date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+        : v.ts?new Date(v.ts).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—';
+      const ssBadge=v.sys_status
+        ? `<span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600;background:${_vSysStatusColor[v.sys_status]||'#94a3b8'}20;color:${_vSysStatusColor[v.sys_status]||'#94a3b8'};margin-right:8px">${_vSysStatusLabel[v.sys_status]||v.sys_status}</span>`
+        : '';
+      const desc=v.description||v.note||'';
+      return `<tr style="background:var(--bg-card)"><td colspan="13" style="padding:4px 12px 4px 28px;font-size:11px;color:var(--text-dim)"><span style="color:var(--accent-blue);font-weight:600;margin-right:6px">&#8627; Visit</span><span style="font-family:var(--mono);margin-right:8px">${vDate}</span><span style="margin-right:8px">${esc(v.eng_name||'—')}</span>${ssBadge}${desc?`<span>${esc(desc)}</span>`:''}</td></tr>`;
     }).join('');
     return mainRow+visitRows;
   }).join('');
@@ -10400,7 +10431,7 @@ function _openTicketDetail(id){
   const logBtnWrap = document.getElementById('atd-log-btn-wrap');
   if(logBtnWrap){
     logBtnWrap.innerHTML = canEdit
-      ? `<button class="btn btn-ghost" style="font-size:12px" onclick="document.getElementById('atd-log-form').style.display='';document.getElementById('atd-log-note').focus()"><i data-lucide="plus"></i>Log Visit</button>`
+      ? `<button class="btn btn-ghost" style="font-size:12px" onclick="_atdOpenLogVisitForm()"><i data-lucide="plus"></i>Log Visit</button>`
       : '';
   }
   document.getElementById('atd-log-form').style.display = 'none';
@@ -10568,14 +10599,29 @@ function _atdRenderVisitLog(t){
     list.innerHTML = `<div style="font-size:11px;color:var(--text-faint);font-style:italic">No visits logged yet.</div>`;
     return;
   }
+  const ssLabel={'working':'Working','partially_down':'Partially Down','down':'Down','planned_activity':'Planned Activity'};
+  const ssColor={'working':'#10b981','partially_down':'#f59e0b','down':'#ef4444','planned_activity':'#3b82f6'};
   list.innerHTML = entries.map(e => {
-    const ts = e.ts ? new Date(e.ts).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-        <span style="font-size:11px;font-weight:600">${esc(e.eng_name||'Unknown')}</span>
-        <span style="font-size:10px;font-family:var(--mono);color:var(--text-dim)">${ts}</span>
+    const attendedDisplay = e.attended_date
+      ? new Date(e.attended_date+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+      : e.ts ? new Date(e.ts).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+    const loggedAt = e.ts ? new Date(e.ts).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+    const ssBadge = e.sys_status
+      ? `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:10px;font-weight:600;background:${ssColor[e.sys_status]||'#94a3b8'}20;color:${ssColor[e.sys_status]||'#94a3b8'}">${ssLabel[e.sys_status]||e.sys_status}</span>`
+      : `<span style="font-size:10px;color:var(--text-faint)">—</span>`;
+    const desc = e.description || e.note || '';
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:600">${esc(e.eng_name||'Unknown')}</span>
+          ${ssBadge}
+        </div>
+        <span style="font-size:10px;font-family:var(--mono);color:var(--text-faint);white-space:nowrap;margin-left:8px">Logged ${loggedAt}</span>
       </div>
-      ${e.note ? `<div style="font-size:11px;color:var(--text-dim)">${esc(e.note)}</div>` : ''}
+      <div style="display:flex;gap:16px;margin-bottom:${desc?'6':'0'}px">
+        <span style="font-size:10px;color:var(--text-dim)"><span style="font-family:var(--mono);letter-spacing:.5px">ATTENDED</span> <b>${attendedDisplay}</b></span>
+      </div>
+      ${desc ? `<div style="font-size:11px;color:var(--text-dim);border-top:1px solid var(--border);padding-top:6px;margin-top:2px">${esc(desc)}</div>` : '<div style="font-size:11px;color:var(--text-faint);font-style:italic">No description recorded.</div>'}
     </div>`;
   }).join('');
 }
@@ -10722,16 +10768,38 @@ async function _atdSubmitVisit(){
   const t = APP_TICKETS.find(x => x.id === _atdCurrentId);
   if(!t) return;
 
-  const email = (_currentUser?.email || '').toLowerCase();
-  const eng = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
-  const engId   = eng?.id   || _currentUser?.id   || 'unknown';
-  const engName = eng?.name || email || 'Unknown';
+  // Read form fields
+  const engSel     = document.getElementById('atd-log-engineer');
+  const selectedEng = engSel ? ENGINEERS.find(e => e.id === engSel.value) : null;
+  const engId   = selectedEng?.id   || _currentUser?.id   || 'unknown';
+  const engName = selectedEng?.name || _currentUser?.email || 'Unknown';
 
-  const note = document.getElementById('atd-log-note')?.value.trim() || '';
-  const entry = { eng_id: engId, eng_name: engName, note, ts: new Date().toISOString() };
+  const attendedDate = document.getElementById('atd-log-date')?.value || _localDateStr();
+  const sysStatusEl  = document.querySelector('#atd-log-form input[name="atd-log-sys-status"]:checked');
+  const sysStatus    = sysStatusEl?.value || null;
+  const description  = document.getElementById('atd-log-note')?.value.trim() || '';
+
+  // Validate required description
+  const errEl = document.getElementById('atd-log-desc-err');
+  if(!description){
+    if(errEl) errEl.style.display = '';
+    document.getElementById('atd-log-note')?.focus();
+    return;
+  }
+  if(errEl) errEl.style.display = 'none';
+
+  const entry = {
+    ts:            new Date().toISOString(),
+    attended_date: attendedDate,
+    eng_id:        engId,
+    eng_name:      engName,
+    sys_status:    sysStatus,
+    description,
+    note:          description, // keep for backward compat (PM completion + old renders read note)
+  };
   const newLog = [...(t.visit_log || []), entry];
 
-  const btn = document.querySelector('#at-detail-modal button[onclick="_atdSubmitVisit()"]');
+  const btn = document.querySelector('#atd-log-form button[onclick="_atdSubmitVisit()"]');
   if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
 
   const updated = await dbUpdateAppTicket(_atdCurrentId, { visit_log: newLog });
@@ -10743,10 +10811,41 @@ async function _atdSubmitVisit(){
   ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
 
   document.getElementById('atd-log-form').style.display = 'none';
-  const noteEl = document.getElementById('atd-log-note');
-  if(noteEl) noteEl.value = '';
+  document.getElementById('atd-log-note').value = '';
+  if(sysStatusEl) sysStatusEl.checked = false;
   _atdRenderVisitLog(updated);
   showToast('Visit logged.', 'success');
+}
+
+function _atdCancelLogVisit(){
+  document.getElementById('atd-log-form').style.display = 'none';
+  const errEl = document.getElementById('atd-log-desc-err');
+  if(errEl) errEl.style.display = 'none';
+}
+
+function _atdOpenLogVisitForm(){
+  // Populate engineer select — full active roster; pre-select the current user.
+  const engSel = document.getElementById('atd-log-engineer');
+  if(engSel){
+    const roster = activeRoster();
+    const email  = (_currentUser?.email || '').toLowerCase();
+    const me     = ENGINEERS.find(e => (e.email||'').toLowerCase() === email);
+    // Engineer role: only themselves. Admin/Manager: full roster.
+    const opts   = canManagePM() ? roster : roster.filter(e => e.id === me?.id);
+    engSel.innerHTML = opts.length
+      ? opts.map(e => `<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.region)})</option>`).join('')
+      : `<option value="">${esc(me?.name || email || 'Unknown')}</option>`;
+    if(me) engSel.value = me.id;
+  }
+  // Default attended date to today.
+  const dateEl = document.getElementById('atd-log-date');
+  if(dateEl && !dateEl.value) dateEl.value = _localDateStr();
+  // Clear previous error / description.
+  const errEl = document.getElementById('atd-log-desc-err');
+  if(errEl) errEl.style.display = 'none';
+
+  document.getElementById('atd-log-form').style.display = '';
+  document.getElementById('atd-log-note').focus();
 }
 
 async function dbUpdateAppTicket(id, fields){
