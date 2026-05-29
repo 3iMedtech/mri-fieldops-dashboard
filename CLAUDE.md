@@ -136,45 +136,27 @@ Freshness rule:
 
 ## 7. Agent Team Rules
 
-Use the FieldOps agent team for structured engineering work. The hierarchy has 4 tiers as of 2026-05-09 — see [`docs/fieldops3i_agent_orchestration_model.md`](docs/fieldops3i_agent_orchestration_model.md) §5 for the full diagram and [`docs/fieldops3i_task_routing_protocol.md`](docs/fieldops3i_task_routing_protocol.md) §2 for the routing decision tree.
+**Active roster (5 agents — trimmed 2026-05-29 based on utilization data).**
+Archived definitions live in `.claude/agents/archived/` and can be restored if needed.
+Utilization data: `automation/agent-analytics/invocations.jsonl` · Report: `node scripts/agent-report.cjs`
 
-### Tier 0 — Delivery Orchestrator
-- `fieldops-delivery-orchestrator`: phase-level controller. PASS / HOLD / STOP / ESCALATE authority. Use when a task crosses SQL ↔ runtime ↔ release boundaries.
+### Active agents
 
-### Tier 1 — Project Managers (one per track; coordinate specialists; produce ONE attributed verdict per track)
-- `fieldops-database-pm`: owns DB track (sql-rls-safety + runbook-verifier + reconciliation).
-- `fieldops-runtime-pm`: owns runtime track (runtime-integration + qa-test-automation + ui-agent advisory).
-- `fieldops-release-pm`: owns release track (release-agent + qa-test-automation + memory snapshot).
+| Agent | Purpose | When to invoke |
+|---|---|---|
+| `fieldops-code-reviewer` | Pre-commit diff review — field propagation, state machines, role gates, JSONB compat, test-plan coverage | Before every non-trivial commit to `index.html` or `db/migrations/` |
+| `fieldops-sql-rls-safety-agent` | SQL/RLS migration review — recursion, SECURITY DEFINER, GRANT layering, rollback symmetry | Every new or modified migration file |
+| `fieldops-qa-test-automation-agent` | Playwright test harness, role-permission matrix, regression coverage | Any new write path, role gate change, or post-deploy verification |
+| `fieldops-automation-memory-agent` | STATE.md updates — branch, commit, environment, migration, matrix state | After every deploy, SQL apply, or significant project state change |
+| `fieldops-observability-agent` | Post-deploy smoke — APP_VERSION, Pages headers, console errors, 3-role matrix | After every production deploy |
 
-### Tier 2 — Specialists (formal; have hard stops)
-- `fieldops-code-reviewer`: **pre-commit diff reviewer** — invoke before every non-trivial commit. Checks field propagation, status-machine transitions, role-gate consistency, render-path completeness, JSONB backward compat, and test-plan coverage. Returns PASS/STOP with line-level findings. Target: under 2 minutes. See `.claude/agents/fieldops-code-reviewer.md` for the full checklist.
-- `fieldops-sql-rls-safety-agent`: SQL/RLS migration review.
-- `fieldops-migration-runbook-verifier`: runbook correctness vs migration claims.
-- `fieldops-data-reconciliation-agent`: V2 / XLSX / PM-CMC drift identification.
-- `fieldops-runtime-integration-agent`: app integration design.
-- `fieldops-qa-test-automation-agent`: automated test harness (Tier 1-5 of the test pyramid).
-- `fieldops-automation-memory-agent`: state persistence (writes `automation/STATE.md`).
+### Rules
 
-### Tier 3 — Legacy / module-level engineering agents
-- `fieldops-orchestrator`: planning, scope, risk, module mapping (single-domain).
-- `fieldops-ui-agent`: UI/UX polish.
-- `fieldops-bug-agent`: root-cause analysis.
-- `fieldops-supabase-agent`: Supabase reads/writes within module scope.
-- `fieldops-test-agent`: manual `TEST_MATRIX.md` execution.
-- `fieldops-release-agent`: release readiness specialist (now reports through release-pm).
-- `fieldops-observability-agent`: post-deploy smoke verification (APP_VERSION, Pages headers, console errors, audit_log health). Reports to release-pm.
-
-### Tier 4 — Product design advisory team
-- `fieldops-product-design-lead`, `fieldops-enterprise-ux-researcher`, `fieldops-dashboard-usability-auditor`, `fieldops-design-system-guardian`, `fieldops-accessibility-reviewer`, `fieldops-microinteraction-designer`. Advisory-only; no implementation without approval.
-
-Rules:
-
-- Use the Delivery Orchestrator for any phase-level work (multi-track).
-- Use a PM when a task needs 2+ specialists in the same track.
-- Skip the PM when only one specialist is needed (see routing protocol §2.1).
-- Use product design agents for intentional UX/design review, not routine bug fixes.
-- Do not claim a specialist review happened unless it was actually performed.
-- A PM must NEVER paraphrase a specialist's verdict — relay it attributed.
+- Invoke agents directly — no PM tier, no orchestrator, for routine work.
+- For a true multi-track change (SQL + runtime + deploy in the same task), coordinate manually and invoke `fieldops-sql-rls-safety-agent` + `fieldops-code-reviewer` + `fieldops-observability-agent` in sequence.
+- Do not claim an agent review happened unless it was actually performed.
+- Log every invocation to `automation/agent-analytics/invocations.jsonl` (see §logging below).
+- Run `node scripts/agent-report.cjs` quarterly to check health. DEAD agents get archived.
 
 ### Standard commit flow (routine feature/fix work)
 
