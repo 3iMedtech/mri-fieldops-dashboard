@@ -2098,8 +2098,8 @@ button,input,select,textarea{font-family:inherit;}
 // ══════════════════════════════════════════
 // APP VERSION — baseline released 2026-04-24
 // ══════════════════════════════════════════
-window.APP_VERSION = '1.5.9';
-window.APP_BUILD   = { version: '1.5.9', released: '2026-05-28', tag: 'v1.5.9' };
+window.APP_VERSION = '1.6.1';
+window.APP_BUILD   = { version: '1.6.1', released: '2026-05-29', tag: 'v1.6.1' };
 
 // ══════════════════════════════════════════
 // LUCIDE ICON RENDER HOOK (v1.1.0 1a)
@@ -2356,6 +2356,7 @@ function applyInstallBaseOverlay(){
 // Seed CONFIG_ASSETS immediately so cold-start renders show the 24 xlsx rows
 // before any Supabase/xlsx load completes.
 applyInstallBaseOverlay();
+let ASSET_LIFECYCLE = []; // active asset_lifecycle rows; loaded by loadAllFromDB, overrides CMC dates post-renewal
 
 let CMC_DATA = [
   {sn:1,customer:'HKES',town:'Gulbargah',model:'Philips 1.5T Achieva',contract:'CMC',start:'01 Jan 2025',end:'31 Dec 2025'},
@@ -4193,8 +4194,8 @@ function normalisePart(raw){
 // ══════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════
-const APP_VERSION = '1.5.9';
-const APP_RELEASE_DATE = '28 May 2026';
+const APP_VERSION = '1.6.1';
+const APP_RELEASE_DATE = '29 May 2026';
 const PAGE_TITLES={dashboard:'Dashboard',tickets:'Service History',open:'Open Tickets',pm:'PM Schedules',assets:'Install Base',engineers:'Engineers',ambiguities:'Flags & Ambiguities',contracts:'Contracts',reports:'Reports',auditlog:'Audit Log',about:'About','app-tickets':'Create Work Order','my-work':'Open Work Orders'};
 const _VALID_PAGES = new Set(Object.keys(PAGE_TITLES));
 
@@ -5912,16 +5913,24 @@ function _aggregateContracts(){
     consumed: new Set(),
   };
 
+  const _LC_DISPLAY = {
+    cmc:'CMC', amc:'AMC', warranty:'Warranty',
+    extended_warranty:'Extended Warranty', labour_contract:'Labour Contract'
+  };
+
   const rows = ibAssets.map(ib => {
     const c = _findContractForAsset(ib, contractPool);
     const p = _findPmForAsset(ib, pmPool);
+    // asset_lifecycle rows (from renewals) override the CMC dates/type when present
+    const lc = (typeof ASSET_LIFECYCLE !== 'undefined' ? ASSET_LIFECYCLE : [])
+      .find(l => l.asset_code === ib.code);
 
-    const startRaw = c ? (c.row.contractStart || c.row.start || '') : '';
-    const endRaw   = c ? (c.row.contractEnd   || c.row.end   || '') : '';
+    const startRaw = lc ? (lc.contract_start || '') : (c ? (c.row.contractStart || c.row.start || '') : '');
+    const endRaw   = lc ? (lc.contract_end   || '') : (c ? (c.row.contractEnd   || c.row.end   || '') : '');
     const start = startRaw ? parseFlexDate(startRaw) : null;
     const end   = endRaw   ? parseFlexDate(endRaw)   : null;
     const days  = end ? Math.round((end - today) / 86400000) : null;
-    const status = c ? _contractStatus(end, today) : 'no_contract';
+    const status = (lc || c) ? _contractStatus(end, today) : 'no_contract';
 
     const pmStat = p ? pmStatus(p.row) : null;
     const sourceName = c && (customerKey(c.row.customer || '') !== customerKey(ib.name || ''))
@@ -5936,8 +5945,8 @@ function _aggregateContracts(){
       town:     ib.town,
       state:    ib.state,
       region:   ib.state || '',
-      // Contract attached
-      contract: c ? (c.row.contract || '—') : '—',
+      // Contract attached (asset_lifecycle overrides CMC when present)
+      contract: lc ? (_LC_DISPLAY[lc.contract_type] || lc.contract_type) : (c ? (c.row.contract || '—') : '—'),
       _start: start, _end: end, _days: days, startRaw, endRaw,
       status,
       statusLabel: _CONTRACT_BUCKET_LABEL[status] || (status === 'no_contract' ? 'No Contract' : status),
@@ -6399,7 +6408,14 @@ async function _submitRenewContract(){
     });
 
     closeModal('renew-contract-modal');
-    renderContracts();
+    suppressRealtimeReload(3000);
+    try {
+      await loadAllFromDB({ silent: true });
+      renderAll();
+    } catch(reloadErr) {
+      console.warn('[renewal] post-save reload failed:', reloadErr);
+      renderContracts();
+    }
   } catch(e){
     showToast('Renew failed: ' + (e.message || 'Could not renew contract. Please try again.'), 'error');
     btn.disabled = false;
@@ -10008,6 +10024,11 @@ async function loadAllFromDB(opts = {}){
     sn: r.sn, customer: r.customer, town: r.town, model: r.model, contract: r.contract,
     start: dbDateToDisplay(r.start_date), end: dbDateToDisplay(r.end_date),
   }));
+
+  const { data: lcRows } = await _sb.from('asset_lifecycle')
+    .select('asset_code, contract_type, contract_start, contract_end, pm_required')
+    .eq('status', 'active');
+  ASSET_LIFECYCLE = lcRows || [];
 
   setMsg('Loading PM schedule…');
   const { data: pms, error: e4 } = await _sb.from('pm_schedule').select('*');
