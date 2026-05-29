@@ -52,8 +52,8 @@ All shipped directly on the `staging` branch, then fast-forwarded to `main`. Pro
 ## Staging Supabase state
 
 - **Project:** `fieldops-staging` · **URL ref:** `qupkpprptopyejbnslev` · **Org:** Abhijit Sen (FREE)
-- **Migrations present in repo:** 0009–0018 (latest: 0016 sub-WO RLS, 0017 ENG010, 0018 field-guard-allow-sys_status).
-- **Applied to staging:** through 0018, plus `app_tickets` added to `supabase_realtime` publication (v1.5.8).
+- **Migrations present in repo:** 0009–0019 (latest: 0017 ENG010, 0018 field-guard-allow-sys_status, 0019 sub-WO RLS correlation fix).
+- **Applied to staging:** through 0019, plus `app_tickets` added to `supabase_realtime` publication (v1.5.8).
 - **Row counts (verified 2026-05-29):** `engineers`: **10** (now includes ENG010 Demo Engineer). Other counts (`config_assets` 27, `pm_schedule` 22, `cmc_contracts` 13) carried from 2026-05-21 — re-verify.
 - **`asset_lifecycle` + `renew_asset_lifecycle` RPC:** present; renewals write active rows (verified 2026-05-29: AN001/AN005/AN012 etc.).
 - **Edge function `notify-work-order`:** dormant — SMTP secrets never configured; app uses mailto:.
@@ -75,7 +75,7 @@ All shipped directly on the `staging` branch, then fast-forwarded to `main`. Pro
   1. `ALTER PUBLICATION supabase_realtime ADD TABLE public.app_tickets` (was missing — v1.5.8 engineer live WO visibility).
   2. Migration 0017 — inserted ENG010 engineer record (was missing).
   3. Migration 0018 — `_app_ticket_engineer_field_guard` no longer blocks `sys_status` (was old version).
-  4. Migration 0016 — sub-WO insert policy renamed v150 → `v160_app_tickets_insert_sub_wo_engineer` (now matches staging).
+  4. Migration 0016 then 0019 — sub-WO insert policy corrected. 0016's fix was a no-op (unqualified `parent_id` bound to subquery alias); 0019 qualifies it as `app_tickets.parent_id`. Verified on prod: engineer sub-WO insert allowed for valid open parent, denied for invalid.
 - **Pre-existing in prod:** `asset_lifecycle` table, `renew_asset_lifecycle` RPC, `app_tickets.visit_log` column, migrations 0001–0015.
 - **Row counts (verified 2026-05-29):** `engineers`: **10** (ENG010 added). Others carried from 2026-05-21 — re-verify.
 
@@ -111,7 +111,6 @@ No code deploy gates open. Staging and production in sync at v1.6.1.
 
 | Risk | Severity | Recorded at |
 |---|---|---|
-| **Migration 0016 sub-WO insert fix is INEFFECTIVE on BOTH staging & prod** — stored policy renders `p.id = p.parent_id` (unqualified `parent_id` binds to subquery alias). Primaries have `parent_id IS NULL`, so EXISTS is always false → engineers likely cannot INSERT sub-WOs directly. Pre-existing; not introduced by today's fixes. Needs RLS redesign (reference the NEW row correctly, or route sub-WO creation through a SECURITY DEFINER RPC). | High | 2026-05-29 |
 | Tags lag code — last tag `v1.5.3`; v1.5.7–v1.6.1 untagged. | Low | 2026-05-29 |
 | No automated tests in repo (only manual matrix + ad-hoc Playwright). | High | ongoing |
 | `notify-work-order` edge function deployed but SMTP secrets not configured. | Low | app uses mailto: now; edge fn dormant |
@@ -125,7 +124,7 @@ No code deploy gates open. Staging and production in sync at v1.6.1.
 |---|---|---|
 | Staging/production row counts (except `engineers`=10) | 2026-05-21 | After any SQL applied or significant time passes |
 | Production Pages content | 2026-05-29 (`181e3d5`, APP_VERSION=1.6.1) | After any future deploy |
-| Sub-WO engineer INSERT behavior | 2026-05-29 (policy present but logic suspect — see Open risks) | Before relying on engineer sub-WO creation |
+| Sub-WO engineer INSERT behavior | 2026-05-29 (FIXED by 0019; verified allow/deny on staging + prod) | If sub-WO RLS policy changes again |
 
 ---
 
@@ -137,10 +136,10 @@ No code deploy gates open. Staging and production in sync at v1.6.1.
   - `b29dae9` — `release: v1.6.1`.
   - `181e3d5` — `fix: contract renewal view refresh + open-WO visits in service history` (Bug 1: `renderContracts()` after `renderAll()`; Bug 2: include open WOs with visits in Service History).
   - Both bug fixes verified live on staging (renewal persists + re-renders for Admin & Manager; visit log visible in Service History for all 3 roles).
-  - Production DB aligned (4 changes: realtime publication, ENG010, field guard 0018, sub-WO policy 0016).
+  - Production DB aligned (realtime publication, ENG010, field guard 0018, sub-WO policy).
   - `main` fast-forwarded `0f84cd2 → 181e3d5`; Pages deploy run `26618021854` success.
   - Staging matrix 74/74 and production matrix 74/74 (0 failures) on 2026-05-29.
-  - **Discovered:** migration 0016 sub-WO fix is ineffective on both environments (see Open risks).
+  - **Discovered + fixed:** migration 0016 sub-WO fix was a no-op on both environments (unqualified `parent_id` bound to subquery alias). Migration `0019` qualifies it as `app_tickets.parent_id`; applied + verified (allow valid / deny invalid) on staging AND production. DB-only — no redeploy.
 
 ---
 
