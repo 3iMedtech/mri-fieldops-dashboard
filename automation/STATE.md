@@ -86,7 +86,7 @@ All shipped directly on the `staging` branch, then fast-forwarded to `main`. Pro
 - **URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/`
 - **Currently served commit:** `181e3d5` · **APP_VERSION:** `1.6.1`
 - **Pages workflow run (latest):** `26618021854` — manual dispatch from `main`, completed/success, 2026-05-29.
-- **Matrix:** `scripts/test-matrix.js production 1.6.1` → 74/74, 0 failures, 0 JS errors, all 3 roles (2026-05-29). Engineer login verified with prod credentials; 10 engineer cards.
+- **Matrix:** `scripts/test-matrix.js production 1.6.1` → 74/74, 0 failures, 0 JS errors, all 3 roles (2026-05-29; **re-verified 2026-05-29** post-tag — identical result). Engineer login verified with prod credentials; 10 engineer cards. APP_VERSION=1.6.1 confirmed on Admin/Manager/Engineer.
 
 ---
 
@@ -139,7 +139,8 @@ No code deploy gates open. Staging and production in sync at v1.6.1.
   - `main` fast-forwarded `0f84cd2 → 181e3d5`; Pages deploy run `26618021854` success.
   - Staging matrix 74/74 and production matrix 74/74 (0 failures) on 2026-05-29.
   - **Discovered + fixed:** migration 0016 sub-WO fix was a no-op on both environments (unqualified `parent_id` bound to subquery alias). Migration `0019` qualifies it as `app_tickets.parent_id`; applied + verified (allow valid / deny invalid) on staging AND production. DB-only — no redeploy.
-  - `main` fast-forwarded to `b0abbff` (STATE.md + migration 0019); annotated tag `v1.6.1` created on `b0abbff` and pushed.
+  - `main` fast-forwarded to `b0abbff` (STATE.md + migration 0019); annotated tag `v1.6.1` created on `b0abbff` and pushed. `main` later levelled to `203e757` (STATE.md doc).
+  - Production matrix re-run post-tag: 74/74, 0 failures, 0 JS errors, APP_VERSION=1.6.1 on all 3 roles — production stable.
 
 ---
 
