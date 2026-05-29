@@ -6412,6 +6412,7 @@ async function _submitRenewContract(){
     try {
       await loadAllFromDB({ silent: true });
       renderAll();
+      renderContracts(); // renderAll() does not re-render the Contracts page
     } catch(reloadErr) {
       console.warn('[renewal] post-save reload failed:', reloadErr);
       renderContracts();
@@ -6488,7 +6489,7 @@ function _mapAppTicketToHistory(t){
     attended_date: attendedStr, engineer: (t.assigned_engineer_names||[]).join(' & '),
     parts: t.parts||'', parts_req_date:'', parts_recv_date:'',
     parts_status: t.parts_status||'', sys_up_date: sysUpStr,
-    resolution: t.resolution||'', status: 'Closed',
+    resolution: t.resolution||'', status: _AT_OPEN_STATUSES.includes(t.status) ? 'Open' : 'Closed',
     orphaned:false, unmatched:false, ambiguities:[],
     _callDate: callDateRaw, _upDate: sysUpRaw, _isAppTicket: true,
     _isSubWO: isSubWO, _parentId: t.parent_id||null,
@@ -6499,7 +6500,9 @@ function _mapAppTicketToHistory(t){
 function getFilteredHistoryRows(){
   // Merge closed/resolved service app_tickets alongside RAW_TICKETS
   const closedAt = APP_TICKETS
-    .filter(t => t.ticket_type === 'service' && !_AT_OPEN_STATUSES.includes(t.status))
+    .filter(t => t.ticket_type === 'service' &&
+      (!_AT_OPEN_STATUSES.includes(t.status) ||
+       (Array.isArray(t.visit_log) && t.visit_log.length > 0)))
     .map(_mapAppTicketToHistory);
   let rows = [...RAW_TICKETS, ...closedAt];
   if(historyFilter!=='all') rows=rows.filter(t=>t.month===historyFilter);
