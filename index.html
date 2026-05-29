@@ -11254,6 +11254,15 @@ async function submitNewTicket(){
     if(eng){ engIds.push(eng.id); engNames.push(eng.name); }
   }
 
+  // Derive model from the selected asset (option carries data-model); fall back to
+  // a CONFIG_ASSETS lookup so a manually-typed asset code still resolves the model.
+  const assetOpt = document.getElementById('nt-asset')?.selectedOptions?.[0];
+  let model = assetOpt?.dataset?.model || '';
+  if(!model && assetCode){
+    const a = CONFIG_ASSETS.find(x => x.code === assetCode);
+    if(a) model = a.model || '';
+  }
+
   const btn = document.getElementById('nt-submit');
   if(btn){ btn.disabled = true; btn.textContent = 'Creating…'; }
 
@@ -11262,6 +11271,7 @@ async function submitNewTicket(){
     status: engIds.length ? 'assigned' : 'new',
     customer,
     asset_code:           assetCode || null,
+    model:                model || null,
     region,
     town:                 town || null,
     call_date:            callDate,
