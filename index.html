@@ -1320,6 +1320,10 @@ button,input,select,textarea{font-family:inherit;}
           <input class="search-box" id="aem-email" type="email" placeholder="engineer@3imedtech.com" style="width:100%;box-sizing:border-box;padding:8px 12px">
         </div>
         <div>
+          <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">WHATSAPP PHONE <span style="color:var(--text-faint)">(with country code, e.g. 919876543210)</span></label>
+          <input class="search-box" id="aem-phone" type="tel" placeholder="919876543210" style="width:100%;box-sizing:border-box;padding:8px 12px">
+        </div>
+        <div>
           <label style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;display:block;margin-bottom:5px">START DATE</label>
           <input class="search-box" id="aem-start" type="date" style="width:100%;box-sizing:border-box;padding:8px 12px">
         </div>
@@ -7971,7 +7975,7 @@ function openAddEngineerModal(){
   }
   const startEl = document.getElementById('aem-start');
   if(startEl) startEl.value = _localDateStr();
-  ['aem-name','aem-email','aem-aliases'].forEach(id => {
+  ['aem-name','aem-email','aem-phone','aem-aliases'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
   });
@@ -7984,6 +7988,7 @@ async function submitAddEngineer(){
   const name       = document.getElementById('aem-name')?.value.trim() || '';
   const region     = document.getElementById('aem-region')?.value || '';
   const email      = document.getElementById('aem-email')?.value.trim() || '';
+  const phone      = document.getElementById('aem-phone')?.value.replace(/\D/g,'') || '';
   const startRaw   = document.getElementById('aem-start')?.value || '';
   const aliasesRaw = document.getElementById('aem-aliases')?.value.trim() || '';
   if(!name)   { showToast('Name is required.', 'error'); return; }
@@ -7997,7 +8002,7 @@ async function submitAddEngineer(){
   const btn = document.getElementById('aem-submit');
   if(btn){ btn.disabled = true; btn.textContent = 'Adding…'; }
 
-  const newEng = { id, name, region, email, aliases, status: 'active', joined_date: startRaw || null, last_working_date: null };
+  const newEng = { id, name, region, email, phone: phone || null, aliases, status: 'active', joined_date: startRaw || null, last_working_date: null };
   await dbSaveEngineer(newEng);
   ENGINEERS.push(newEng);
 
@@ -10072,6 +10077,7 @@ async function loadAllFromDB(opts = {}){
   if(e1) throw e1;
   ENGINEERS = engs.map(r => ({
     id: r.id, name: r.name, region: r.region, email: r.email || '',
+    phone: r.phone || null,
     aliases: r.aliases || [],
     status: r.status || 'active',
     joined_date: r.joined_date || null,
@@ -10261,6 +10267,7 @@ async function loadAllFromDB(opts = {}){
 async function dbSaveEngineer(e){
   const row = {
     id: e.id, name: e.name, region: e.region, email: e.email || null,
+    phone: e.phone || null,
     aliases: e.aliases || [],
     status: e.status || 'active',
     joined_date: e.joined_date || null,
@@ -10467,10 +10474,15 @@ function _openTicketDetail(id){
     if(showNotify){
       const alreadyPrepared = _notifiedTickets.has(t.id);
       notifyBtn.disabled = alreadyPrepared;
+      const engId0 = (t.assigned_engineer_ids || [])[0];
+      const eng0   = ENGINEERS.find(e => e.id === engId0);
+      const hasPhone = !!(eng0?.phone);
       if(alreadyPrepared){
-        notifyBtn.textContent = '✓ Email Prepared';
+        notifyBtn.textContent = hasPhone ? '✓ WhatsApp Sent' : '✓ Email Prepared';
       } else {
-        notifyBtn.innerHTML = '<i data-lucide="mail"></i>Notify Engineer';
+        notifyBtn.innerHTML = hasPhone
+          ? '<i data-lucide="message-circle"></i>Notify via WhatsApp'
+          : '<i data-lucide="mail"></i>Notify via Email';
       }
     }
   }
@@ -11460,35 +11472,12 @@ async function submitNewTicket(){
   }
 }
 
-async function notifyWorkOrder(ticketId){
-  if(!ticketId) return;
-
-  const t = APP_TICKETS.find(x => x.id === ticketId);
-  if(!t){ showToast('Work order not found.', 'error'); return; }
-
-  const engId = (t.assigned_engineer_ids || [])[0];
-  const eng   = ENGINEERS.find(e => e.id === engId);
-  if(!eng || !eng.email){
-    showToast('No email address found for the assigned engineer. Update the engineer record first.', 'error');
-    return;
-  }
-
-  let createdByEmail = '—';
-  try {
-    const { data: { session } } = await _sb.auth.getSession();
-    createdByEmail = session?.user?.email ?? '—';
-  } catch(_){}
-
+// _mailtoNotify — existing email path, used as fallback when WhatsApp is unavailable.
+function _mailtoNotify(t, eng){
   const fmt     = s => (s || '—');
-  const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN',
-    { day:'2-digit', month:'short', year:'numeric' }) : '—';
-  const fmtDT   = d => d ? new Date(d).toLocaleDateString('en-IN',
-    { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
-
-  const subject = encodeURIComponent(
-    `New Work Order Assigned: ${t.id} - ${t.customer}${t.model ? ' / ' + t.model : ''}`
-  );
-
+  const fmtDate = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+  const fmtDT   = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+  const subject = encodeURIComponent(`New Work Order Assigned: ${t.id} - ${t.customer}${t.model?' / '+t.model:''}`);
   const lines = [
     `Work Order No.    : ${fmt(t.id)}`,
     `Customer          : ${fmt(t.customer)}`,
@@ -11501,27 +11490,92 @@ async function notifyWorkOrder(ticketId){
     `Call Date         : ${fmtDate(t.call_date)}`,
     `SLA Due           : ${fmtDT(t.sla_due_at)}`,
     ``,
-    `Assigned Engineer : ${(t.assigned_engineer_names || []).join(', ') || '—'}`,
+    `Assigned Engineer : ${(t.assigned_engineer_names||[]).join(', ')||'—'}`,
     ``,
     `Issue / Complaint :`,
     fmt(t.issue_description),
     ``,
-    `Created By        : ${createdByEmail}`,
-    `Created At        : ${fmtDT(t.created_at)}`,
-    ``,
     `—`,
     `3i MEDTECH — MRI FieldOps`,
   ];
+  const body     = encodeURIComponent(lines.join('\r\n'));
+  const ccParam  = encodeURIComponent(PM_REMINDER_CC.join(','));
+  window.open(`mailto:${eng.email}?cc=${ccParam}&subject=${subject}&body=${body}`, '_blank');
+}
 
-  const body      = encodeURIComponent(lines.join('\r\n'));
-  const ccParam   = encodeURIComponent(PM_REMINDER_CC.join(','));
-  const mailtoUrl = `mailto:${eng.email}?cc=${ccParam}&subject=${subject}&body=${body}`;
-  window.open(mailtoUrl, '_blank');
+async function notifyWorkOrder(ticketId){
+  if(!ticketId) return;
 
-  showToast('Email client opened — complete and send from your mail app.', 'success');
+  const t = APP_TICKETS.find(x => x.id === ticketId);
+  if(!t){ showToast('Work order not found.', 'error'); return; }
 
-  _notifiedTickets.add(ticketId);
+  const engId = (t.assigned_engineer_ids || [])[0];
+  const eng   = ENGINEERS.find(e => e.id === engId);
+  if(!eng){ showToast('Assigned engineer not found in roster.', 'error'); return; }
+
   const btn = document.getElementById('atd-notify-btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
+
+  // ── Try WhatsApp first if engineer has a phone number ───────────────
+  if(eng.phone){
+    try {
+      const { data: { session } } = await _sb.auth.getSession();
+      const res = await fetch(
+        `${SUPABASE_URL.replace('/rest/v1','')}/functions/v1/notify-work-order`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || ''}`,
+            'apikey': SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            ticket: {
+              id:                t.id,
+              customer:          t.customer,
+              town:              t.town,
+              region:            t.region,
+              model:             t.model,
+              sys_status:        t.sys_status,
+              issue_description: t.issue_description,
+              sla_due_at:        t.sla_due_at,
+              call_date:         t.call_date,
+            },
+            engineer_phone: eng.phone,
+            engineer_name:  eng.name,
+          }),
+        }
+      );
+
+      const result = await res.json();
+
+      if(result.method === 'whatsapp' && result.success){
+        showToast(`✅ WhatsApp sent to ${eng.name}`, 'success');
+        _notifiedTickets.add(ticketId);
+        if(btn){ btn.disabled = true; btn.innerHTML = '<i data-lucide="message-circle"></i>✓ WhatsApp Sent'; }
+        if(window.lucide) try{ lucide.createIcons(); }catch(_){}
+        return;
+      }
+
+      // Edge function returned 'email' reason or WhatsApp failed — fall through to email
+      if(result.method === 'whatsapp' && !result.success){
+        console.warn('[notify] WhatsApp send failed, falling back to email:', result.error);
+        showToast('WhatsApp delivery failed — opening email instead.', 'warn');
+      }
+    } catch(err){
+      console.warn('[notify] Edge function error, falling back to email:', err);
+    }
+  }
+
+  // ── Fallback: email via mailto ───────────────────────────────────────
+  if(!eng.email){
+    showToast('No contact info for this engineer. Add a phone or email to their record.', 'error');
+    if(btn){ btn.disabled = false; btn.innerHTML = '<i data-lucide="mail"></i>Notify Engineer'; }
+    return;
+  }
+  _mailtoNotify(t, eng);
+  showToast('Email client opened — complete and send from your mail app.', 'success');
+  _notifiedTickets.add(ticketId);
   if(btn){ btn.disabled = true; btn.textContent = '✓ Email Prepared'; }
 }
 
