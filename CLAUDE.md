@@ -192,6 +192,22 @@ implement
 
 Trivial changes (doc edits, string constants, CSS-only) may skip the code reviewer. When in doubt, invoke it — it takes under 2 minutes.
 
+### Agent invocation logging (mandatory)
+
+Every time an agent from the roster above is invoked, append one line to
+`automation/agent-analytics/invocations.jsonl` **before ending the session**.
+Format (all fields required except `commit` and `notes`):
+
+```json
+{"ts":"<ISO>","session":"<first8 of session id>","agent":"<slug>","triggered_by":"<who>","task":"<one-liner>","category":"<feature|bugfix|migration|deploy|investigation|review|other>","verdict":"<PASS|STOP|ESCALATE|HOLD|N/A>","caught":<true|false>,"commit":"<hash or null>","notes":"<optional>"}
+```
+
+- `caught`: `true` if the agent surfaced a finding that was acted upon (changed the code, blocked a commit, triggered an escalation). `false` for clean passes and informational outputs.
+- `triggered_by`: who invoked the agent — `operator`, `orchestrator`, `runtime-pm`, `database-pm`, `release-pm`, or `direct` (invoked inline without a formal spawn).
+
+After logging, run `node scripts/agent-report.cjs` to verify the entry parsed correctly.
+Run `node scripts/agent-report.cjs --md` to regenerate `automation/agent-analytics/SUMMARY.md`.
+
 ---
 
 ## 8. Product Design Team Rules
