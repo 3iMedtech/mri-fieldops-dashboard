@@ -5554,6 +5554,14 @@ function _findBlankStatusTickets(tickets){
 // RENDER SERVICE HISTORY (FIX 8 — dynamic tabs)
 // ══════════════════════════════════════════
 let historyFilter='all', historySearch='', historyModalityFilter='all', historyStatusFilter='all';
+const _historyExpandedIds = new Set(); // per-ticket visit expand state; never persisted
+
+function _historyToggleVisits(id, event){
+  event.stopPropagation(); // don't fire the parent row's openDetail()
+  if(_historyExpandedIds.has(id)) _historyExpandedIds.delete(id);
+  else _historyExpandedIds.add(id);
+  renderHistory();
+}
 
 function buildHistoryTabs(){
   const mc=countByMonth(RAW_TICKETS);
@@ -6566,9 +6574,14 @@ function renderHistory(){
   const theadRow = document.getElementById('history-thead-row');
   if(theadRow) theadRow.innerHTML = renderSortableHeaders('history');
   document.getElementById('history-body').innerHTML=sorted.map(t=>{
+    const hasVisits = t._isAppTicket && t._visitLog && t._visitLog.length > 0;
+    const isExpanded = hasVisits && _historyExpandedIds.has(t.id);
+    const toggleChip = hasVisits
+      ? `<button onclick="_historyToggleVisits('${t.id}',event)" style="display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:1px 6px;border:none;border-radius:9px;background:var(--surface2);color:var(--text-dim);font-size:10px;font-family:var(--mono);cursor:pointer;vertical-align:middle" title="${isExpanded?'Collapse':'Expand'} visits">${isExpanded?'▾':'▸'} ${t._visitLog.length} visit${t._visitLog.length===1?'':'s'}</button>`
+      : '';
     const mainRow=`
     <tr class="clickable" onclick="openDetail('${t.id}')">
-      <td><span class="ticket-id">${t.id}</span></td>
+      <td><span class="ticket-id">${t.id}</span>${toggleChip}</td>
       <td><span class="month-pill">${t.month}</span></td>
       <td style="font-weight:500;max-width:140px">${truncate(t.customer,22)}</td>
       <td style="font-size:11px;color:var(--text-dim)">${truncate(t.model,22)}</td>
@@ -6582,7 +6595,7 @@ function renderHistory(){
       <td style="font-family:var(--mono);font-size:10px">${t.sys_up_date||'—'}</td>
       <td>${statusBadge(t.status)}</td>
     </tr>`;
-    if(!t._isAppTicket||!t._visitLog||t._visitLog.length===0) return mainRow;
+    if(!isExpanded) return mainRow;
     const _vSysStatusLabel={'working':'Working','partially_down':'Partially Down','down':'Down','planned_activity':'Planned Activity'};
     const _vSysStatusColor={'working':'#10b981','partially_down':'#f59e0b','down':'#ef4444','planned_activity':'#3b82f6'};
     const visitRows=t._visitLog.map(v=>{
