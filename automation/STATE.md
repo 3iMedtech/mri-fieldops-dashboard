@@ -12,7 +12,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 ## Last verified
 
-- **Snapshot timestamp:** 2026-05-29 (staging and main fully in sync at `f721ada`; production deployed and verified)
+- **Snapshot timestamp:** 2026-05-29 (staging and main fully in sync at `f3b02fa`; production deployed and verified)
 - **Snapshot author:** Claude (Opus) acting as automation-memory-agent
 
 ---
@@ -20,8 +20,8 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 ## Branch + commit
 
 - **Canonical branch:** `main`
-- **Latest commit on `main`:** `f721ada` — `feat: collapsible visit sub-rows in Service History` — **staging and main fully in sync**
-- **Latest commit on `staging`:** `f721ada` — same
+- **Latest commit on `main`:** `f3b02fa` — `fix: walk PM state machine before closing in submitPMComplete` — **staging and main fully in sync**
+- **Latest commit on `staging`:** `f3b02fa` — same
 - **Latest git tag:** `v1.6.1` (annotated, `b0abbff`) — aligned with `APP_BUILD.tag`. Intermediate v1.5.7 / v1.5.8 / v1.5.9 / v1.6.0 were folded into the v1.6.1 production release and intentionally not tagged separately. Previous tag: `v1.5.3` (`ba2351b`).
 - **Working tree:** clean
 
@@ -84,8 +84,8 @@ All shipped directly on the `staging` branch, then fast-forwarded to `main`. Pro
 ## Production Pages state
 
 - **URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/`
-- **Currently served commit:** `f721ada` · **APP_VERSION:** `1.6.1`
-- **Pages workflow run (latest):** `26639615691` — manual dispatch from `main`, completed/success, 2026-05-29.
+- **Currently served commit:** `f3b02fa` · **APP_VERSION:** `1.6.1`
+- **Pages workflow run (latest):** `26643623987` — manual dispatch from `main`, completed/success, 2026-05-29.
 - **Matrix:** `scripts/test-matrix.js production` → 74/74, 0 failures, 0 JS errors, all 3 roles (2026-05-29). Admin 26/0, Manager 26/0, Engineer 22/0.
 
 ---
@@ -145,6 +145,7 @@ No code deploy gates open. Staging and production in sync at v1.6.1.
   - **New feature deployed to production:** enriched Visit Log — each visit now captures attended date, engineer (picker), system status, and work description (required). JSONB only — no schema migration. Commit `4619bde`.
   - **New feature deployed to production:** collapsible visit sub-rows in Service History — collapsed by default, per-ticket toggle chip (▸/▾ N visits), in-memory state only. Commit `f721ada`.
   - Production deploy `26639615691` success 2026-05-29. Matrix 74/74, 0 failures, 0 JS errors (Admin/Manager/Engineer).
+  - **PM three-way sync fix deployed to production:** completing a PM in any path (PM Schedule modal or WO modal) now reflects in all three views — Open WOs, PM Schedule, and Service History. Fix A: `submitPMComplete()` walks PM state machine to close the matching app_ticket. Fix B: `_createPMCompletionFromAppTicket()` rolls forward `pm_schedule`. Fix C: `getFilteredHistoryRows()` includes closed PM app_tickets. Commits `77bc017` + `f3b02fa`. No schema change. Production deploy `26643623987` success 2026-05-29. Matrix 74/74.
 
 ---
 
