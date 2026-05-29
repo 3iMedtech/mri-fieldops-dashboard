@@ -7637,19 +7637,30 @@ async function submitPMComplete(){
   // 3) Close the most recent open PM app_ticket for this pm_id so it leaves
   //    Open Work Orders immediately and appears as closed in Service History.
   //    We close the latest cycle only (by pm_cycle_key) to avoid bulk-closing
-  //    stale duplicates that may have been left by earlier bugs.
+  //    stale duplicates. The PM state machine requires reaching 'completed'
+  //    before 'closed', so we walk through intermediate states as needed.
   const openPMTickets = APP_TICKETS.filter(t =>
     t.pm_id === pmId && t.ticket_type === 'pm' && _AT_OPEN_STATUSES.includes(t.status)
   );
   if(openPMTickets.length){
     openPMTickets.sort((a, b) => (b.pm_cycle_key||'').localeCompare(a.pm_cycle_key||''));
-    const toClose = openPMTickets[0];
-    const closed = await dbUpdateAppTicket(toClose.id, { status: 'closed' });
-    if(closed){
-      const idx = APP_TICKETS.findIndex(x => x.id === toClose.id);
-      if(idx !== -1) APP_TICKETS[idx] = closed;
-      ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+    let current = openPMTickets[0];
+    const stepsToCompleted = {
+      'upcoming':    ['due', 'in_progress', 'completed'],
+      'due':         ['in_progress', 'completed'],
+      'in_progress': ['completed'],
+      'missed':      ['in_progress', 'completed'],
+      'deferred':    ['due', 'in_progress', 'completed'],
+    };
+    const steps = [...(stepsToCompleted[current.status] || []), 'closed'];
+    for(const nextStatus of steps){
+      const updated = await dbUpdateAppTicket(current.id, { status: nextStatus });
+      if(!updated) break;
+      current = updated;
+      const idx = APP_TICKETS.findIndex(x => x.id === current.id);
+      if(idx !== -1) APP_TICKETS[idx] = current;
     }
+    if(current.status === 'closed') ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
   }
 
   closeModal('pm-complete-modal');
