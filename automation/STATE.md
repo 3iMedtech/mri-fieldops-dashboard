@@ -99,11 +99,17 @@ All shipped directly on the `staging` branch, then fast-forwarded to `main`. Pro
 
 ## Open approval gates (operator phrase needed)
 
-| Gate | Phrase needed |
+| Gate | Phrase needed / Action needed |
 |---|---|
-| Configure Zoho SMTP secrets to activate server-side WO email | Operator sets secrets in Supabase dashboard |
+| ~~Configure Zoho SMTP secrets~~ | Superseded by WhatsApp feature |
+| **WhatsApp live activation (staging)** | Set 3 Supabase secrets (see below) + add engineer phone numbers in Engineers tab |
 
-No code deploy gates open. Staging and production in sync at v1.6.1.
+**WhatsApp hold — staged at `8972007`, NOT deployed to production.**
+Code is live on staging but dormant (no secrets → falls back to email). Safe to leave indefinitely.
+To activate: operator provides `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_NAME` from Meta Business Portal.
+Template body to register with Meta (6 variables): see `supabase/functions/notify-work-order/index.ts` header comment.
+
+Staging is **1 commit ahead of main** (`8972007` WhatsApp feature not yet in production).
 
 ---
 
