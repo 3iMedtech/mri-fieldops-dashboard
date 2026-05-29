@@ -12,7 +12,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 ## Last verified
 
-- **Snapshot timestamp:** 2026-05-29 (v1.6.1 deployed to production; staging and main in sync at `181e3d5`)
+- **Snapshot timestamp:** 2026-05-29 (v1.6.1 on production at `203e757`; staging at `daf7785` — model fix not yet in production)
 - **Snapshot author:** Claude (Opus) acting as automation-memory-agent
 
 ---
@@ -20,8 +20,8 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 ## Branch + commit
 
 - **Canonical branch:** `main`
-- **Latest commit on `main`:** `181e3d5` — `fix: contract renewal view refresh + open-WO visits in service history` — **staging and main fully in sync**
-- **Latest commit on `staging`:** `181e3d5` — same
+- **Latest commit on `main`:** `203e757` — STATE.md doc update (v1.6.1 production verification)
+- **Latest commit on `staging`:** `daf7785` — `fix: persist asset model on app-created service work orders` — **staging is 1 commit ahead of main**
 - **Latest git tag:** `v1.6.1` (annotated, `b0abbff`) — aligned with `APP_BUILD.tag`. Intermediate v1.5.7 / v1.5.8 / v1.5.9 / v1.6.0 were folded into the v1.6.1 production release and intentionally not tagged separately. Previous tag: `v1.5.3` (`ba2351b`).
 - **Working tree:** clean
 
@@ -141,6 +141,8 @@ No code deploy gates open. Staging and production in sync at v1.6.1.
   - **Discovered + fixed:** migration 0016 sub-WO fix was a no-op on both environments (unqualified `parent_id` bound to subquery alias). Migration `0019` qualifies it as `app_tickets.parent_id`; applied + verified (allow valid / deny invalid) on staging AND production. DB-only — no redeploy.
   - `main` fast-forwarded to `b0abbff` (STATE.md + migration 0019); annotated tag `v1.6.1` created on `b0abbff` and pushed. `main` later levelled to `203e757` (STATE.md doc).
   - Production matrix re-run post-tag: 74/74, 0 failures, 0 JS errors, APP_VERSION=1.6.1 on all 3 roles — production stable.
+  - **New bug fixed (staging only):** app-created service WOs stored `model = NULL` — `submitNewTicket()` never included `model` in the `dbSaveAppTicket()` payload. Root cause confirmed live: 32/33 app-created service WOs missing model vs 0/17 XLSX rows. Fix: derive model from selected asset (`data-model` attribute, fallback `CONFIG_ASSETS` lookup) and include in insert payload. Commit `daf7785` on `staging`; deployed + verified all 3 roles on live staging — model stored in DB and rendered in Service History. Staging matrix 74/74 (0 failures). **Not yet deployed to production — awaiting approval phrase.**
+  - **Staging DB backfill:** 20 pre-existing app-created service WOs backfilled with model via `UPDATE app_tickets SET model = config_assets.model WHERE asset_code matches`. 8 rows remain NULL (unrecognised/manual asset codes — no source data). DB-only, no redeploy.
 
 ---
 
