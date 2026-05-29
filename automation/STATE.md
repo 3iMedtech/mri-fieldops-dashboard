@@ -12,7 +12,7 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 
 ## Last verified
 
-- **Snapshot timestamp:** 2026-05-29 (v1.6.1 on production at `203e757`; staging at `daf7785` — model fix not yet in production)
+- **Snapshot timestamp:** 2026-05-29 (staging and main fully in sync at `f721ada`; production deployed and verified)
 - **Snapshot author:** Claude (Opus) acting as automation-memory-agent
 
 ---
@@ -20,8 +20,8 @@ If this file disagrees with `git log` / `gh pr list` / Supabase, the repo and Su
 ## Branch + commit
 
 - **Canonical branch:** `main`
-- **Latest commit on `main`:** `203e757` — STATE.md doc update (v1.6.1 production verification)
-- **Latest commit on `staging`:** `daf7785` — `fix: persist asset model on app-created service work orders` — **staging is 1 commit ahead of main**
+- **Latest commit on `main`:** `f721ada` — `feat: collapsible visit sub-rows in Service History` — **staging and main fully in sync**
+- **Latest commit on `staging`:** `f721ada` — same
 - **Latest git tag:** `v1.6.1` (annotated, `b0abbff`) — aligned with `APP_BUILD.tag`. Intermediate v1.5.7 / v1.5.8 / v1.5.9 / v1.6.0 were folded into the v1.6.1 production release and intentionally not tagged separately. Previous tag: `v1.5.3` (`ba2351b`).
 - **Working tree:** clean
 
@@ -63,7 +63,7 @@ All shipped directly on the `staging` branch, then fast-forwarded to `main`. Pro
 ## Staging Pages state
 
 - **URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/staging/index.html`
-- **Currently served commit:** `181e3d5` · **APP_VERSION:** `1.6.1`
+- **Currently served commit:** `f721ada` · **APP_VERSION:** `1.6.1`
 - **Matrix:** 74/74, 0 failures, 0 JS errors (2026-05-29)
 
 ---
@@ -84,9 +84,9 @@ All shipped directly on the `staging` branch, then fast-forwarded to `main`. Pro
 ## Production Pages state
 
 - **URL:** `https://3imedtech.github.io/mri-fieldops-dashboard/`
-- **Currently served commit:** `181e3d5` · **APP_VERSION:** `1.6.1`
-- **Pages workflow run (latest):** `26618021854` — manual dispatch from `main`, completed/success, 2026-05-29.
-- **Matrix:** `scripts/test-matrix.js production 1.6.1` → 74/74, 0 failures, 0 JS errors, all 3 roles (2026-05-29; **re-verified 2026-05-29** post-tag — identical result). Engineer login verified with prod credentials; 10 engineer cards. APP_VERSION=1.6.1 confirmed on Admin/Manager/Engineer.
+- **Currently served commit:** `f721ada` · **APP_VERSION:** `1.6.1`
+- **Pages workflow run (latest):** `26639615691` — manual dispatch from `main`, completed/success, 2026-05-29.
+- **Matrix:** `scripts/test-matrix.js production` → 74/74, 0 failures, 0 JS errors, all 3 roles (2026-05-29). Admin 26/0, Manager 26/0, Engineer 22/0.
 
 ---
 
@@ -141,8 +141,10 @@ No code deploy gates open. Staging and production in sync at v1.6.1.
   - **Discovered + fixed:** migration 0016 sub-WO fix was a no-op on both environments (unqualified `parent_id` bound to subquery alias). Migration `0019` qualifies it as `app_tickets.parent_id`; applied + verified (allow valid / deny invalid) on staging AND production. DB-only — no redeploy.
   - `main` fast-forwarded to `b0abbff` (STATE.md + migration 0019); annotated tag `v1.6.1` created on `b0abbff` and pushed. `main` later levelled to `203e757` (STATE.md doc).
   - Production matrix re-run post-tag: 74/74, 0 failures, 0 JS errors, APP_VERSION=1.6.1 on all 3 roles — production stable.
-  - **New bug fixed (staging only):** app-created service WOs stored `model = NULL` — `submitNewTicket()` never included `model` in the `dbSaveAppTicket()` payload. Root cause confirmed live: 32/33 app-created service WOs missing model vs 0/17 XLSX rows. Fix: derive model from selected asset (`data-model` attribute, fallback `CONFIG_ASSETS` lookup) and include in insert payload. Commit `daf7785` on `staging`; deployed + verified all 3 roles on live staging — model stored in DB and rendered in Service History. Staging matrix 74/74 (0 failures). **Not yet deployed to production — awaiting approval phrase.**
-  - **Staging DB backfill:** 20 pre-existing app-created service WOs backfilled with model via `UPDATE app_tickets SET model = config_assets.model WHERE asset_code matches`. 8 rows remain NULL (unrecognised/manual asset codes — no source data). DB-only, no redeploy.
+  - **Bug fixed + deployed to production:** app-created service WOs stored `model = NULL`. Fix: derive model from selected asset in `submitNewTicket()`. Commit `daf7785`. Staging DB backfill: 20 rows updated via `asset_code → config_assets.model`; 8 unmatchable.
+  - **New feature deployed to production:** enriched Visit Log — each visit now captures attended date, engineer (picker), system status, and work description (required). JSONB only — no schema migration. Commit `4619bde`.
+  - **New feature deployed to production:** collapsible visit sub-rows in Service History — collapsed by default, per-ticket toggle chip (▸/▾ N visits), in-memory state only. Commit `f721ada`.
+  - Production deploy `26639615691` success 2026-05-29. Matrix 74/74, 0 failures, 0 JS errors (Admin/Manager/Engineer).
 
 ---
 
