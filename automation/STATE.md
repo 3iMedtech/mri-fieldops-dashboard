@@ -146,6 +146,8 @@ No code deploy gates open. Staging and production in sync at v1.6.1.
   - **New feature deployed to production:** collapsible visit sub-rows in Service History — collapsed by default, per-ticket toggle chip (▸/▾ N visits), in-memory state only. Commit `f721ada`.
   - Production deploy `26639615691` success 2026-05-29. Matrix 74/74, 0 failures, 0 JS errors (Admin/Manager/Engineer).
   - **PM three-way sync fix deployed to production:** completing a PM in any path (PM Schedule modal or WO modal) now reflects in all three views — Open WOs, PM Schedule, and Service History. Fix A: `submitPMComplete()` walks PM state machine to close the matching app_ticket. Fix B: `_createPMCompletionFromAppTicket()` rolls forward `pm_schedule`. Fix C: `getFilteredHistoryRows()` includes closed PM app_tickets. Commits `77bc017` + `f3b02fa`. No schema change. Production deploy `26643623987` success 2026-05-29. Matrix 74/74.
+  - **Production DB backfill:** 10 pre-existing production app tickets with null model backfilled via `UPDATE app_tickets SET model = config_assets.model WHERE asset_code matches`. 0 remaining. DB-only, no redeploy.
+  - **Agent roster cleanup:** 19 dead agents (never invoked) archived to `.claude/agents/archived/`. 5 active agents retained. CLAUDE.md §7 simplified. Agent utilization system added: `automation/agent-analytics/invocations.jsonl` + `scripts/agent-report.cjs`.
 
 ---
 
