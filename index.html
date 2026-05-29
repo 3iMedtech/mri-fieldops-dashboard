@@ -6529,11 +6529,16 @@ function _mapAppTicketToHistory(t){
 }
 
 function getFilteredHistoryRows(){
-  // Merge closed/resolved service app_tickets alongside RAW_TICKETS
+  // Merge closed/resolved app_tickets alongside RAW_TICKETS.
+  // Service: include closed/resolved + open with visits.
+  // PM: include closed/completed — completion in any path is then visible here.
   const closedAt = APP_TICKETS
-    .filter(t => t.ticket_type === 'service' &&
-      (!_AT_OPEN_STATUSES.includes(t.status) ||
-       (Array.isArray(t.visit_log) && t.visit_log.length > 0)))
+    .filter(t =>
+      (t.ticket_type === 'service' &&
+        (!_AT_OPEN_STATUSES.includes(t.status) ||
+         (Array.isArray(t.visit_log) && t.visit_log.length > 0))) ||
+      (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
+    )
     .map(_mapAppTicketToHistory);
   let rows = [...RAW_TICKETS, ...closedAt];
   if(historyFilter!=='all') rows=rows.filter(t=>t.month===historyFilter);
@@ -7629,9 +7634,29 @@ async function submitPMComplete(){
   pm.status = 'active';
   await dbSavePM(pm);
 
+  // 3) Close the most recent open PM app_ticket for this pm_id so it leaves
+  //    Open Work Orders immediately and appears as closed in Service History.
+  //    We close the latest cycle only (by pm_cycle_key) to avoid bulk-closing
+  //    stale duplicates that may have been left by earlier bugs.
+  const openPMTickets = APP_TICKETS.filter(t =>
+    t.pm_id === pmId && t.ticket_type === 'pm' && _AT_OPEN_STATUSES.includes(t.status)
+  );
+  if(openPMTickets.length){
+    openPMTickets.sort((a, b) => (b.pm_cycle_key||'').localeCompare(a.pm_cycle_key||''));
+    const toClose = openPMTickets[0];
+    const closed = await dbUpdateAppTicket(toClose.id, { status: 'closed' });
+    if(closed){
+      const idx = APP_TICKETS.findIndex(x => x.id === toClose.id);
+      if(idx !== -1) APP_TICKETS[idx] = closed;
+      ALL_TICKETS = [...RAW_TICKETS, ...APP_TICKETS];
+    }
+  }
+
   closeModal('pm-complete-modal');
   _pmCompletePendingId = null;
   renderPM();
+  renderOpen();
+  renderHistory();
   // Update nav badge
   const pb = document.getElementById('nb-pm');
   if(pb){
@@ -11049,6 +11074,24 @@ async function _createPMCompletionFromAppTicket(ticket){
   }
   invalidatePMCompletionsCache();
   console.log(`[PM completion] created for ${ticket.pm_id} via app ticket ${ticket.id}`);
+
+  // Also roll forward pm_schedule so PM Schedule view reflects this completion.
+  // Mirrors the date logic in submitPMComplete() for consistency.
+  const pm = PM_BY_ID.get(ticket.pm_id);
+  if(pm){
+    const [cy, cm, cd] = completionDate.split('-').map(Number);
+    const completion = new Date(cy, cm - 1, cd);
+    pm.lastPMS = completion.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+    if(pm.freq && pm.freq > 0){
+      const intervalMonths = Math.round(12 / pm.freq);
+      const next = new Date(completion);
+      next.setMonth(next.getMonth() + intervalMonths);
+      pm.nextPMS = next.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+    }
+    pm.status = 'active';
+    await dbSavePM(pm);
+    renderPM();
+  }
 }
 
 function renderMyWork(){
