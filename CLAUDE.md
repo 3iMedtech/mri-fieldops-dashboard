@@ -147,6 +147,7 @@ Use the FieldOps agent team for structured engineering work. The hierarchy has 4
 - `fieldops-release-pm`: owns release track (release-agent + qa-test-automation + memory snapshot).
 
 ### Tier 2 — Specialists (formal; have hard stops)
+- `fieldops-code-reviewer`: **pre-commit diff reviewer** — invoke before every non-trivial commit. Checks field propagation, status-machine transitions, role-gate consistency, render-path completeness, JSONB backward compat, and test-plan coverage. Returns PASS/STOP with line-level findings. Target: under 2 minutes. See `.claude/agents/fieldops-code-reviewer.md` for the full checklist.
 - `fieldops-sql-rls-safety-agent`: SQL/RLS migration review.
 - `fieldops-migration-runbook-verifier`: runbook correctness vs migration claims.
 - `fieldops-data-reconciliation-agent`: V2 / XLSX / PM-CMC drift identification.
@@ -174,6 +175,22 @@ Rules:
 - Use product design agents for intentional UX/design review, not routine bug fixes.
 - Do not claim a specialist review happened unless it was actually performed.
 - A PM must NEVER paraphrase a specialist's verdict — relay it attributed.
+
+### Standard commit flow (routine feature/fix work)
+
+For any non-trivial change to `index.html` or `db/migrations/*.sql`:
+
+```
+implement
+  → fieldops-code-reviewer  (PASS required before commit)
+  → commit + push to staging
+  → node scripts/test-matrix.js staging  (0 failures required)
+  → [operator approval phrase]
+  → deploy to production
+  → node scripts/test-matrix.js production
+```
+
+Trivial changes (doc edits, string constants, CSS-only) may skip the code reviewer. When in doubt, invoke it — it takes under 2 minutes.
 
 ---
 
