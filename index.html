@@ -4780,17 +4780,32 @@ function engStatusPill(status){
 let dashMonthFilter = 'all';
 
 function filteredTickets(){
-  if(dashMonthFilter === 'all') return RAW_TICKETS;
-  return RAW_TICKETS.filter(t => t.month === dashMonthFilter);
+  // Include all service app tickets so Dashboard KPIs count app-created WOs.
+  // SLA/MTTR filter by isClosed() internally — open app tickets are safely no-ops there.
+  const appRows = APP_TICKETS
+    .filter(t => t.ticket_type === 'service')
+    .map(_mapAppTicketToHistory);
+  const all = [...RAW_TICKETS, ...appRows];
+  if(dashMonthFilter === 'all') return all;
+  return all.filter(t => t.month === dashMonthFilter);
 }
 
 function renderDashMonthTabs(){
   const container = document.getElementById('dash-month-tabs');
   if(!container) return;
-  const mc = countByMonth(RAW_TICKETS);
-  let html = `<div class="tab${dashMonthFilter==='all'?' active':''}" onclick="setDashMonth(this,'all')">All (${RAW_TICKETS.length})</div>`;
-  MONTHS.forEach(m=>{
-    const cnt = mc[m]||0;
+  // Derive month list locally so app-only months (no XLSX) get tabs.
+  // MONTHS global intentionally not updated — stays XLSX-only for other consumers.
+  const appRows = APP_TICKETS
+    .filter(t => t.ticket_type === 'service')
+    .map(_mapAppTicketToHistory);
+  const allDashRows = [...RAW_TICKETS, ...appRows];
+  const dashMonths = [...new Set(allDashRows.map(t => t.month).filter(Boolean))]
+    .sort((a, b) => new Date('01 ' + a) - new Date('01 ' + b));
+  const dashMc = {};
+  allDashRows.forEach(t => { if (t.month) dashMc[t.month] = (dashMc[t.month] || 0) + 1; });
+  let html = `<div class="tab${dashMonthFilter==='all'?' active':''}" onclick="setDashMonth(this,'all')">All (${allDashRows.length})</div>`;
+  dashMonths.forEach(m=>{
+    const cnt = dashMc[m]||0;
     html += `<div class="tab${dashMonthFilter===m?' active':''}" onclick="setDashMonth(this,'${esc(m)}')">${esc(m)} (${cnt})</div>`;
   });
   container.innerHTML = html;
@@ -5306,20 +5321,30 @@ function renderRenewals(){
 }
 
 function renderBarMonthly(){
-  // This chart always shows ALL months for context, but highlights the selected one
-  const mc = countByMonth(RAW_TICKETS);
-  const vals = MONTHS.map(m=>mc[m]);
+  // This chart always shows ALL months for context, but highlights the selected one.
+  // Uses the same merged set as filteredTickets() so app-created WOs are counted.
+  const appRows = APP_TICKETS
+    .filter(t => t.ticket_type === 'service')
+    .map(_mapAppTicketToHistory);
+  const allDashRows = [...RAW_TICKETS, ...appRows];
+  const dashMonths = [...new Set(allDashRows.map(t => t.month).filter(Boolean))]
+    .sort((a, b) => new Date('01 ' + a) - new Date('01 ' + b));
+  const dashMc = {};
+  allDashRows.forEach(t => { if (t.month) dashMc[t.month] = (dashMc[t.month] || 0) + 1; });
+  const vals = dashMonths.map(m => dashMc[m] || 0);
   const max = Math.max(...vals, 1);
+  const _MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   document.getElementById('bar-monthly').innerHTML = vals.map((v,i)=>{
-    const isSelected = MONTHS[i] === dashMonthFilter;
+    const m = dashMonths[i];
+    const shortLabel = _MNAMES[new Date('01 ' + m).getMonth()] || m.slice(0,3);
+    const isSelected = m === dashMonthFilter;
     const isNoFilter = dashMonthFilter === 'all';
-    // When "all" selected: highlight the tallest bar (max). Otherwise highlight the selected month.
     const highlight = isNoFilter ? (v===max) : isSelected;
     const dim = !isNoFilter && !isSelected;
-    return `<div class="bar-col" onclick="setDashMonth(document.querySelector('#dash-month-tabs .tab:nth-child(${i+2})'),'${esc(MONTHS[i])}')" style="cursor:pointer" title="Click to filter to ${esc(MONTHS[i])}">
+    return `<div class="bar-col" onclick="setDashMonth(document.querySelector('#dash-month-tabs .tab:nth-child(${i+2})'),'${esc(m)}')" style="cursor:pointer" title="Click to filter to ${esc(m)}">
       <div class="bar-val">${v}</div>
       <div class="bar" style="height:${Math.max(4,Math.round(v/max*72))}px;background:${highlight?'#3b82f6':(dim?'#3b82f608':'#3b82f620')};border:1px solid ${highlight?'#3b82f6':'#3b82f640'}"></div>
-      <div class="bar-label" style="${isSelected?'color:var(--brand);font-weight:700':''}">${MONTH_SHORT[i]}</div>
+      <div class="bar-label" style="${isSelected?'color:var(--brand);font-weight:700':''}">${shortLabel}</div>
     </div>`;
   }).join('');
 }
