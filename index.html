@@ -7728,6 +7728,7 @@ async function submitPMComplete(){
   renderPM();
   renderOpen();
   renderHistory();
+  if(typeof renderMyWork === 'function') renderMyWork(); // refresh Open Work Orders list
   // Update nav badge
   const pb = document.getElementById('nb-pm');
   if(pb){
@@ -10254,7 +10255,7 @@ async function loadAllFromDB(opts = {}){
   // Load app_tickets (in-app created work orders)
   setMsg('Loading work orders…');
   const { data: appTkts, error: eAt } = await _sb
-    .from('app_tickets').select('*').order('created_at', { ascending: false });
+    .from('app_tickets').select('*').is('deleted_at', null).order('created_at', { ascending: false });
   if(eAt) throw eAt;
   APP_TICKETS = appTkts.map(r => ({
     id: r.id, ticket_type: r.ticket_type, status: r.status,
