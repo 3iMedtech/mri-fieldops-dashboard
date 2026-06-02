@@ -5568,13 +5568,29 @@ function _historyToggleVisits(id, event){
 }
 
 function buildHistoryTabs(){
-  const mc=countByMonth(RAW_TICKETS);
   const total=RAW_TICKETS.length;
-  // v1.3.0-1a — month completeness dots (median of last 3 complete months)
+  // Include closed/visited app tickets so months with no XLSX data still get a tab.
+  // MONTHS global is intentionally NOT updated — Dashboard filteredTickets() reads
+  // RAW_TICKETS only; adding app-only months there would produce empty chart data.
+  const appBaseRows = APP_TICKETS
+    .filter(t =>
+      (t.ticket_type === 'service' &&
+        (!_AT_OPEN_STATUSES.includes(t.status) ||
+         (Array.isArray(t.visit_log) && t.visit_log.length > 0))) ||
+      (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
+    )
+    .map(_mapAppTicketToHistory);
+  const allHistRows = [...RAW_TICKETS, ...appBaseRows];
+  const histMonths = [...new Set(allHistRows.map(t => t.month).filter(Boolean))]
+    .sort((a, b) => new Date('01 ' + a) - new Date('01 ' + b));
+  const histMc = {};
+  allHistRows.forEach(t => { if (t.month) histMc[t.month] = (histMc[t.month] || 0) + 1; });
+  const histTotal = allHistRows.length;
+  // v1.3.0-1a — month completeness dots (median of last 3 complete months, XLSX baseline only)
   const completenessMap = _computeMonthCompleteness(RAW_TICKETS);
-  let html=`<div class="tab${historyFilter==='all'?' active':''}" role="button" tabindex="0" onclick="filterHistoryMonth(this,'all')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterHistoryMonth(this,'all')}">All (${total})</div>`;
-  MONTHS.forEach(m=>{
-    const cnt=mc[m]||0;
+  let html=`<div class="tab${historyFilter==='all'?' active':''}" role="button" tabindex="0" onclick="filterHistoryMonth(this,'all')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterHistoryMonth(this,'all')}">All (${histTotal})</div>`;
+  histMonths.forEach(m=>{
+    const cnt=histMc[m]||0;
     const c = completenessMap[m] || { level:'unknown', baseline:null, ratio:null };
     let dotTitle;
     if(c.level === 'in-progress') dotTitle = 'In progress (current month)';
