@@ -3748,7 +3748,10 @@ function renderAll(){
   const hpt = document.getElementById('history-panel-title');
   if(hpt){
     const range = MONTHS.length ? ` (${MONTHS[0]} – ${MONTHS[MONTHS.length-1]})` : '';
-    const totalHist = RAW_TICKETS.length + APP_TICKETS.filter(t => t.ticket_type === 'service' && !_AT_OPEN_STATUSES.includes(t.status)).length;
+    const totalHist = RAW_TICKETS.length + APP_TICKETS.filter(t =>
+      (t.ticket_type === 'service' && t.wo_type !== 'sub') ||
+      (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
+    ).length;
     hpt.innerHTML = `<i data-lucide="clipboard-list"></i>Full Service History — ${totalHist} Record${totalHist!==1?'s':''}${range}`;
   }
   // Sweep the document for any newly-injected <i data-lucide=…> nodes and
@@ -5607,12 +5610,11 @@ function _historyToggleVisits(id, event){
 }
 
 function buildHistoryTabs(){
-  const total=RAW_TICKETS.length;
-  // All service app tickets contribute to month tabs (mirrors getFilteredHistoryRows).
-  // PM app tickets remain closed-only. MONTHS global not updated — Dashboard uses its own dashMonths.
+  // All primary service app tickets contribute to month tabs (mirrors getFilteredHistoryRows).
+  // Sub-WOs excluded; PM app tickets remain closed-only. MONTHS global not updated.
   const appBaseRows = APP_TICKETS
     .filter(t =>
-      t.ticket_type === 'service' ||
+      (t.ticket_type === 'service' && t.wo_type !== 'sub') ||
       (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
     )
     .map(_mapAppTicketToHistory);
@@ -5650,10 +5652,12 @@ function buildHistoryTabs(){
 
   // v1.1.0 1c: status filter chips. Open Tickets is no longer a separate
   // page — it's now a saved filter on Service History (#/tickets?status=open).
-  const openCount = RAW_TICKETS.filter(isOpen).length;
-  const closedCount = RAW_TICKETS.filter(isClosed).length;
+  // Counts derive from allHistRows (RAW + primary app rows) so the chip labels
+  // exactly match the rows getFilteredHistoryRows() displays for each filter.
+  const openCount = allHistRows.filter(isOpen).length;
+  const closedCount = allHistRows.filter(isClosed).length;
   const statusOptions = [
-    {code:'all', label:`All (${total})`},
+    {code:'all', label:`All (${histTotal})`},
     {code:'open', label:`Open (${openCount})`},
     {code:'closed', label:`Closed (${closedCount})`},
   ];
@@ -6585,13 +6589,14 @@ function _mapAppTicketToHistory(t){
 }
 
 function getFilteredHistoryRows(){
-  // All service app tickets appear in Service History regardless of status —
-  // open WOs show as 'Open', closed ones as 'Closed'. This makes Service History
-  // a complete register of all service records, not just completed ones.
+  // All primary service app tickets appear in Service History regardless of status —
+  // open WOs show as 'Open', closed ones as 'Closed'. This makes Service History a
+  // complete register of all service records, not just completed ones.
+  // Sub-WOs are excluded (shown inside parent detail, matching the Open WO page scope).
   // PM app tickets remain closed-only (open PMs belong in PM Schedules).
   const appRows = APP_TICKETS
     .filter(t =>
-      t.ticket_type === 'service' ||
+      (t.ticket_type === 'service' && t.wo_type !== 'sub') ||
       (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
     )
     .map(_mapAppTicketToHistory);
@@ -9875,7 +9880,10 @@ async function doFirstPaint(){
   const hpt = document.getElementById('history-panel-title');
   if(hpt){
     const range = MONTHS.length ? ` (${MONTHS[0]} – ${MONTHS[MONTHS.length-1]})` : '';
-    const totalHist = RAW_TICKETS.length + APP_TICKETS.filter(t => t.ticket_type === 'service' && !_AT_OPEN_STATUSES.includes(t.status)).length;
+    const totalHist = RAW_TICKETS.length + APP_TICKETS.filter(t =>
+      (t.ticket_type === 'service' && t.wo_type !== 'sub') ||
+      (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
+    ).length;
     hpt.innerHTML = `<i data-lucide="clipboard-list"></i>Full Service History — ${totalHist} Record${totalHist!==1?'s':''}${range}`;
     if (window.refreshIcons) window.refreshIcons();
   }
