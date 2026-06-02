@@ -3855,6 +3855,7 @@ function ticketsForEngineer(eng, opts){
   const appMatches = (typeof APP_TICKETS !== 'undefined' ? APP_TICKETS : [])
     .filter(t => {
       if(t.ticket_type !== 'service') return false;
+      if(t.deleted_at) return false;                           // exclude soft-deleted
       if(_AT_OPEN_STATUSES.includes(t.status)) return false;  // open = backlog, not history
       if(!(t.assigned_engineer_ids||[]).includes(eng.id)) return false;
       return true;
@@ -4780,10 +4781,15 @@ function engStatusPill(status){
 let dashMonthFilter = 'all';
 
 function filteredTickets(){
-  // Include all service app tickets so Dashboard KPIs count app-created WOs.
-  // SLA/MTTR filter by isClosed() internally — open app tickets are safely no-ops there.
+  // Include closed/visited service app tickets so Dashboard counts match Service History.
+  // Mirrors the buildHistoryTabs() visibility filter: closed OR has a visit log entry.
+  // Soft-deleted records excluded via !t.deleted_at.
   const appRows = APP_TICKETS
-    .filter(t => t.ticket_type === 'service')
+    .filter(t =>
+      t.ticket_type === 'service' && !t.deleted_at &&
+      (!_AT_OPEN_STATUSES.includes(t.status) ||
+       (Array.isArray(t.visit_log) && t.visit_log.length > 0))
+    )
     .map(_mapAppTicketToHistory);
   const all = [...RAW_TICKETS, ...appRows];
   if(dashMonthFilter === 'all') return all;
@@ -4794,9 +4800,13 @@ function renderDashMonthTabs(){
   const container = document.getElementById('dash-month-tabs');
   if(!container) return;
   // Derive month list locally so app-only months (no XLSX) get tabs.
-  // MONTHS global intentionally not updated — stays XLSX-only for other consumers.
+  // Mirrors filteredTickets(): closed/visited service WOs only, no deleted records.
   const appRows = APP_TICKETS
-    .filter(t => t.ticket_type === 'service')
+    .filter(t =>
+      t.ticket_type === 'service' && !t.deleted_at &&
+      (!_AT_OPEN_STATUSES.includes(t.status) ||
+       (Array.isArray(t.visit_log) && t.visit_log.length > 0))
+    )
     .map(_mapAppTicketToHistory);
   const allDashRows = [...RAW_TICKETS, ...appRows];
   const dashMonths = [...new Set(allDashRows.map(t => t.month).filter(Boolean))]
@@ -5322,9 +5332,13 @@ function renderRenewals(){
 
 function renderBarMonthly(){
   // This chart always shows ALL months for context, but highlights the selected one.
-  // Uses the same merged set as filteredTickets() so app-created WOs are counted.
+  // Uses the same merged set as filteredTickets(): closed/visited service WOs only.
   const appRows = APP_TICKETS
-    .filter(t => t.ticket_type === 'service')
+    .filter(t =>
+      t.ticket_type === 'service' && !t.deleted_at &&
+      (!_AT_OPEN_STATUSES.includes(t.status) ||
+       (Array.isArray(t.visit_log) && t.visit_log.length > 0))
+    )
     .map(_mapAppTicketToHistory);
   const allDashRows = [...RAW_TICKETS, ...appRows];
   const dashMonths = [...new Set(allDashRows.map(t => t.month).filter(Boolean))]
@@ -5595,14 +5609,15 @@ function _historyToggleVisits(id, event){
 function buildHistoryTabs(){
   const total=RAW_TICKETS.length;
   // Include closed/visited app tickets so months with no XLSX data still get a tab.
-  // MONTHS global is intentionally NOT updated — Dashboard filteredTickets() reads
-  // RAW_TICKETS only; adding app-only months there would produce empty chart data.
+  // MONTHS global intentionally not updated — Dashboard uses its own local dashMonths.
   const appBaseRows = APP_TICKETS
     .filter(t =>
-      (t.ticket_type === 'service' &&
-        (!_AT_OPEN_STATUSES.includes(t.status) ||
-         (Array.isArray(t.visit_log) && t.visit_log.length > 0))) ||
-      (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
+      !t.deleted_at && (
+        (t.ticket_type === 'service' &&
+          (!_AT_OPEN_STATUSES.includes(t.status) ||
+           (Array.isArray(t.visit_log) && t.visit_log.length > 0))) ||
+        (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
+      )
     )
     .map(_mapAppTicketToHistory);
   const allHistRows = [...RAW_TICKETS, ...appBaseRows];
