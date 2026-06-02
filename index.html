@@ -5608,16 +5608,12 @@ function _historyToggleVisits(id, event){
 
 function buildHistoryTabs(){
   const total=RAW_TICKETS.length;
-  // Include closed/visited app tickets so months with no XLSX data still get a tab.
-  // MONTHS global intentionally not updated — Dashboard uses its own local dashMonths.
+  // All service app tickets contribute to month tabs (mirrors getFilteredHistoryRows).
+  // PM app tickets remain closed-only. MONTHS global not updated — Dashboard uses its own dashMonths.
   const appBaseRows = APP_TICKETS
     .filter(t =>
-      !t.deleted_at && (
-        (t.ticket_type === 'service' &&
-          (!_AT_OPEN_STATUSES.includes(t.status) ||
-           (Array.isArray(t.visit_log) && t.visit_log.length > 0))) ||
-        (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
-      )
+      t.ticket_type === 'service' ||
+      (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
     )
     .map(_mapAppTicketToHistory);
   const allHistRows = [...RAW_TICKETS, ...appBaseRows];
@@ -6589,18 +6585,17 @@ function _mapAppTicketToHistory(t){
 }
 
 function getFilteredHistoryRows(){
-  // Merge closed/resolved app_tickets alongside RAW_TICKETS.
-  // Service: include closed/resolved + open with visits.
-  // PM: include closed/completed — completion in any path is then visible here.
-  const closedAt = APP_TICKETS
+  // All service app tickets appear in Service History regardless of status —
+  // open WOs show as 'Open', closed ones as 'Closed'. This makes Service History
+  // a complete register of all service records, not just completed ones.
+  // PM app tickets remain closed-only (open PMs belong in PM Schedules).
+  const appRows = APP_TICKETS
     .filter(t =>
-      (t.ticket_type === 'service' &&
-        (!_AT_OPEN_STATUSES.includes(t.status) ||
-         (Array.isArray(t.visit_log) && t.visit_log.length > 0))) ||
+      t.ticket_type === 'service' ||
       (t.ticket_type === 'pm' && !_AT_OPEN_STATUSES.includes(t.status))
     )
     .map(_mapAppTicketToHistory);
-  let rows = [...RAW_TICKETS, ...closedAt];
+  let rows = [...RAW_TICKETS, ...appRows];
   if(historyFilter!=='all') rows=rows.filter(t=>t.month===historyFilter);
   if(historySearch) rows=rows.filter(t=>[t.customer,t.issue,t.engineer,t.parts,t.resolution,t.model].some(v=>v&&v.toLowerCase().includes(historySearch.toLowerCase())));
   if(historyModalityFilter!=='all') rows=rows.filter(t=>getTicketModality(t)===historyModalityFilter);
