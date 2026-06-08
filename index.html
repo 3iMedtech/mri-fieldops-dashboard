@@ -6552,7 +6552,14 @@ function _monthLabelFromDate(d){
   if(!d || isNaN(d)) return '';
   const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const candidate = names[d.getMonth()] + ' ' + d.getFullYear();
-  return MONTHS.find(m => m === candidate) || candidate;
+  // Match an existing uploaded month tab by actual month+year, tolerating
+  // short vs full month-name spellings ("Jun 2026" vs the sheet's "June 2026")
+  // so app-created tickets share the same tab as uploaded ones for that month.
+  const existing = MONTHS.find(m => {
+    const md = new Date('01 ' + m);
+    return !isNaN(md) && md.getMonth() === d.getMonth() && md.getFullYear() === d.getFullYear();
+  });
+  return existing || candidate;
 }
 
 function _mapAppTicketToHistory(t){
