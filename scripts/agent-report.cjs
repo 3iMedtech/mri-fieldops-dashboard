@@ -24,32 +24,34 @@ const HOT_DAYS      = 14;    // used within N days → HOT
 const ACTIVE_DAYS   = 30;    // used within N days → ACTIVE (else STALE)
 const HOT_MIN_USES  = 3;     // min lifetime uses to qualify as HOT
 
-// All agents defined in the project (slug → metadata).
-// Update this list when adding or removing agent definition files.
+// Active agent roster (slug → metadata). Keep in sync with REGISTRY.md and
+// CLAUDE.md §7. Only these count toward active-health (HOT/ACTIVE/STALE/DEAD).
 const DEFINED_AGENTS = {
-  // Tier 0
+  'fieldops-code-reviewer':               { tier: 2, track: 'Cross',   label: 'Code Reviewer',     isReviewer: true },
+  'fieldops-sql-rls-safety-agent':        { tier: 2, track: 'DB',      label: 'SQL/RLS Safety',    isReviewer: true },
+  'fieldops-qa-test-automation-agent':    { tier: 2, track: 'Runtime', label: 'QA Test Automation' },
+  'fieldops-observability-agent':         { tier: 3, track: 'Release', label: 'Observability' },
+};
+
+// Archived definitions (live in .claude/agents/archived/). Retained here ONLY so
+// historical log records still attribute to a known name, and as a restore
+// reference — they are EXCLUDED from active-health counts and the active tables.
+// Restore protocol: move the .md back, then move its row here → DEFINED_AGENTS.
+const ARCHIVED_AGENTS = {
+  'fieldops-automation-memory-agent':     { tier: 2, track: 'Cross',   label: 'Automation Memory' }, // retired → scripts/update-state.cjs
   'fieldops-delivery-orchestrator':       { tier: 0, track: 'Cross',   label: 'Delivery Orchestrator' },
-  // Tier 1
   'fieldops-database-pm':                 { tier: 1, track: 'DB',      label: 'Database PM' },
   'fieldops-runtime-pm':                  { tier: 1, track: 'Runtime', label: 'Runtime PM' },
   'fieldops-release-pm':                  { tier: 1, track: 'Release', label: 'Release PM' },
-  // Tier 2
-  'fieldops-code-reviewer':               { tier: 2, track: 'Cross',   label: 'Code Reviewer',            isReviewer: true },
-  'fieldops-sql-rls-safety-agent':        { tier: 2, track: 'DB',      label: 'SQL/RLS Safety',           isReviewer: true },
-  'fieldops-migration-runbook-verifier':  { tier: 2, track: 'DB',      label: 'Runbook Verifier',         isReviewer: true },
+  'fieldops-migration-runbook-verifier':  { tier: 2, track: 'DB',      label: 'Runbook Verifier' },
   'fieldops-data-reconciliation-agent':   { tier: 2, track: 'DB',      label: 'Data Reconciliation' },
   'fieldops-runtime-integration-agent':   { tier: 2, track: 'Runtime', label: 'Runtime Integration' },
-  'fieldops-qa-test-automation-agent':    { tier: 2, track: 'Runtime', label: 'QA Test Automation' },
-  'fieldops-automation-memory-agent':     { tier: 2, track: 'Cross',   label: 'Automation Memory' },
-  // Tier 3
   'fieldops-orchestrator':                { tier: 3, track: 'Cross',   label: 'Module Orchestrator' },
-  'fieldops-observability-agent':         { tier: 3, track: 'Release', label: 'Observability' },
   'fieldops-bug-agent':                   { tier: 3, track: 'Cross',   label: 'Bug Agent' },
   'fieldops-ui-agent':                    { tier: 3, track: 'Runtime', label: 'UI Agent' },
   'fieldops-supabase-agent':              { tier: 3, track: 'DB',      label: 'Supabase Agent' },
   'fieldops-test-agent':                  { tier: 3, track: 'Release', label: 'Manual Test Agent' },
-  'fieldops-release-agent':              { tier: 3, track: 'Release', label: 'Release Agent' },
-  // Tier 4
+  'fieldops-release-agent':               { tier: 3, track: 'Release', label: 'Release Agent' },
   'fieldops-product-design-lead':         { tier: 4, track: 'Design',  label: 'Product Design Lead' },
   'fieldops-enterprise-ux-researcher':    { tier: 4, track: 'Design',  label: 'UX Researcher' },
   'fieldops-dashboard-usability-auditor': { tier: 4, track: 'Design',  label: 'Usability Auditor' },
@@ -78,19 +80,24 @@ function compute(log) {
   const categories = {};
   const agentStats = {};
 
-  // Init all defined agents
-  for (const [slug, meta] of Object.entries(DEFINED_AGENTS)) {
-    agentStats[slug] = {
-      ...meta, slug,
-      invocations: 0,
-      passes: 0, stops: 0, escalates: 0, holds: 0, skipped: 0, na: 0,
-      caught: 0,         // findings acted upon
-      lastUsed: null,
-      sessions: new Set(),
-      categories: {},
-      recentCommits: [],
-    };
-  }
+  // Init active + archived agents. Archived ones are flagged so they are kept
+  // for historical attribution but excluded from active-health rollups.
+  const seed = (map, archived) => {
+    for (const [slug, meta] of Object.entries(map)) {
+      agentStats[slug] = {
+        ...meta, slug, archived,
+        invocations: 0,
+        passes: 0, stops: 0, escalates: 0, holds: 0, skipped: 0, na: 0,
+        caught: 0,         // findings acted upon
+        lastUsed: null,
+        sessions: new Set(),
+        categories: {},
+        recentCommits: [],
+      };
+    }
+  };
+  seed(DEFINED_AGENTS, false);
+  seed(ARCHIVED_AGENTS, true);
 
   // Aggregate log entries
   for (const e of log) {
@@ -127,7 +134,8 @@ function compute(log) {
     s.sessions = s.sessions.size;
     // Health
     const daysSince = s.lastUsed ? Math.round((now - s.lastUsed) / 86400000) : Infinity;
-    if (s.invocations === 0)                                     s.health = 'DEAD';
+    if (s.archived)                                                 s.health = 'ARCHIVED';
+    else if (s.invocations === 0)                                   s.health = 'DEAD';
     else if (daysSince <= HOT_DAYS && s.invocations >= HOT_MIN_USES) s.health = 'HOT';
     else if (daysSince <= ACTIVE_DAYS)                               s.health = 'ACTIVE';
     else                                                              s.health = 'STALE';
@@ -154,6 +162,7 @@ function recommend(agentStats) {
   const recs = [];
 
   for (const s of Object.values(agentStats)) {
+    if (s.archived) continue; // archived agents are not active-roster recommendations
     if (s.health === 'DEAD' && s.tier <= 2) {
       recs.push({ type: 'REMOVE', agent: s.slug, reason: `Tier ${s.tier} specialist — never used. Definition adds maintenance weight with zero ROI.` });
     } else if (s.health === 'DEAD' && s.tier === 3) {
@@ -197,29 +206,31 @@ function formatReport({ agentStats, sessions, totalInvocations, categories }, re
 
   // Overview
   lines.push(h2('Overview'));
-  const byHealth = { HOT:0, ACTIVE:0, STALE:0, DEAD:0 };
+  const byHealth = { HOT:0, ACTIVE:0, STALE:0, DEAD:0, ARCHIVED:0 };
   for (const s of Object.values(agentStats)) byHealth[s.health] = (byHealth[s.health]||0)+1;
+  const activeCount = Object.values(agentStats).filter(s => !s.archived).length;
 
   if (asMarkdown) {
     lines.push(`| Metric | Value |`);
     lines.push(`|---|---|`);
-    lines.push(`| Total defined agents | ${Object.keys(agentStats).length} |`);
+    lines.push(`| Active agents | ${activeCount} |`);
+    lines.push(`| Archived agents | ${byHealth.ARCHIVED} |`);
     lines.push(`| Total invocations | ${totalInvocations} |`);
     lines.push(`| Unique sessions | ${sessions} |`);
     lines.push(`| HOT agents | ${byHealth.HOT} |`);
     lines.push(`| ACTIVE agents | ${byHealth.ACTIVE} |`);
     lines.push(`| STALE agents | ${byHealth.STALE} |`);
-    lines.push(`| DEAD agents (never used) | ${byHealth.DEAD} |`);
+    lines.push(`| DEAD agents (active roster, never used) | ${byHealth.DEAD} |`);
     lines.push('');
   } else {
-    lines.push(`  Agents defined : ${Object.keys(agentStats).length}   |  Invocations: ${totalInvocations}   |  Sessions: ${sessions}`);
+    lines.push(`  Active agents : ${activeCount}   |  Invocations: ${totalInvocations}   |  Sessions: ${sessions}   |  Archived: ${byHealth.ARCHIVED}`);
     lines.push(`  HOT: ${byHealth.HOT}  ACTIVE: ${byHealth.ACTIVE}  STALE: ${byHealth.STALE}  DEAD: ${byHealth.DEAD}`);
   }
 
   // Per-tier tables
   for (let tier = 0; tier <= 4; tier++) {
     const tierAgents = Object.values(agentStats)
-      .filter(s => s.tier === tier || (tier === 4 && typeof s.tier === 'string' && s.tier > 3))
+      .filter(s => !s.archived && (s.tier === tier || (tier === 4 && typeof s.tier === 'string' && s.tier > 3)))
       .sort((a,b) => b.invocations - a.invocations);
     if (!tierAgents.length) continue;
 
@@ -241,6 +252,26 @@ function formatReport({ agentStats, sessions, totalInvocations, categories }, re
         lines.push(`  ${pad(s.slug,42)} ${pad(s.health,8)} ${rpad(s.invocations,5)} ${rpad(s.sessions,5)} ${rpad(s.catchRate,7)} ${rpad(s.valueRate,7)} ${pad(s.topCategory,14)} ${s.lastUsedStr}`);
       }
     }
+  }
+
+  // Archived agents (historical) — excluded from active health, shown for reference
+  const archived = Object.values(agentStats).filter(s => s.archived).sort((a,b) => b.invocations - a.invocations);
+  if (archived.length) {
+    const withHistory = archived.filter(s => s.invocations > 0);
+    const noHistory   = archived.filter(s => s.invocations === 0);
+    lines.push(h2(`Archived Agents (${archived.length} — excluded from active health)`));
+    if (withHistory.length) {
+      if (asMarkdown) {
+        lines.push('| Archived agent | Lifetime uses | Last used | Note |');
+        lines.push('|---|---|---|---|');
+        for (const s of withHistory) lines.push(`| \`${s.slug}\` | ${s.invocations} | ${s.lastUsedStr} | retired — see REGISTRY.md |`);
+        lines.push('');
+      } else {
+        for (const s of withHistory) lines.push(`  ⤓  ${pad(s.slug,42)} ${rpad(s.invocations,4)} uses  (last ${s.lastUsedStr}) — retired`);
+      }
+    }
+    const restLine = `${noHistory.length} archived with no recorded history (restore via REGISTRY.md if needed).`;
+    lines.push(asMarkdown ? `> ${restLine}\n` : `  ${restLine}`);
   }
 
   // Category breakdown

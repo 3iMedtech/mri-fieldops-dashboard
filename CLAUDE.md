@@ -136,7 +136,7 @@ Freshness rule:
 
 ## 7. Agent Team Rules
 
-**Active roster (5 agents — trimmed 2026-05-29 based on utilization data).**
+**Active roster (4 agents — trimmed 2026-05-29, automation-memory retired 2026-06-08).**
 Archived definitions live in `.claude/agents/archived/` and can be restored if needed.
 Utilization data: `automation/agent-analytics/invocations.jsonl` · Report: `node scripts/agent-report.cjs`
 
@@ -147,8 +147,9 @@ Utilization data: `automation/agent-analytics/invocations.jsonl` · Report: `nod
 | `fieldops-code-reviewer` | Pre-commit diff review — field propagation, state machines, role gates, JSONB compat, test-plan coverage | Before every non-trivial commit to `index.html` or `db/migrations/` |
 | `fieldops-sql-rls-safety-agent` | SQL/RLS migration review — recursion, SECURITY DEFINER, GRANT layering, rollback symmetry | Every new or modified migration file |
 | `fieldops-qa-test-automation-agent` | Playwright test harness, role-permission matrix, regression coverage | Any new write path, role gate change, or post-deploy verification |
-| `fieldops-automation-memory-agent` | STATE.md updates — branch, commit, environment, migration, matrix state | After every deploy, SQL apply, or significant project state change |
 | `fieldops-observability-agent` | Post-deploy smoke — APP_VERSION, Pages headers, console errors, 3-role matrix | After every production deploy |
+
+**STATE.md updates are not an agent** — run `node scripts/update-state.cjs` (deterministic git snapshot) after every deploy / branch sync. It rewrites only the mechanical sections (Last verified, Branch + commit); narrative edits stay manual.
 
 ### Rules
 
@@ -158,6 +159,20 @@ Utilization data: `automation/agent-analytics/invocations.jsonl` · Report: `nod
 - Log every invocation to `automation/agent-analytics/invocations.jsonl` (see §logging below).
 - Run `node scripts/agent-report.cjs` quarterly to check health. DEAD agents get archived.
 
+### Gate enforcement (commit-guard hook)
+
+The §7 review gates are wired into a version-controlled pre-commit hook so they
+can't be silently skipped. Activate once per clone:
+
+```
+sh scripts/install-hooks.sh      # sets core.hooksPath → scripts/githooks
+```
+
+When `index.html` or a `db/migrations/*.sql` is staged, the hook blocks the
+commit and prints the required gates. After the gate(s) have **actually** run,
+acknowledge and commit: `FIELDOPS_GATES_OK=1 git commit ...`. Commits that don't
+touch those paths pass untouched. Undo with `git config --unset core.hooksPath`.
+
 ### Standard commit flow (routine feature/fix work)
 
 For any non-trivial change to `index.html` or `db/migrations/*.sql`:
@@ -165,11 +180,12 @@ For any non-trivial change to `index.html` or `db/migrations/*.sql`:
 ```
 implement
   → fieldops-code-reviewer  (PASS required before commit)
-  → commit + push to staging
+  → commit + push to staging         (commit-guard enforces the gate)
   → node scripts/test-matrix.js staging  (0 failures required)
   → [operator approval phrase]
   → deploy to production
-  → node scripts/test-matrix.js production
+  → fieldops-observability-agent → node scripts/test-matrix.js production  (0 failures)
+  → node scripts/update-state.cjs    (refresh STATE.md snapshot)
 ```
 
 Trivial changes (doc edits, string constants, CSS-only) may skip the code reviewer. When in doubt, invoke it — it takes under 2 minutes.

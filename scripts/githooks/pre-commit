@@ -1,0 +1,40 @@
+#!/bin/sh
+# FieldOps3i commit-guard — enforces the CLAUDE.md §7 review gates on risky files.
+#
+# Fires whenever index.html or a db/migrations/*.sql is staged, so the
+# code-reviewer / sql-rls gates can't be silently skipped. Once you've actually
+# run the gate(s), re-commit with the acknowledgement:
+#
+#     FIELDOPS_GATES_OK=1 git commit ...
+#
+# Activate with: sh scripts/install-hooks.sh   (sets core.hooksPath)
+
+staged=$(git diff --cached --name-only)
+risky_html=$(printf '%s\n' "$staged" | grep -E '^index\.html$')
+risky_sql=$(printf '%s\n' "$staged" | grep -E '^db/migrations/.*\.sql$')
+
+# Nothing risky staged → let the commit through untouched.
+if [ -z "$risky_html" ] && [ -z "$risky_sql" ]; then
+  exit 0
+fi
+
+if [ "$FIELDOPS_GATES_OK" = "1" ]; then
+  echo "commit-guard: §7 gates acknowledged (FIELDOPS_GATES_OK=1) — proceeding."
+  exit 0
+fi
+
+echo "──────────────────────────────────────────────────────────────"
+echo " FieldOps3i commit-guard — CLAUDE.md §7 review gates required"
+echo "──────────────────────────────────────────────────────────────"
+[ -n "$risky_html" ] && echo " • index.html staged   → run fieldops-code-reviewer (PASS required)"
+[ -n "$risky_sql" ]  && echo " • db/migrations staged → run fieldops-sql-rls-safety-agent + fieldops-code-reviewer"
+echo
+echo " Post-deploy (don't forget): fieldops-observability-agent matrix"
+echo "   node scripts/test-matrix.js <staging|production>"
+echo "   node scripts/update-state.cjs"
+echo " Log each agent run to automation/agent-analytics/invocations.jsonl."
+echo
+echo " Once the gate(s) have ACTUALLY run, re-commit with:"
+echo "     FIELDOPS_GATES_OK=1 git commit ..."
+echo "──────────────────────────────────────────────────────────────"
+exit 1
