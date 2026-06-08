@@ -10326,12 +10326,16 @@ async function loadAllFromDB(opts = {}){
 
 // ── Write helpers ─────────────────────────────────────────────────────
 async function dbSaveEngineer(e){
+  // status + last_working_date are owned by the resignation lifecycle
+  // (submitResignEngineer / checkAndDeactivateEngineers) — never let a profile
+  // save clobber them. Omitting them from the upsert means ON CONFLICT DO UPDATE
+  // leaves an existing engineer's resignation intact, while a brand-new row
+  // falls back to the column default (status NOT NULL DEFAULT 'active',
+  // last_working_date NULL) per migration 0008.
   const row = {
     id: e.id, name: e.name, region: e.region, email: e.email || null,
     aliases: e.aliases || [],
-    status: e.status || 'active',
     joined_date: e.joined_date || null,
-    last_working_date: e.last_working_date || null,
   };
   suppressRealtimeReload(3000);
   const { error } = await _sb.from('engineers').upsert(row);
