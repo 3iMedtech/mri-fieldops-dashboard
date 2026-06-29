@@ -5940,6 +5940,10 @@ function _jaccard(a, b){
 // True if `row` (PM/CMC shape) matches `ib` (CONFIG_ASSETS shape) at `tier`.
 // All tiers require strict normalized town equality (gate).
 function _rowMatchesIb(ib, row, tier){
+  // 'id' tier: a stable asset_code link wins outright, with no town gate
+  // (international standard — join by ID, not fuzzy strings). Legacy tiers
+  // remain as fallback for rows whose asset_code is not yet backfilled.
+  if(tier === 'id') return !!row.asset_code && row.asset_code === ib.code;
   if(_normalizeName(row.town) !== _normalizeName(ib.town)) return false;
   if(tier === 'exact')      return customerKey(row.customer || '') === customerKey(ib.name || '');
   if(tier === 'fuzzy')      return _jaccard(row.customer, ib.name)   >= 0.5;
@@ -5950,7 +5954,7 @@ function _rowMatchesIb(ib, row, tier){
 // pool so they take priority over CMC at the same tier. Mutates
 // pool.consumed (Set<index>) on success.
 function _findContractForAsset(ib, pool){
-  for(const tier of ['exact','fuzzy','town_model']){
+  for(const tier of ['id','exact','fuzzy','town_model']){
     for(let i = 0; i < pool.all.length; i++){
       if(pool.consumed.has(i)) continue;
       if(_rowMatchesIb(ib, pool.all[i], tier)){
@@ -5963,7 +5967,7 @@ function _findContractForAsset(ib, pool){
 }
 // Same shape, scoped to a PM-only pool. Independent from contract pool.
 function _findPmForAsset(ib, pmPool){
-  for(const tier of ['exact','fuzzy','town_model']){
+  for(const tier of ['id','exact','fuzzy','town_model']){
     for(let i = 0; i < pmPool.all.length; i++){
       if(pmPool.consumed.has(i)) continue;
       if(_rowMatchesIb(ib, pmPool.all[i], tier)){
@@ -10175,7 +10179,7 @@ async function loadAllFromDB(opts = {}){
   const { data: cmcs, error: e3 } = await _sb.from('cmc_contracts').select('*').order('sn');
   if(e3) throw e3;
   CMC_DATA = cmcs.map(r => ({
-    sn: r.sn, customer: r.customer, town: r.town, model: r.model, contract: r.contract,
+    sn: r.sn, asset_code: r.asset_code || null, customer: r.customer, town: r.town, model: r.model, contract: r.contract,
     start: dbDateToDisplay(r.start_date), end: dbDateToDisplay(r.end_date),
   }));
 
@@ -10188,7 +10192,7 @@ async function loadAllFromDB(opts = {}){
   const { data: pms, error: e4 } = await _sb.from('pm_schedule').select('*');
   if(e4) throw e4;
   PM_SCHEDULE = pms.map(r => ({
-    id: r.id, customer: r.customer, model: r.model, contract: r.contract,
+    id: r.id, asset_code: r.asset_code || null, customer: r.customer, model: r.model, contract: r.contract,
     town: r.town, region: r.region, freq: r.freq,
     contractStart: dbDateToDisplay(r.contract_start),
     contractEnd: dbDateToDisplay(r.contract_end),
