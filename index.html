@@ -2425,6 +2425,7 @@ function pmStatus(pm){
   // Special statuses override computation
   if(pm.status==='installation-pending') return {code:'installation', label:'INSTALLATION PENDING', cls:'low', priority:5};
   if(pm.status==='not-covered') return {code:'not-covered', label:'PM NOT COVERED', cls:'low', priority:6};
+  if(pm.status==='renewal-due') return {code:'renewal-due', label:'RENEWAL DUE', cls:'medium', priority:2};
   if(!pm.nextPMS) return {code:'unscheduled', label:'NOT SCHEDULED', cls:'unknown', priority:4};
   const due = parseFlexDate(pm.nextPMS, pm.id+':nextPMS');
   if(!due) return {code:'unscheduled', label:'NOT SCHEDULED', cls:'unknown', priority:4};
@@ -2434,6 +2435,31 @@ function pmStatus(pm){
   if(diff <= PM_WINDOW_DAYS) return {code:'in-window', label:'IN WINDOW', cls:'high', daysText:`Due in ${diff}d`, priority:1};
   if(diff <= 45) return {code:'upcoming', label:'UPCOMING', cls:'medium', daysText:`Due in ${diff}d`, priority:2};
   return {code:'scheduled', label:'SCHEDULED', cls:'planned', daysText:`Due in ${diff}d`, priority:3};
+}
+
+// Floating-from-completion PM roll with a contract_end cap (international
+// standard — SAP/Maximo/Salesforce). Mutates `pm`: lastPMS := completion;
+// nextPMS := completion + round(12/freq) months — unless that next date falls
+// past contract_end, in which case the cycle stops and the row is flagged
+// 'renewal-due' (no nextPMS). Single source of truth for every completion path.
+function _applyPmRoll(pm, completion){
+  const fmt = d => d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+  pm.lastPMS = fmt(completion);
+  if(pm.freq && pm.freq > 0){
+    const next = new Date(completion);
+    next.setMonth(next.getMonth() + Math.round(12 / pm.freq));
+    const end = pm.contractEnd ? parseFlexDate(pm.contractEnd) : null;
+    if(end && next > end){
+      pm.nextPMS = '';
+      pm.status = 'renewal-due';
+    } else {
+      pm.nextPMS = fmt(next);
+      pm.status = 'active';
+    }
+  } else {
+    pm.status = 'active';
+  }
+  return pm;
 }
 
 function getEngineersForRegion(region){
@@ -7616,6 +7642,13 @@ function updatePMCompletePreview(){
   const intervalMonths = Math.round(12 / pm.freq);
   const next = new Date(dateVal);
   next.setMonth(next.getMonth() + intervalMonths);
+  const end = pm.contractEnd ? parseFlexDate(pm.contractEnd) : null;
+  if(end && next > end){
+    box.innerHTML = `Next PM (${esc(next.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}))}) ` +
+                    `falls after contract end (${esc(pm.contractEnd)}). ` +
+                    `<strong style="color:var(--text)">Will be marked RENEWAL DUE</strong> — renew the contract to resume PMs.`;
+    return;
+  }
   const nextStr = next.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
   box.innerHTML = `Next PM due: <strong style="color:var(--text)">${esc(nextStr)}</strong> ` +
                   `<span style="color:var(--text-faint)">(+${intervalMonths} mo from completion, ${pm.freq}× per year)</span>`;
@@ -7699,14 +7732,7 @@ async function submitPMComplete(){
   // in IST-adjacent timezones.
   const [cy,cm,cd] = dateVal.split('-').map(Number);
   const completion = new Date(cy, cm - 1, cd);
-  pm.lastPMS = completion.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
-  if(pm.freq && pm.freq > 0){
-    const intervalMonths = Math.round(12 / pm.freq);
-    const next = new Date(completion);
-    next.setMonth(next.getMonth() + intervalMonths);
-    pm.nextPMS = next.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
-  }
-  pm.status = 'active';
+  _applyPmRoll(pm, completion);  // floating roll + contract_end cap (→ renewal-due)
   await dbSavePM(pm);
 
   // 3) Close the most recent open PM app_ticket for this pm_id so it leaves
@@ -8775,18 +8801,7 @@ async function syncPMCompletionsFromTickets(){
           const [cy,cm,cd] = compIso.split('-').map(Number);
           const compDate = new Date(cy, cm - 1, cd);
           if(priorLast && compDate <= priorLast) continue;
-          pm.lastPMS = compDate.toLocaleDateString('en-GB',
-            {day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
-          if(pm.freq && pm.freq > 0){
-            const intervalMonths = Math.round(12 / pm.freq);
-            const next = new Date(compDate);
-            next.setMonth(next.getMonth() + intervalMonths);
-            pm.nextPMS = next.toLocaleDateString('en-GB',
-              {day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
-          }
-          // If an earlier 'overdue' flag was latched onto the row,
-          // clear it — we have a fresh completion in hand.
-          if(pm.status === 'overdue') pm.status = 'active';
+          _applyPmRoll(pm, compDate);  // floating roll + contract_end cap (→ renewal-due)
           await dbSavePM(pm);
         }
       } catch(rollErr){
@@ -11183,14 +11198,7 @@ async function _createPMCompletionFromAppTicket(ticket){
   if(pm){
     const [cy, cm, cd] = completionDate.split('-').map(Number);
     const completion = new Date(cy, cm - 1, cd);
-    pm.lastPMS = completion.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
-    if(pm.freq && pm.freq > 0){
-      const intervalMonths = Math.round(12 / pm.freq);
-      const next = new Date(completion);
-      next.setMonth(next.getMonth() + intervalMonths);
-      pm.nextPMS = next.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
-    }
-    pm.status = 'active';
+    _applyPmRoll(pm, completion);  // floating roll + contract_end cap (→ renewal-due)
     await dbSavePM(pm);
     renderPM();
   }
