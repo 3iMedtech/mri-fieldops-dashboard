@@ -2438,15 +2438,19 @@ function pmStatus(pm){
 
 function getEngineersForRegion(region){
   if(!region || region==='Unassigned') return [];
-  // Calicut doesn't have a dedicated engineer — check if any cover Kerala
-  // For now, Neeraj is in Calicut area (from ticket data)
+  // Calicut has no dedicated engineer. SivaSubramanian (Chennai) covers it —
+  // replaced Neeraj, who left the organisation (2026-06).
+  if(region==='Calicut'){
+    return ENGINEERS.filter(e =>
+      (e.name||'').toLowerCase().includes('sivasubramanian') ||
+      (e.aliases||[]).map(a => (a||'').toLowerCase()).includes('siva'));
+  }
   const regionMap = {
     'Chennai': ['Chennai'],
     'Bangalore': ['Bangalore'],
     'Pune': ['Pune'],
     'Patna': ['Patna'],
     'Hyderabad': ['Hyderabad'],
-    'Calicut': ['Calicut','Chennai'], // Neeraj covers Calicut from ticket history
   };
   const regions = regionMap[region] || [region];
   return ENGINEERS.filter(e => regions.some(r => e.region.toLowerCase() === r.toLowerCase()));
