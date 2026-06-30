@@ -2422,6 +2422,7 @@ function pmStatus(pm){
   if(pm.status==='installation-pending') return {code:'installation', label:'INSTALLATION PENDING', cls:'low', priority:5};
   if(pm.status==='not-covered') return {code:'not-covered', label:'PM NOT COVERED', cls:'low', priority:6};
   if(pm.status==='renewal-due') return {code:'renewal-due', label:'RENEWAL DUE', cls:'medium', priority:2};
+  if(pm.status==='suspended') return {code:'suspended', label:'SUSPENDED', cls:'low', priority:7};
   if(!pm.nextPMS) return {code:'unscheduled', label:'NOT SCHEDULED', cls:'unknown', priority:4};
   const due = parseFlexDate(pm.nextPMS, pm.id+':nextPMS');
   if(!due) return {code:'unscheduled', label:'NOT SCHEDULED', cls:'unknown', priority:4};
@@ -6089,12 +6090,20 @@ function _aggregateContracts(){
   // claim for the same asset) are alternates, not unmatched, so they're
   // filtered out of diagnostics.
   const isMatchableToAnyIb = row => ibAssets.some(ib =>
+    _rowMatchesIb(ib, row, 'id') ||
     _rowMatchesIb(ib, row, 'exact') ||
     _rowMatchesIb(ib, row, 'fuzzy') ||
     _rowMatchesIb(ib, row, 'town_model')
   );
+  // R1: rows belonging to a de-installed asset are retired, not data errors —
+  // exclude them so de-installed machines stop resurfacing on the Contracts page.
+  const _deInstalledIb = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS))
+    ? CONFIG_ASSETS.filter(a => (a.status || 'active') === 'de_installed') : [];
+  const matchesRetiredIb = row => _deInstalledIb.some(ib =>
+    _rowMatchesIb(ib, row, 'id') || _rowMatchesIb(ib, row, 'exact') ||
+    _rowMatchesIb(ib, row, 'fuzzy') || _rowMatchesIb(ib, row, 'town_model'));
   const leftover = contractPool.all.filter((_, i) => !contractPool.consumed.has(i));
-  const unmatchedContract = leftover.filter(r => !isMatchableToAnyIb(r));
+  const unmatchedContract = leftover.filter(r => !isMatchableToAnyIb(r) && !matchesRetiredIb(r));
   const unmatchedPm  = unmatchedContract.filter(r => r._source === 'pm');
   const unmatchedCmc = unmatchedContract.filter(r => r._source === 'cmc');
 
@@ -6843,12 +6852,19 @@ function renderPM(){
 
   // Truly unmatched PM rows = leftover candidates that match no IB at any tier.
   const isMatchableToAnyIb = pm => ibAssets.some(ib =>
+    _rowMatchesIb(ib, pm, 'id') ||
     _rowMatchesIb(ib, pm, 'exact') ||
     _rowMatchesIb(ib, pm, 'fuzzy') ||
     _rowMatchesIb(ib, pm, 'town_model')
   );
+  // R1: exclude PM rows belonging to de-installed assets (retired, not errors).
+  const _deIb = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS))
+    ? CONFIG_ASSETS.filter(a => (a.status || 'active') === 'de_installed') : [];
+  const matchesRetiredIb = pm => _deIb.some(ib =>
+    _rowMatchesIb(ib, pm, 'id') || _rowMatchesIb(ib, pm, 'exact') ||
+    _rowMatchesIb(ib, pm, 'fuzzy') || _rowMatchesIb(ib, pm, 'town_model'));
   const leftover = pmAll.filter((_, i) => !pmPool.consumed.has(i));
-  const unmatchedPm = leftover.filter(p => !isMatchableToAnyIb(p));
+  const unmatchedPm = leftover.filter(p => !isMatchableToAnyIb(p) && !matchesRetiredIb(p));
 
   // ── Overview stats ──────────────────────────────────────────
   // Status counts only consider matched rows (rows with a PM).
@@ -7471,6 +7487,15 @@ async function submitDeInstallAsset(){
       note: reason,
     });
     if(histErr) console.warn('asset_lifecycle_history insert (event=de_installed) failed:', histErr);
+    // Cascade (R1): a de-installed machine carries no live PM schedule — suspend
+    // its plan(s) so they leave the active PM calendar. (Contract-cancel cascade
+    // lands with contract consolidation, R2/R3.)
+    try {
+      const { error: pmErr } = await _sb.from('pm_schedule')
+        .update({ status: 'suspended', next_pms: null })
+        .eq('asset_code', _deinstallAssetCode);
+      if(pmErr) console.warn('de-install PM suspend failed:', pmErr);
+    } catch(pmEx){ console.warn('de-install PM suspend threw:', pmEx); }
     _deinstallAssetCode = null;
     _deinstallAssetBefore = null;
     closeModal('deinstall-asset-modal');
