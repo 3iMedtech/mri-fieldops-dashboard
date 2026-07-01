@@ -17,14 +17,15 @@
 --           (status re-derive is harmless to leave.)
 -- ═════════════════════════════════════════════════════════════════════
 
--- 1. Re-derive status of the cmc-migrated rows (0022) from the asset's status.
---    de_installed asset → cancelled; otherwise active. No-op where already correct.
+-- 1. Re-derive status of every active/cancelled lifecycle row from the asset's
+--    status: de_installed asset → cancelled; otherwise active. Idempotent.
+--    (Broadened from cmc-only to all rows so de-installed assets carrying a
+--    pre-existing active contract — e.g. AN005/AN006 — are cancelled too.)
 UPDATE public.asset_lifecycle al
    SET status = CASE WHEN coalesce(ca.status,'active') = 'de_installed' THEN 'cancelled' ELSE 'active' END,
        updated_at = now()
   FROM public.config_assets ca
  WHERE ca.code = al.asset_code
-   AND al.source_ref LIKE 'cmc:%'
    AND al.status IN ('active','cancelled');
 
 -- 2. Migrate contracts that live only on PM rows (warranty etc.) into
