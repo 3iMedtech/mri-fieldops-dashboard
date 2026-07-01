@@ -6085,9 +6085,12 @@ function _aggregateContracts(){
   //   • orphan contracts: active asset_lifecycle rows whose asset_code is not an
   //     active install-base asset.
   //   • orphan PM rows: PM rows matching no active (non-retired) asset.
-  const ibCodes = new Set(ibAssets.map(a => a.code));
+  // Orphan = lifecycle row pointing at an asset that does not exist at all.
+  // De-installed assets still exist (just retired), so their contracts are not
+  // orphans and must not resurface here.
+  const allAssetCodes = new Set((typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS) ? CONFIG_ASSETS : []).map(a => a.code));
   const orphanContracts = lcRows
-    .filter(l => l.asset_code && !ibCodes.has(l.asset_code))
+    .filter(l => l.asset_code && !allAssetCodes.has(l.asset_code))
     .map(l => ({ customer: l.source_customer || l.asset_code, town: '', end: l.contract_end, _source: 'lifecycle', asset_code: l.asset_code }));
   const _deInstalledIb = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS))
     ? CONFIG_ASSETS.filter(a => (a.status || 'active') === 'de_installed') : [];
@@ -7489,6 +7492,15 @@ async function submitDeInstallAsset(){
         .eq('asset_code', _deinstallAssetCode);
       if(pmErr) console.warn('de-install PM suspend failed:', pmErr);
     } catch(pmEx){ console.warn('de-install PM suspend threw:', pmEx); }
+    // Cascade (R2.3): cancel the active contract too — a de-installed machine
+    // is not under an active contract. Keeps asset_lifecycle consistent so the
+    // Contracts page never resurfaces the retired machine.
+    try {
+      const { error: lcErr } = await _sb.from('asset_lifecycle')
+        .update({ status: 'cancelled' })
+        .eq('asset_code', _deinstallAssetCode).eq('status', 'active');
+      if(lcErr) console.warn('de-install contract cancel failed:', lcErr);
+    } catch(lcEx){ console.warn('de-install contract cancel threw:', lcEx); }
     _deinstallAssetCode = null;
     _deinstallAssetBefore = null;
     closeModal('deinstall-asset-modal');
