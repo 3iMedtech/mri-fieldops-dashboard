@@ -1821,6 +1821,10 @@ button,input,select,textarea{font-family:inherit;}
           <input type="checkbox" id="rc-pm-required" style="width:15px;height:15px;accent-color:var(--brand)">
           <label for="rc-pm-required" style="font-size:13px;cursor:pointer">PM visits required</label>
         </div>
+        <div id="rc-freq-wrap">
+          <label for="rc-freq" style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:5px">PM visits / year <span style="color:var(--text-faint)">(0 = none · 4 = quarterly · 3 = every 4 mo · 2 = half-yearly)</span></label>
+          <input type="number" id="rc-freq" min="0" max="12" step="1" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px" placeholder="e.g. 4">
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
             <label for="rc-start" style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:5px">Start Date</label>
@@ -6481,6 +6485,8 @@ function openRenewModal(assetCode, customer, contractType, currentEnd){
   const mapped = _CONTRACT_TYPE_MAP[(contractType || '').toLowerCase()] || 'cmc';
   document.getElementById('rc-contract-type').value = mapped;
   document.getElementById('rc-pm-required').checked = _PM_REQUIRED_TYPES.has(mapped);
+  const _pmForAsset = (typeof PM_SCHEDULE !== 'undefined' ? PM_SCHEDULE : []).find(p => p.asset_code === assetCode);
+  document.getElementById('rc-freq').value = (_pmForAsset && _pmForAsset.freq) ? _pmForAsset.freq : '';
   document.getElementById('rc-start').value = '';
   document.getElementById('rc-end').value = '';
   document.getElementById('rc-note').value = '';
@@ -6497,6 +6503,54 @@ function _rcUpdatePmRequired(){
   document.getElementById('rc-pm-required').checked = _PM_REQUIRED_TYPES.has(t);
 }
 
+// R3.4: derive/refresh an asset's PM plan from its contract (international
+// standard: the plan is generated from the contract, not hand-kept).
+//   next_pms = anchor + (12/freq) months, rolled to the next FUTURE cycle,
+//   capped at contract_end (→ renewal-due). Anchor = last completed PM, else
+//   commission_date, else contract_start. freq<=0 / not-PM → not-covered;
+//   no anchor → installation-pending. De-installed assets are skipped.
+// Pass opts.dryRun=true to compute + return without writing (preview).
+async function _ensurePmPlan(assetCode, opts){
+  opts = opts || {};
+  const asset = (typeof CONFIG_ASSETS !== 'undefined' ? CONFIG_ASSETS : []).find(a => a.code === assetCode);
+  if(!asset || (asset.status || 'active') === 'de_installed') return null;
+  const existing = (typeof PM_SCHEDULE !== 'undefined' ? PM_SCHEDULE : []).find(p => p.asset_code === assetCode);
+  const fmt = d => d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+  const row = existing ? { ...existing } : {
+    id: 'PM-' + assetCode, asset_code: assetCode,
+    customer: asset.name, model: asset.model, town: asset.town,
+    region: asset.territory || '', lastPMS: ''
+  };
+  row.freq = opts.freq || 0;
+  row.contractStart = opts.contractStart || row.contractStart || '';
+  row.contractEnd   = opts.contractEnd   || '';
+
+  let next = '', status = 'active';
+  if(!opts.pmRequired || !opts.freq || opts.freq <= 0){
+    next = ''; status = 'not-covered';
+  } else {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const interval = Math.round(12 / opts.freq);
+    const anchorRaw = (existing && existing.lastPMS) ? existing.lastPMS : (asset.commission_date || opts.contractStart || '');
+    const anchor = anchorRaw ? parseFlexDate(anchorRaw) : null;
+    if(anchor){
+      let d = new Date(anchor); d.setMonth(d.getMonth() + interval);
+      let guard = 0;
+      while(d < today && guard++ < 240){ d.setMonth(d.getMonth() + interval); }
+      const end = opts.contractEnd ? parseFlexDate(opts.contractEnd) : null;
+      if(end && d > end){ next = ''; status = 'renewal-due'; }
+      else next = fmt(d);
+    } else {
+      next = ''; status = 'installation-pending';  // no anchor → wait for commissioning
+    }
+  }
+  row.nextPMS = next; row.status = status;
+  const result = { assetCode, id: row.id, next, status, freq: row.freq };
+  if(opts.dryRun) return result;
+  await dbSavePM(row);
+  return result;
+}
+
 async function _submitRenewContract(){
   const assetCode    = document.getElementById('rc-asset-code').value;
   const contractType = document.getElementById('rc-contract-type').value;
@@ -6504,6 +6558,8 @@ async function _submitRenewContract(){
   const startVal     = document.getElementById('rc-start').value;
   const endVal       = document.getElementById('rc-end').value;
   const note         = document.getElementById('rc-note').value.trim() || null;
+  const freqRaw      = document.getElementById('rc-freq').value;
+  const freqVal      = freqRaw === '' ? null : Math.max(0, Math.min(12, parseInt(freqRaw, 10) || 0));
 
   if(!endVal){
     showToast('End date is required.', 'warning');
@@ -6532,6 +6588,13 @@ async function _submitRenewContract(){
       contract_end:  endVal,
       new_lifecycle_id: data?.id,
     });
+
+    // R3.4: auto-create/refresh the PM plan from the contract just saved
+    // (single source → derived plan). Non-fatal — a renewal still succeeds
+    // even if plan generation hiccups.
+    try {
+      await _ensurePmPlan(assetCode, { freq: freqVal, contractStart: startVal || null, contractEnd: endVal, pmRequired });
+    } catch(genErr){ console.warn('[renewal] PM plan generation failed (non-fatal):', genErr); }
 
     closeModal('renew-contract-modal');
     suppressRealtimeReload(3000);
@@ -11682,6 +11745,7 @@ async function dbSavePM(pm){
   const row = {
     id: pm.id, customer: pm.customer, model: pm.model, contract: pm.contract,
     town: pm.town, region: pm.region, freq: pm.freq,
+    asset_code: pm.asset_code || null,
     contract_start: displayToDbDate(pm.contractStart),
     contract_end: displayToDbDate(pm.contractEnd),
     last_pms: displayToDbDate(pm.lastPMS),
