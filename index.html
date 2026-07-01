@@ -6026,14 +6026,11 @@ function _aggregateContracts(){
     ? CONFIG_ASSETS.filter(a => (a.status || 'active') !== 'de_installed')
     : [];
 
-  // PM ordered first so it wins over CMC at the same tier inside the pool.
-  const contractPool = {
-    all: [
-      ...pmRows.map(r => ({ ...r, _source: 'pm'  })),
-      ...cmcRows.map(r => ({ ...r, _source: 'cmc' })),
-    ],
-    consumed: new Set(),
-  };
+  // R2.3: asset_lifecycle is the single contract source of truth (ID-linked).
+  // cmc_contracts + PM-row contract fields were migrated into it (0022/0023),
+  // so cmc/PM rows are no longer matched as "contracts". The PM pool is used
+  // only to attach the PM *schedule* to each asset.
+  const lcRows = (typeof ASSET_LIFECYCLE !== 'undefined' && Array.isArray(ASSET_LIFECYCLE)) ? ASSET_LIFECYCLE : [];
   const pmPool = {
     all: pmRows.map(r => ({ ...r, _source: 'pm' })),
     consumed: new Set(),
@@ -6045,22 +6042,20 @@ function _aggregateContracts(){
   };
 
   const rows = ibAssets.map(ib => {
-    const c = _findContractForAsset(ib, contractPool);
     const p = _findPmForAsset(ib, pmPool);
-    // asset_lifecycle rows (from renewals) override the CMC dates/type when present
-    const lc = (typeof ASSET_LIFECYCLE !== 'undefined' ? ASSET_LIFECYCLE : [])
-      .find(l => l.asset_code === ib.code);
+    // R2.3: contract comes solely from asset_lifecycle (active row), by asset_code.
+    const lc = lcRows.find(l => l.asset_code === ib.code);
 
-    const startRaw = lc ? (lc.contract_start || '') : (c ? (c.row.contractStart || c.row.start || '') : '');
-    const endRaw   = lc ? (lc.contract_end   || '') : (c ? (c.row.contractEnd   || c.row.end   || '') : '');
+    const startRaw = lc ? (lc.contract_start || '') : '';
+    const endRaw   = lc ? (lc.contract_end   || '') : '';
     const start = startRaw ? parseFlexDate(startRaw) : null;
     const end   = endRaw   ? parseFlexDate(endRaw)   : null;
     const days  = end ? Math.round((end - today) / 86400000) : null;
-    const status = (lc || c) ? _contractStatus(end, today) : 'no_contract';
+    const status = lc ? _contractStatus(end, today) : 'no_contract';
 
     const pmStat = p ? pmStatus(p.row) : null;
-    const sourceName = c && (customerKey(c.row.customer || '') !== customerKey(ib.name || ''))
-      ? c.row.customer
+    const sourceName = (lc && lc.source_customer && customerKey(lc.source_customer) !== customerKey(ib.name || ''))
+      ? lc.source_customer
       : null;
 
     return {
@@ -6071,8 +6066,8 @@ function _aggregateContracts(){
       town:     ib.town,
       state:    ib.state,
       region:   ib.state || '',
-      // Contract attached (asset_lifecycle overrides CMC when present)
-      contract: lc ? (_LC_DISPLAY[lc.contract_type] || lc.contract_type) : (c ? (c.row.contract || '—') : '—'),
+      // Contract from asset_lifecycle (single source of truth)
+      contract: lc ? (_LC_DISPLAY[lc.contract_type] || lc.contract_type) : '—',
       _start: start, _end: end, _days: days, startRaw, endRaw,
       status,
       statusLabel: _CONTRACT_BUCKET_LABEL[status] || (status === 'no_contract' ? 'No Contract' : status),
@@ -6082,34 +6077,32 @@ function _aggregateContracts(){
       pm_status_label: pmStat ? pmStat.label : (p ? '—' : 'NO PM ROW'),
       pm_status_cls:   pmStat ? (pmStat.cls || '') : '',
       // Match metadata
-      contract_match_tier: c ? c.tier : 'none',
-      contract_source:     c ? c.row._source : null,
+      contract_match_tier: lc ? 'id' : 'none',
+      contract_source:     lc ? 'lifecycle' : null,
       contract_source_name: sourceName,
       pm_match_tier:       p ? p.tier : 'none',
     };
   });
 
-  // Truly unmatched = candidates with no possible IB match at any tier.
-  // Rows that *could* have matched (but lost to a higher-tier or PM-priority
-  // claim for the same asset) are alternates, not unmatched, so they're
-  // filtered out of diagnostics.
-  const isMatchableToAnyIb = row => ibAssets.some(ib =>
-    _rowMatchesIb(ib, row, 'id') ||
-    _rowMatchesIb(ib, row, 'exact') ||
-    _rowMatchesIb(ib, row, 'fuzzy') ||
-    _rowMatchesIb(ib, row, 'town_model')
-  );
-  // R1: rows belonging to a de-installed asset are retired, not data errors —
-  // exclude them so de-installed machines stop resurfacing on the Contracts page.
+  // R2.3: "unmatched" is now a true data-quality exception set, not a routine
+  // artifact of fuzzy matching. Two kinds:
+  //   • orphan contracts: active asset_lifecycle rows whose asset_code is not an
+  //     active install-base asset.
+  //   • orphan PM rows: PM rows matching no active (non-retired) asset.
+  const ibCodes = new Set(ibAssets.map(a => a.code));
+  const orphanContracts = lcRows
+    .filter(l => l.asset_code && !ibCodes.has(l.asset_code))
+    .map(l => ({ customer: l.source_customer || l.asset_code, town: '', end: l.contract_end, _source: 'lifecycle', asset_code: l.asset_code }));
   const _deInstalledIb = (typeof CONFIG_ASSETS !== 'undefined' && Array.isArray(CONFIG_ASSETS))
     ? CONFIG_ASSETS.filter(a => (a.status || 'active') === 'de_installed') : [];
-  const matchesRetiredIb = row => _deInstalledIb.some(ib =>
-    _rowMatchesIb(ib, row, 'id') || _rowMatchesIb(ib, row, 'exact') ||
-    _rowMatchesIb(ib, row, 'fuzzy') || _rowMatchesIb(ib, row, 'town_model'));
-  const leftover = contractPool.all.filter((_, i) => !contractPool.consumed.has(i));
-  const unmatchedContract = leftover.filter(r => !isMatchableToAnyIb(r) && !matchesRetiredIb(r));
-  const unmatchedPm  = unmatchedContract.filter(r => r._source === 'pm');
-  const unmatchedCmc = unmatchedContract.filter(r => r._source === 'cmc');
+  const _matchAnyIb = (pool, pm) => pool.some(ib =>
+    _rowMatchesIb(ib, pm, 'id') || _rowMatchesIb(ib, pm, 'exact') ||
+    _rowMatchesIb(ib, pm, 'fuzzy') || _rowMatchesIb(ib, pm, 'town_model'));
+  const unmatchedPm = pmPool.all
+    .filter((_, i) => !pmPool.consumed.has(i))
+    .filter(p => !_matchAnyIb(ibAssets, p) && !_matchAnyIb(_deInstalledIb, p));
+  const unmatchedContract = orphanContracts;
+  const unmatchedCmc = orphanContracts; // key retained for renderContracts diagnostic card
 
   return { rows, unmatchedContract, unmatchedPm, unmatchedCmc };
 }
