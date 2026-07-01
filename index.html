@@ -10298,7 +10298,7 @@ async function loadAllFromDB(opts = {}){
   }));
 
   const { data: lcRows } = await _sb.from('asset_lifecycle')
-    .select('asset_code, contract_type, contract_start, contract_end, pm_required')
+    .select('asset_code, contract_type, contract_start, contract_end, pm_required, freq')
     .eq('status', 'active');
   ASSET_LIFECYCLE = lcRows || [];
 
